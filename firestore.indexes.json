@@ -2,6 +2,11 @@
   "indexes": [],
   "fieldOverrides": [
     {
+      "collectionGroup": "chunks",
+      "fieldPath": "bytes",
+      "indexes": []
+    },
+    {
       "collectionGroup": "receipts",
       "fieldPath": "imageURL",
       "indexes": []

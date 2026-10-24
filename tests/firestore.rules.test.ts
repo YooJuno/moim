@@ -1,8 +1,8 @@
-import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import type { RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, query, setDoc, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { Bytes, collection, deleteDoc, deleteField, doc, getDoc, getDocs, query, setDoc, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
 
 const enabled=Boolean(process.env.FIRESTORE_EMULATOR_HOST);
 let environment: RulesTestEnvironment;
@@ -15,6 +15,10 @@ const event=(id: string)=>({id,title:'모임',description:'일정',date:'2026-11
 const client=(id: string)=>environment.authenticatedContext(id,{email:`${id}@example.com`}).firestore();
 const ballot=(id:string,kind='venue')=>({id,eventId:'e1',kind,title:kind==='venue'?'장소 투표':'MVP 투표',options:[{id:'o1',label:'식당 A',detail:'서울 마포구',menu:'파스타'},{id:'o2',label:'식당 B'}],optionIds:['o1','o2'],status:'open',creatorId:kind==='venue'?'creator':'leader',createdAt:now,updatedAt:now});
 const ledger=(id: string,creatorId='treasurer')=>({id,type:'income',category:'회비',amount:10000,date:'2026-10-24',description:'회비 납부',creatorId,createdAt:now,updatedAt:now});
+const fileRecord=(id:string,postId='p1',ownerId='member',uploadedBy=ownerId,size=3)=>({id,postId,ownerId,uploadedBy,size,name:'기록.bin',mimeType:'application/octet-stream',createdAt:now,chunkCount:Math.ceil(size/786432),sha256:'a'.repeat(64)});
+const fileReference=(file:ReturnType<typeof fileRecord>)=>({id:file.id,name:file.name,size:file.size,mimeType:file.mimeType});
+function stageFile(db:ReturnType<typeof client>,file:ReturnType<typeof fileRecord>,missingIndex=-1){const batch=writeBatch(db);for(let index=0;index<file.chunkCount;index++){if(index===missingIndex)continue;const length=Math.min(786432,file.size-index*786432);batch.set(doc(db,'postFiles',file.id,'chunks',String(index)),{index,bytes:Bytes.fromUint8Array(new Uint8Array(length))});}batch.set(doc(db,'postFiles',file.id),file);return batch.commit();}
+function removeFile(db:ReturnType<typeof client>,id:string){const batch=writeBatch(db);for(let index=0;index<7;index++)batch.delete(doc(db,'postFiles',id,'chunks',String(index)));batch.delete(doc(db,'postFiles',id));return batch.commit();}
 
 describe.skipIf(!enabled)('Firebase access boundaries',()=>{
   beforeAll(async()=>{
@@ -467,5 +471,86 @@ describe.skipIf(!enabled)('Firebase access boundaries',()=>{
     await assertSucceeds(updateDoc(entry,{memo:''}));
     await assertSucceeds(updateDoc(entry,{memo:deleteField()}));
     const remove=writeBatch(db);remove.delete(doc(db,'receipts','l1'));remove.update(entry,{hasReceipt:false});await assertSucceeds(remove.commit());
+  });
+
+  it('keeps staged files private and exposes only linked files to active and pending readers',async()=>{
+    const db=client('member'),file=fileRecord('draft-file','draft-post');
+    await assertSucceeds(stageFile(db,file));
+    for(const reader of ['member','creator','pending']){
+      await assertFails(getDoc(doc(client(reader),'postFiles',file.id)));
+      await assertFails(getDoc(doc(client(reader),'postFiles',file.id,'chunks','0')));
+    }
+    await assertSucceeds(setDoc(doc(db,'posts','draft-post'),{...post('draft-post'),attachments:[fileReference(file)]}));
+    for(const reader of ['member','creator','pending']){
+      await assertSucceeds(getDoc(doc(client(reader),'postFiles',file.id)));
+      await assertSucceeds(getDoc(doc(client(reader),'postFiles',file.id,'chunks','0')));
+    }
+    await assertFails(getDoc(doc(client('rejected'),'postFiles',file.id)));
+    await assertFails(getDoc(doc(environment.unauthenticatedContext().firestore(),'postFiles',file.id,'chunks','0')));
+    await assertFails(updateDoc(doc(db,'postFiles',file.id),{name:'이름 바꾸기.bin'}));
+    await assertFails(updateDoc(doc(db,'postFiles',file.id,'chunks','0'),{bytes:Bytes.fromUint8Array(new Uint8Array(3))}));
+    await assertFails(removeFile(db,file.id));
+  });
+
+  it('validates complete five MiB manifests within rule access limits and bounds post references',async()=>{
+    const db=client('member'),large=fileRecord('large-file','p1','member','member',5*1024*1024);
+    // Node gRPC's emulator transport caps one request at 4MiB. Browser SDK integration
+    // covers the atomic 5MiB upload; here seed each immutable chunk to test all seven lookups.
+    await environment.withSecurityRulesDisabled(async context=>{
+      for(let index=0;index<large.chunkCount;index++)await setDoc(doc(context.firestore(),'postFiles',large.id,'chunks',String(index)),{index,bytes:Bytes.fromUint8Array(new Uint8Array(Math.min(786432,large.size-index*786432)))});
+    });
+    await assertSucceeds(setDoc(doc(db,'postFiles',large.id),large));
+    const second=fileRecord('second-file'),third=fileRecord('third-file');
+    await assertSucceeds(stageFile(db,second));await assertSucceeds(stageFile(db,third));
+    const attachments=[large,second,third].map(fileReference);
+    await assertSucceeds(updateDoc(doc(db,'posts','p1'),{attachments}));
+    await assertSucceeds(updateDoc(doc(client('creator'),'posts','p1'),{likedBy:['creator']}));
+    await assertFails(updateDoc(doc(db,'posts','p1'),{attachments:[...attachments,attachments[0]]}));
+    await assertFails(updateDoc(doc(db,'posts','p1'),{attachments:[attachments[0],attachments[0]]}));
+    for(const change of [{name:'forged.bin'},{size:1},{mimeType:'text/plain'},{id:'missing-file'},{id:'../p1'},{unexpected:true}])await assertFails(updateDoc(doc(db,'posts','p1'),{attachments:[{...attachments[0],...change}]}));
+    await assertFails(setDoc(doc(db,'posts','different-post'),{...post('different-post'),attachments:[attachments[0]]}));
+    await assertFails(updateDoc(doc(client('pending'),'posts','p1'),{attachments:[]}));
+    await assertFails(updateDoc(doc(client('creator'),'posts','p1'),{attachments:[]}));
+  });
+
+  it('rejects partial, forged, oversized, unapproved and unauthorized file staging',async()=>{
+    const db=client('member');
+    await assertFails(stageFile(db,fileRecord('partial','p1','member','member',786433),1));
+    await assertFails(setDoc(doc(db,'postFiles','no-chunks'),fileRecord('no-chunks')));
+    await assertFails(setDoc(doc(db,'postFiles','missing-parent','chunks','0'),{index:0,bytes:Bytes.fromUint8Array(new Uint8Array(3))}));
+    await assertFails(setDoc(doc(db,'postFiles','too-large'),{...fileRecord('too-large'),size:5242881,chunkCount:7}));
+    await assertFails(stageFile(db,{...fileRecord('forged-uploader'),uploadedBy:'leader'}));
+    await assertFails(stageFile(db,{...fileRecord('forged-owner'),ownerId:'creator'}));
+    await assertFails(stageFile(client('creator'),fileRecord('other-author','p1','member','creator')));
+    await assertFails(stageFile(client('pending'),fileRecord('pending-file','p1','member','pending')));
+    await assertFails(stageFile(db,fileRecord('notice-file','notice','leader','member')));
+    await assertSucceeds(stageFile(client('leader'),fileRecord('notice-file','notice','leader','leader')));
+    await assertFails(stageFile(db,{...fileRecord('long-name'),name:'a'.repeat(201)}));
+    await assertFails(stageFile(db,{...fileRecord('extra-field'),unexpected:true} as ReturnType<typeof fileRecord>));
+  });
+
+  it('unlinks before cleanup and deletes the manifest and every chunk together',async()=>{
+    const db=client('member'),file=fileRecord('cleanup-file','p1','member','leader');
+    await assertSucceeds(stageFile(client('leader'),file));
+    await assertSucceeds(updateDoc(doc(db,'posts','p1'),{attachments:[fileReference(file)]}));
+    await assertFails(deleteDoc(doc(db,'postFiles',file.id,'chunks','0')));
+    await assertFails(deleteDoc(doc(db,'postFiles',file.id)));
+    await assertSucceeds(updateDoc(doc(db,'posts','p1'),{attachments:[]}));
+    await assertFails(getDoc(doc(client('pending'),'postFiles',file.id)));
+    await assertFails(getDoc(doc(client('pending'),'postFiles',file.id,'chunks','0')));
+    await assertFails(deleteDoc(doc(db,'postFiles',file.id,'chunks','0')));
+    await assertFails(deleteDoc(doc(db,'postFiles',file.id)));
+    await assertFails(removeFile(client('creator'),file.id));
+    await assertSucceeds(removeFile(db,file.id));
+    await environment.withSecurityRulesDisabled(async context=>{
+      expect((await getDoc(doc(context.firestore(),'postFiles',file.id))).exists()).toBe(false);
+      expect((await getDocs(collection(context.firestore(),'postFiles',file.id,'chunks'))).empty).toBe(true);
+    });
+    const removedPostFile=fileRecord('deleted-post-file');
+    await assertSucceeds(stageFile(db,removedPostFile));
+    await assertSucceeds(updateDoc(doc(db,'posts','p1'),{attachments:[fileReference(removedPostFile)]}));
+    await assertSucceeds(deleteDoc(doc(db,'posts','p1')));
+    await assertFails(getDoc(doc(db,'postFiles',removedPostFile.id)));
+    await assertSucceeds(removeFile(db,removedPostFile.id));
   });
 });

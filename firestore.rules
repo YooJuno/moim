@@ -24,14 +24,66 @@ service cloud.firestore {
         && (!('birthday' in data) || validBirthday(data.birthday));
     }
     function validPost(data, postId) {
-      return data.keys().hasOnly(['id','category','title','body','authorId','createdAt','updatedAt','images','pinned','likedBy'])
+      return data.keys().hasOnly(['id','category','title','body','authorId','createdAt','updatedAt','images','attachments','pinned','likedBy'])
         && data.keys().hasAll(['id','category','title','body','authorId','createdAt','updatedAt','images','pinned','likedBy'])
         && data.id == postId && data.category in ['notice','chat','info','gallery']
         && data.title is string && data.title.size() > 0 && data.title.size() <= 120
         && data.body is string && data.body.size() <= 20000
         && data.authorId is string && data.createdAt is string && data.updatedAt is string
         && data.images is list && data.images.size() <= 8 && data.pinned is bool
+        && validPostAttachments(data, postId)
         && data.likedBy is list && data.likedBy.size() == data.likedBy.toSet().size();
+    }
+    function attachmentId(value) { return value is string && value.matches('^[A-Za-z0-9_-]{1,80}$'); }
+    function validPostAttachment(item, postId, ownerId) {
+      let file = getAfter(/databases/$(database)/documents/postFiles/$(item.id)).data;
+      return item is map && item.keys().hasOnly(['id','name','size','mimeType'])
+        && item.keys().hasAll(['id','name','size','mimeType']) && attachmentId(item.id)
+        && file.id == item.id && file.postId == postId && file.ownerId == ownerId
+        && item.name == file.name && item.size == file.size && item.mimeType == file.mimeType;
+    }
+    function validPostAttachments(data, postId) {
+      return !('attachments' in data) || (data.attachments is list && data.attachments.size() <= 3
+        && (data.attachments.size() < 1 || validPostAttachment(data.attachments[0], postId, data.authorId))
+        && (data.attachments.size() < 2 || (validPostAttachment(data.attachments[1], postId, data.authorId) && data.attachments[0].id != data.attachments[1].id))
+        && (data.attachments.size() < 3 || (validPostAttachment(data.attachments[2], postId, data.authorId)
+          && data.attachments[0].id != data.attachments[2].id && data.attachments[1].id != data.attachments[2].id)));
+    }
+    function postReferencesFile(post, fileId) {
+      return 'attachments' in post && post.attachments is list
+        && ((post.attachments.size() > 0 && post.attachments[0].id == fileId)
+          || (post.attachments.size() > 1 && post.attachments[1].id == fileId)
+          || (post.attachments.size() > 2 && post.attachments[2].id == fileId));
+    }
+    function readablePostFile(file, fileId) {
+      return readable() && exists(/databases/$(database)/documents/posts/$(file.postId))
+        && postReferencesFile(get(/databases/$(database)/documents/posts/$(file.postId)).data, fileId);
+    }
+    function unlinkedPostFile(file, fileId) {
+      return !existsAfter(/databases/$(database)/documents/posts/$(file.postId))
+        || !postReferencesFile(getAfter(/databases/$(database)/documents/posts/$(file.postId)).data, fileId);
+    }
+    function mayRemovePostFile(file, fileId) {
+      return active() && (admin() || file.ownerId == request.auth.uid || file.uploadedBy == request.auth.uid)
+        && unlinkedPostFile(file, fileId);
+    }
+    function ownsFileUpload(file) {
+      return file.uploadedBy == request.auth.uid
+        && (exists(/databases/$(database)/documents/posts/$(file.postId))
+          ? (file.ownerId == get(/databases/$(database)/documents/posts/$(file.postId)).data.authorId
+            && (admin() || (file.ownerId == request.auth.uid && get(/databases/$(database)/documents/posts/$(file.postId)).data.category != 'notice')))
+          : file.ownerId == request.auth.uid);
+    }
+    function validFileChunk(data, index, file) {
+      return data.keys().hasOnly(['index','bytes']) && data.keys().hasAll(['index','bytes'])
+        && data.index == index && data.bytes is bytes
+        && data.bytes.size() == (index == file.chunkCount - 1 ? file.size - index * 786432 : 786432);
+    }
+    function completedFileChunk(file, index) {
+      return index >= file.chunkCount || validFileChunk(getAfter(/databases/$(database)/documents/postFiles/$(file.id)/chunks/$(['0','1','2','3','4','5','6'][index])).data, index, file);
+    }
+    function removedFileChunk(fileId, index) {
+      return !existsAfter(/databases/$(database)/documents/postFiles/$(fileId)/chunks/$(['0','1','2','3','4','5','6'][index]));
     }
     function validPoll(data, pollId) {
       return data.keys().hasOnly(['id','title','description','slots','slotIds','deadline','deadlineAt','status','creatorId','createdAt','updatedAt','eventId','slotMinutes','timeWindows'])
@@ -330,6 +382,39 @@ service cloud.firestore {
       allow create: if admin() && validPlace(request.resource.data);
       allow update: if admin() && validPlace(request.resource.data) && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if admin();
+    }
+    match /postFiles/{fileId} {
+      allow read: if readablePostFile(resource.data, fileId);
+      allow create: if active() && request.resource.data.keys().hasOnly(['id','name','size','mimeType','postId','ownerId','uploadedBy','createdAt','chunkCount','sha256'])
+        && request.resource.data.keys().hasAll(['id','name','size','mimeType','postId','ownerId','uploadedBy','createdAt','chunkCount','sha256'])
+        && attachmentId(fileId) && request.resource.data.id == fileId && attachmentId(request.resource.data.postId)
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 200
+        && request.resource.data.size is int && request.resource.data.size > 0 && request.resource.data.size <= 5242880
+        && request.resource.data.mimeType is string && request.resource.data.mimeType.size() > 0 && request.resource.data.mimeType.size() <= 120
+        && request.resource.data.ownerId is string && request.resource.data.createdAt is string
+        && request.resource.data.chunkCount is int && request.resource.data.chunkCount > 0 && request.resource.data.chunkCount <= 7
+        && request.resource.data.size > (request.resource.data.chunkCount - 1) * 786432 && request.resource.data.size <= request.resource.data.chunkCount * 786432
+        && request.resource.data.sha256 is string && request.resource.data.sha256.matches('^[a-f0-9]{64}$')
+        && ownsFileUpload(request.resource.data)
+        && completedFileChunk(request.resource.data, 0) && completedFileChunk(request.resource.data, 1)
+        && completedFileChunk(request.resource.data, 2) && completedFileChunk(request.resource.data, 3)
+        && completedFileChunk(request.resource.data, 4) && completedFileChunk(request.resource.data, 5) && completedFileChunk(request.resource.data, 6);
+      allow update: if false;
+      allow delete: if mayRemovePostFile(resource.data, fileId)
+        && removedFileChunk(fileId, 0) && removedFileChunk(fileId, 1) && removedFileChunk(fileId, 2)
+        && removedFileChunk(fileId, 3) && removedFileChunk(fileId, 4) && removedFileChunk(fileId, 5) && removedFileChunk(fileId, 6);
+      match /chunks/{chunkId} {
+        allow read: if readablePostFile(get(/databases/$(database)/documents/postFiles/$(fileId)).data, fileId);
+        allow create: if active() && attachmentId(fileId) && request.resource.data.index is int
+          && request.resource.data.index >= 0 && request.resource.data.index < 7
+          && chunkId == ['0','1','2','3','4','5','6'][request.resource.data.index]
+          && request.resource.data.index < getAfter(/databases/$(database)/documents/postFiles/$(fileId)).data.chunkCount
+          && getAfter(/databases/$(database)/documents/postFiles/$(fileId)).data.uploadedBy == request.auth.uid
+          && validFileChunk(request.resource.data, request.resource.data.index, getAfter(/databases/$(database)/documents/postFiles/$(fileId)).data);
+        allow update: if false;
+        allow delete: if mayRemovePostFile(get(/databases/$(database)/documents/postFiles/$(fileId)).data, fileId)
+          && !existsAfter(/databases/$(database)/documents/postFiles/$(fileId));
+      }
     }
     match /photos/{photoId} {
       allow read: if readable();

@@ -2,12 +2,15 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import type { ReactNode } from 'react';
 import type { DocumentData } from 'firebase/firestore';
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
-import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, onSnapshot, query, runTransaction, setDoc, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { Bytes, collection, deleteDoc, deleteField, doc, getDoc, getDocs, onSnapshot, query, runTransaction, setDoc, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { getBlob, ref } from 'firebase/storage';
 import { auth, configurationError, db, isDemo, storage } from './firebase';
 import { createDemoData, DEMO_USER_ID } from '../data/demo';
 import { deleteDemoImage, readDemoImage, saveDemoImage } from '../data/images';
-import type { AppContextValue, AppData, CalendarLink, EventBallot, Member, MoimEvent, Poll, Post, Receipt, Rsvp, SavedPlace } from './types';
+import { clearDemoAttachments, deleteDemoAttachment, readDemoAttachment, saveDemoAttachment } from '../data/attachments';
+import type { AppContextValue, AppData, CalendarLink, EventBallot, Member, MoimEvent, Poll, Post, PostAttachment, Receipt, Rsvp, SavedPlace } from './types';
+import { assemblePostAttachment, MAX_POST_FILE_CHUNKS, POST_FILE_CHUNK_BYTES, preparePostAttachment, validatePostAttachments, validatePostFiles } from './attachments';
+import type { PostFileManifest } from './attachments';
 import { preparePostPhoto, prepareReceipt } from './receipt';
 import { errorMessage, uid } from './utils';
 
@@ -42,6 +45,8 @@ export function AppProvider({children}: {children: ReactNode}) {
   const canParticipate=user?.status==='active';
   const isAdmin = user?.status === 'active' && user.role === 'leader';
   const canCreatePoll = user?.status === 'active' && (isAdmin || user.canCreatePoll);
+  const fileSession = useRef('');
+  fileSession.current = `${isDemo ? demoSignedIn : authUid}:${user?.id ?? ''}:${user?.status ?? ''}`;
 
   const applyDemo = (next: AppData) => {
     try { localStorage.setItem(DEMO_KEY,JSON.stringify(next)); }
@@ -53,6 +58,18 @@ export function AppProvider({children}: {children: ReactNode}) {
   const admin = () => { const actor=active(); if(actor.role!=='leader') throw new Error('관리자만 변경할 수 있어요.'); return actor; };
   const managePoll = (poll: Poll) => { const actor=active(); if(!isAdmin && !(actor.canCreatePoll && poll.creatorId===actor.id)) throw new Error('투표를 관리할 권한이 없어요.'); if(poll.status==='confirmed') throw new Error('확정한 투표는 변경할 수 없어요. 캘린더에서 일정을 수정해 주세요.'); return actor; };
   const database = () => { if(!db) throw new Error(configurationError ?? 'Firebase에 연결할 수 없어요.'); return db; };
+  const checkFileSession = (session:string,uid:string) => {
+    if(fileSession.current!==session || (!isDemo && auth?.currentUser?.uid!==uid))throw new Error('로그인 상태가 변경됐어요. 다시 시도해 주세요.');
+  };
+  const cleanupPostFile = async (id:string) => {
+    if(isDemo) {
+      if(!dataRef.current.posts.some(post=>post.attachments?.some(file=>file.id===id)))await deleteDemoAttachment(id);
+    } else {
+      const batch=writeBatch(database());
+      for(let index=0;index<MAX_POST_FILE_CHUNKS;index++)batch.delete(doc(database(),'postFiles',id,'chunks',String(index)));
+      batch.delete(doc(database(),'postFiles',id));await batch.commit();
+    }
+  };
   const normalizeImages = (images: string[]) => images.map(image=>reverseImages.current.get(image) ?? image);
   const displayImage = (path: string) => {
     if(imageUrls[path]) return imageUrls[path];
@@ -273,29 +290,90 @@ export function AppProvider({children}: {children: ReactNode}) {
       if(!['leader','treasurer','member'].includes(next.role) || !['active','pending','rejected'].includes(next.status)) throw new Error('유효한 역할과 가입 상태를 선택해 주세요.');
       if(isDemo) applyDemo({...dataRef.current,members:replace(dataRef.current.members,next)}); else await updateDoc(doc(database(),'members',id),clean(patch));
     },
-    async savePost(post) {
+    async savePost(post,newFiles=[]) {
       const actor=active(); const old=dataRef.current.posts.find(item=>item.id===post.id);
       if(old && old.updatedAt!==post.updatedAt) throw new Error('다른 변경이 있어요. 글을 다시 확인한 뒤 수정해 주세요.');
       if(old && old.authorId!==actor.id && !isAdmin) throw new Error('작성자만 글을 수정할 수 있어요.');
       if(!isAdmin && (post.category==='notice' || post.pinned!==(old?.pinned ?? false) || old?.category==='notice')) throw new Error('공지사항은 관리자만 작성할 수 있어요.');
       if(!post.title.trim() || post.title.length>120 || post.body.length>20000 || post.images.length>8) throw new Error('제목, 본문과 사진 개수를 확인해 주세요.');
+      const retained=post.attachments ?? old?.attachments ?? [];
+      validatePostAttachments(retained);validatePostFiles(newFiles,retained.length);
+      const session=fileSession.current;
+      const staged:PostAttachment[]=[];
       const now=new Date().toISOString();
-      const next: Post=clean({...post,title:post.title.trim(),authorId:old?.authorId ?? actor.id,createdAt:old?.createdAt ?? now,updatedAt:now,likedBy:old?.likedBy ?? [],images:normalizeImages(post.images)});
-      if(isDemo) applyDemo({...dataRef.current,posts:replace(dataRef.current.posts,next)});
-      else await runTransaction(database(),async transaction=>{
-        const postRef=doc(database(),'posts',post.id); const snapshot=await transaction.get(postRef);
-        if(snapshot.exists()) {
-          const current=snapshot.data() as Post;
-          if(current.updatedAt!==post.updatedAt) throw new Error('다른 변경이 있어요. 글을 다시 확인한 뒤 수정해 주세요.');
-          transaction.set(postRef,{...next,authorId:current.authorId,createdAt:current.createdAt,likedBy:current.likedBy});
-        } else transaction.set(postRef,next);
-      });
+      try {
+        for(const file of newFiles) {
+          const prepared=await preparePostAttachment(file,post.id,old?.authorId ?? actor.id,actor.id);
+          checkFileSession(session,actor.id);staged.push(prepared.attachment);
+          if(isDemo)await saveDemoAttachment(prepared.manifest,file);
+          else {
+            const batch=writeBatch(database());
+            for(const [index,bytes] of prepared.chunks.entries())batch.set(doc(database(),'postFiles',prepared.attachment.id,'chunks',String(index)),{index,bytes:Bytes.fromUint8Array(bytes)});
+            batch.set(doc(database(),'postFiles',prepared.attachment.id),{...prepared.manifest});await batch.commit();
+          }
+          checkFileSession(session,actor.id);
+        }
+        const attachments=[...retained,...staged];
+        const next:Post=clean({...post,attachments,title:post.title.trim(),authorId:old?.authorId ?? actor.id,createdAt:old?.createdAt ?? now,updatedAt:now,likedBy:old?.likedBy ?? [],images:normalizeImages(post.images)});
+        let removed:PostAttachment[]=[];
+        checkFileSession(session,actor.id);
+        if(isDemo) {
+          removed=(old?.attachments ?? []).filter(file=>!attachments.some(value=>value.id===file.id));
+          applyDemo({...dataRef.current,posts:replace(dataRef.current.posts,next)});
+        } else removed=await runTransaction(database(),async transaction=>{
+          const postRef=doc(database(),'posts',post.id);const snapshot=await transaction.get(postRef);
+          checkFileSession(session,actor.id);
+          if(snapshot.exists()) {
+            const current=snapshot.data() as Post;
+            if(current.updatedAt!==post.updatedAt)throw new Error('다른 변경이 있어요. 글을 다시 확인한 뒤 수정해 주세요.');
+            if(current.authorId!==actor.id && !isAdmin)throw new Error('작성자만 글을 수정할 수 있어요.');
+            transaction.set(postRef,{...next,authorId:current.authorId,createdAt:current.createdAt,likedBy:current.likedBy});
+            return (current.attachments ?? []).filter(file=>!attachments.some(value=>value.id===file.id));
+          }
+          transaction.set(postRef,next);return [];
+        });
+        await Promise.allSettled(removed.map(file=>cleanupPostFile(file.id)));
+      } catch(problem) {
+        // The cleanup rules preserve a file if a lost acknowledgement already linked it to a post.
+        await Promise.allSettled(staged.map(file=>cleanupPostFile(file.id)));
+        throw problem;
+      }
+    },
+    async getPostAttachment(postId,attachmentId) {
+      const actor=readable(),session=fileSession.current;
+      const infoError=()=>new Error('첨부 파일 정보를 확인해 주세요.');
+      if(!/^[A-Za-z0-9_-]{1,80}$/.test(attachmentId) || !/^[A-Za-z0-9:_-]{1,128}$/.test(postId))throw infoError();
+      const post=isDemo ? dataRef.current.posts.find(value=>value.id===postId) : (await getDoc(doc(database(),'posts',postId))).data() as Post|undefined;
+      const attachment=post?.attachments?.find(file=>file.id===attachmentId);
+      if(!attachment)throw infoError();validatePostAttachments([attachment]);
+      let manifest:PostFileManifest,chunks:{index:number;bytes:Uint8Array}[];
+      if(isDemo) {
+        const saved=await readDemoAttachment(attachmentId);if(!saved)throw infoError();manifest=saved.manifest;
+        const bytes=new Uint8Array(await saved.blob.arrayBuffer());chunks=[];
+        for(let offset=0;offset<bytes.byteLength;offset+=POST_FILE_CHUNK_BYTES)chunks.push({index:chunks.length,bytes:bytes.slice(offset,offset+POST_FILE_CHUNK_BYTES)});
+      } else {
+        const snapshot=await getDoc(doc(database(),'postFiles',attachmentId));if(!snapshot.exists())throw infoError();manifest=snapshot.data() as PostFileManifest;
+        if(!Number.isInteger(manifest.chunkCount) || manifest.chunkCount<1 || manifest.chunkCount>MAX_POST_FILE_CHUNKS)throw infoError();
+        const snapshots=await Promise.all(Array.from({length:manifest.chunkCount},(_,index)=>getDoc(doc(database(),'postFiles',attachmentId,'chunks',String(index)))));
+        chunks=snapshots.map(value=>{const data=value.data();if(!data || !(data.bytes instanceof Bytes))throw infoError();return {index:data.index as number,bytes:data.bytes.toUint8Array()};});
+      }
+      if(manifest.postId!==postId || manifest.id!==attachmentId || manifest.name!==attachment.name || manifest.size!==attachment.size || manifest.mimeType!==attachment.mimeType)throw infoError();
+      const blob=await assemblePostAttachment(manifest,chunks);
+      checkFileSession(session,actor.id);
+      if(isDemo && !dataRef.current.posts.find(value=>value.id===postId)?.attachments?.some(file=>file.id===attachmentId))throw infoError();
+      return blob;
     },
     async deletePost(id) {
       const actor=active(); const post=dataRef.current.posts.find(item=>item.id===id); if(!post || (!isAdmin && post.authorId!==actor.id)) throw new Error('글을 삭제할 권한이 없어요.');
       if(!isAdmin && post.category==='notice') throw new Error('공지사항은 관리자만 관리할 수 있어요.');
-      if(isDemo) applyDemo({...dataRef.current,posts:dataRef.current.posts.filter(item=>item.id!==id),comments:dataRef.current.comments.filter(item=>item.postId!==id)});
-      else { await deleteDoc(doc(database(),'posts',id)); /* Orphaned comments are hidden by the UI's post filter. */ }
+      let removed=post.attachments ?? [];
+      if(isDemo)applyDemo({...dataRef.current,posts:dataRef.current.posts.filter(item=>item.id!==id),comments:dataRef.current.comments.filter(item=>item.postId!==id)});
+      else removed=await runTransaction(database(),async transaction=>{
+        const target=doc(database(),'posts',id),snapshot=await transaction.get(target);if(!snapshot.exists())return [];
+        const current=snapshot.data() as Post;if(!isAdmin && (current.authorId!==actor.id || current.category==='notice'))throw new Error('글을 삭제할 권한이 없어요.');
+        transaction.delete(target);return current.attachments ?? [];
+      });
+      await Promise.allSettled(removed.map(file=>cleanupPostFile(file.id)));
     },
     async toggleLike(id) {
       const actor=active();
@@ -429,7 +507,7 @@ export function AppProvider({children}: {children: ReactNode}) {
         if(generation!==imageGeneration.current)throw new Error('로그인 상태가 변경됐어요. 다시 시도해 주세요.');const url=URL.createObjectURL(blob);imageCache.current.set(path,url);reverseImages.current.set(url,path);setImageUrls(previous=>({...previous,[path]:url}));return url;
       }));
     },
-    resetDemo() { if(!isDemo) return; const next=createDemoData();applyDemo(next);setDemoSignedIn(true);setError(null); },
+    resetDemo() { if(!isDemo) return; const next=createDemoData();applyDemo(next);void clearDemoAttachments().catch(()=>{});setDemoSignedIn(true);setError(null); },
   }),[data,user,loading,isAdmin,canParticipate,canCreatePoll,error,imageUrls]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

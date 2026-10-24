@@ -5,7 +5,8 @@ export interface UserPreferences { language: 'ko' | 'en'; theme: 'system' | 'lig
 export interface Profile { id: string; phone: string; area: string; birthday?: string; language?: UserPreferences['language']; theme?: UserPreferences['theme'] }
 export interface Settings { name: string; description: string; photoURL?: string; smsEnabled?: boolean; smsAutoOnConfirm?: boolean }
 export type Category = 'notice' | 'chat' | 'info' | 'gallery';
-export interface Post { id: string; category: Category; title: string; body: string; authorId: string; createdAt: string; updatedAt: string; images: string[]; pinned: boolean; likedBy: string[] }
+export interface PostAttachment { id: string; name: string; size: number; mimeType: string }
+export interface Post { id: string; category: Category; title: string; body: string; authorId: string; createdAt: string; updatedAt: string; images: string[]; attachments?: PostAttachment[]; pinned: boolean; likedBy: string[] }
 export interface Comment { id: string; postId: string; authorId: string; body: string; createdAt: string }
 export interface PollSlot { id: string; date: string; start: string; end: string }
 export interface Poll { id: string; title: string; description: string; slots: PollSlot[]; slotIds: string[]; deadline: string | null; slotMinutes?: 30 | 60; timeWindows?: PollSlot[]; status: 'open' | 'closed' | 'confirmed'; creatorId: string; createdAt: string; updatedAt: string; eventId?: string }
@@ -37,7 +38,7 @@ export interface AppContextValue extends AppData {
   updateMember: (id: string, patch: Partial<Pick<Member, 'role' | 'status' | 'canCreatePoll' | 'position'>>) => Promise<void>;
   addRosterMember: (data: { name: string; phone: string; area: string; birthday?: string; position?: string }) => Promise<void>;
   linkRosterMember: (rosterId: string, userId: string) => Promise<void>;
-  savePost: (post: Post) => Promise<void>; deletePost: (id: string) => Promise<void>; toggleLike: (id: string) => Promise<void>;
+  savePost: (post: Post, newFiles?: File[]) => Promise<void>; getPostAttachment: (postId: string, attachmentId: string) => Promise<Blob>; deletePost: (id: string) => Promise<void>; toggleLike: (id: string) => Promise<void>;
   addComment: (postId: string, body: string) => Promise<void>; deleteComment: (id: string) => Promise<void>;
   savePoll: (poll: Poll) => Promise<void>; deletePoll: (id: string) => Promise<void>; saveVote: (pollId: string, slotIds: string[]) => Promise<void>;
   confirmPoll: (pollId: string, slotId: string, location: string, endSlotId?: string) => Promise<void>;

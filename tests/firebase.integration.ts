@@ -14,6 +14,74 @@ let environment: RulesTestEnvironment;
 let leaderId:string;
 let pendingId:string;
 
+test('real Firebase file attachments preserve maximum-size bytes, editing and pending downloads', async ({ page, browser }) => {
+  test.setTimeout(90000);
+  const title = 'Firebase 문서 첨부';
+  const large = Buffer.alloc(5 * 1024 * 1024);
+  for (let i = 0; i < large.length; i++) large[i] = i % 251;
+  const note = Buffer.from('회비 안내\r\n매월 1일 · 20,000원\n', 'utf8');
+  await login(page, leaderEmail); await page.goto('/board');
+  await page.getByRole('button', { name: '글쓰기', exact: true }).first().click();
+  let dialog = page.getByRole('dialog');
+  await dialog.getByLabel('제목').fill(title); await dialog.getByLabel('내용').fill('최대 크기의 파일도 원본 그대로 저장합니다.');
+  await dialog.getByLabel('파일 첨부', { exact: true }).setInputFiles([
+    { name: '대관 자료.pdf', mimeType: 'application/pdf', buffer: large },
+    { name: '회비 안내.txt', mimeType: 'text/plain', buffer: note },
+  ]);
+  await dialog.getByRole('button', { name: '올리기', exact: true }).click();
+  await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible({ timeout: 30000 });
+  const saved = (await savedPost(title))!;
+  expect(saved.attachments).toHaveLength(2);
+  expect(saved.attachments[0].size).toBe(large.length);
+  await page.reload(); dialog = page.getByRole('dialog');
+  const waiting = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: '대관 자료.pdf 다운로드', exact: true }).click();
+  const download = await waiting;
+  expect(download.suggestedFilename()).toBe('대관 자료.pdf');
+  expect(readFileSync((await download.path())!)).toEqual(large);
+  await dialog.getByRole('button', { name: '게시글 관리', exact: true }).click();
+  await dialog.getByRole('button', { name: '수정하기', exact: true }).click();
+  await page.getByRole('dialog').getByLabel('내용').fill('본문을 수정했습니다.');
+  await page.getByRole('dialog').getByRole('button', { name: '수정 완료', exact: true }).click();
+  await expect(page.getByRole('dialog').getByText('본문을 수정했습니다.', { exact: true })).toBeVisible();
+  expect((await savedPost(title))!.attachments).toEqual(saved.attachments);
+
+  const pendingContext = await browser.newContext();
+  const pendingPage = await pendingContext.newPage();
+  await login(pendingPage, pendingEmail);
+  await pendingPage.goto(`/board?post=${saved.id}`);
+  const pendingDetail = pendingPage.getByRole('dialog');
+  await expect(pendingPage.locator('.pending-access')).toBeVisible();
+  await expect(pendingDetail.getByRole('button', { name: '게시글 관리', exact: true })).toHaveCount(0);
+  const pendingWaiting = pendingPage.waitForEvent('download');
+  await pendingDetail.getByRole('button', { name: '회비 안내.txt 다운로드', exact: true }).click();
+  expect(readFileSync((await (await pendingWaiting).path())!)).toEqual(note);
+  await pendingContext.close();
+
+  dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: '게시글 관리', exact: true }).click();
+  await dialog.getByRole('button', { name: '삭제하기', exact: true }).click();
+  await dialog.locator('.community-confirm').getByRole('button', { name: '삭제', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(await savedPost(title)).toBeUndefined();
+  // The post snapshot removes the dialog before asynchronous file cleanup finishes.
+  await expect.poll(async () => {
+    let remaining = true;
+    await environment.withSecurityRulesDisabled(async context => {
+      const files = await Promise.all(saved.attachments.map((file: { id: string }) => getDoc(doc(context.firestore(), 'postFiles', file.id))));
+      remaining = files.some(file => file.exists());
+    });
+    return remaining;
+  }).toBe(false);
+  await environment.withSecurityRulesDisabled(async context => {
+    const { collection, getDocs } = await import('firebase/firestore');
+    for (const file of saved.attachments) {
+      expect((await getDoc(doc(context.firestore(), 'postFiles', file.id))).exists()).toBe(false);
+      expect((await getDocs(collection(context.firestore(), 'postFiles', file.id, 'chunks'))).empty).toBe(true);
+    }
+  });
+});
+
 async function createAccount(email:string):Promise<string> {
   const response=await fetch('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake-api-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password,returnSecureToken:true})});
   const result=await response.json();if(!response.ok)throw new Error(JSON.stringify(result));return result.localId as string;
@@ -193,7 +261,7 @@ test('real Firebase gallery uses compact private photo documents and preserves r
   await login(page,leaderEmail);await page.goto('/board?category=gallery');
   await page.getByRole('button',{name:'글쓰기',exact:true}).first().click();let dialog=page.getByRole('dialog');
   await dialog.getByLabel('제목').fill('Firebase 사진 저장');await dialog.getByLabel('내용').fill('Firestore 사진 참조 검증');
-  await dialog.locator('input[type=file]').setInputFiles({name:'group-photo.jpg',mimeType:'image/jpeg',buffer:readFileSync(new URL('../public/images/gallery-cafe.jpg',import.meta.url))});
+  await dialog.getByLabel('사진 첨부',{exact:true}).setInputFiles({name:'group-photo.jpg',mimeType:'image/jpeg',buffer:readFileSync(new URL('../public/images/gallery-cafe.jpg',import.meta.url))});
   await expect(dialog.getByRole('img',{name:'첨부 사진 1'})).toBeVisible();await dialog.getByRole('button',{name:'올리기',exact:true}).click();
   await expect(dialog.getByRole('heading',{name:'Firebase 사진 저장',exact:true})).toBeVisible();
   let postId='',reference='';

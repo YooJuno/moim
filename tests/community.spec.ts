@@ -43,7 +43,7 @@ test('사진첩에 올린 이미지가 새로고침 후에도 표시된다', asy
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('제목').fill('테스트 사진 기록');
   await dialog.getByLabel('내용').fill('우리 모임의 작은 순간');
-  await dialog.locator('input[type=file]').setInputFiles({ name:'test-photo.png', mimeType:'image/png', buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNQyf4LAAJDAY2a3VQGAAAAAElFTkSuQmCC', 'base64') });
+  await dialog.locator('.board-upload-head input[type=file]').setInputFiles({ name:'test-photo.png', mimeType:'image/png', buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNQyf4LAAJDAY2a3VQGAAAAAElFTkSuQmCC', 'base64') });
   await expect(dialog.getByRole('img', { name:'첨부 사진 1' })).toBeVisible();
   await dialog.getByRole('button', { name: '올리기', exact: true }).click();
   await expect(dialog.getByRole('heading', { name: '테스트 사진 기록', exact: true })).toBeVisible();
