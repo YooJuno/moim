@@ -23,7 +23,7 @@ for(const viewport of [{name:'desktop',width:1440,height:1000},{name:'mobile',wi
     await expect(editor).toHaveAccessibleName('New schedule poll');
     await editor.getByRole('button',{name:'Clear selection',exact:true}).click();
     await editor.getByLabel('Poll title').fill('English schedule smoke');
-    await editor.locator('.poll-common-times input[type=time]').first().fill('18:00');
+    await editor.locator('.poll-common-times .time-input').first().fill('18:00');
     await editor.locator('.poll-common-times select').first().selectOption('21:00');
     await editor.locator('[data-date="2026-10-31"]').click();
     await assertEnglishChrome(page);

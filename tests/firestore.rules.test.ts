@@ -446,4 +446,26 @@ describe.skipIf(!enabled)('Firebase access boundaries',()=>{
     await assertSucceeds(getDoc(doc(client('member'),'ledger','l1')));
     await assertFails(updateDoc(doc(db,'members','pending'),{status:'active'}));
   });
+
+  it('supports optional bounded ledger notes with unchanged author and receipt protections',async()=>{
+    const db=client('treasurer');const entry=doc(db,'ledger','l1');
+    await assertSucceeds(setDoc(doc(db,'ledger','notes'),{...ledger('notes'),memo:'대관료, "현장 결제"\n다음 달 정산'}));
+    await assertSucceeds(updateDoc(entry,{memo:'m'.repeat(2000)}));
+    await assertSucceeds(getDoc(doc(client('pending'),'ledger','l1')));
+    await assertFails(updateDoc(entry,{memo:'m'.repeat(2001)}));
+    await assertFails(setDoc(doc(db,'ledger','long-notes'),{...ledger('long-notes'),memo:'m'.repeat(2001)}));
+    await assertFails(updateDoc(entry,{memo:42}));
+    await assertFails(updateDoc(entry,{memo:null}));
+    await assertFails(updateDoc(doc(client('pending'),'ledger','l1'),{memo:'무단 수정'}));
+    await assertFails(updateDoc(doc(client('member'),'ledger','l1'),{memo:'무단 수정'}));
+    await assertFails(updateDoc(entry,{memo:'수정',creatorId:'leader'}));
+    const receipt={entryId:'l1',fileName:'receipt.jpg',imageURL:'data:image/jpeg;base64,aGVsbG8=',uploadedBy:'treasurer',updatedAt:now};
+    const attach=writeBatch(db);attach.set(doc(db,'receipts','l1'),receipt);attach.update(entry,{hasReceipt:true});await assertSucceeds(attach.commit());
+    await assertSucceeds(updateDoc(entry,{memo:'영수증 첨부 후 수정'}));
+    await assertFails(updateDoc(entry,{memo:'m'.repeat(2001),hasReceipt:true}));
+    await assertFails(updateDoc(entry,{memo:'첨부 무단 해제',hasReceipt:false}));
+    await assertSucceeds(updateDoc(entry,{memo:''}));
+    await assertSucceeds(updateDoc(entry,{memo:deleteField()}));
+    const remove=writeBatch(db);remove.delete(doc(db,'receipts','l1'));remove.update(entry,{hasReceipt:false});await assertSucceeds(remove.commit());
+  });
 });

@@ -205,8 +205,9 @@ export function AppProvider({children}: {children: ReactNode}) {
       const actor=active(); if(!['leader','treasurer'].includes(actor.role)) throw new Error('관리자와 회계 담당만 회계를 관리할 수 있어요.');
       const old=dataRef.current.ledger.find(item=>item.id===entry.id);
       if(!['income','expense'].includes(entry.type) || !Number.isSafeInteger(entry.amount) || entry.amount<=0 || entry.amount>1e10 || !entry.category.trim() || entry.category.length>40 || !entry.description.trim() || entry.description.length>1000 || !/^\d{4}-\d{2}-\d{2}$/.test(entry.date)) throw new Error('거래 날짜, 금액과 내용을 확인해 주세요.');
+      if(entry.memo!==undefined && (typeof entry.memo!=='string' || entry.memo.length>2000))throw new Error('비고는 2,000자 이내로 입력해 주세요.');
       const now=new Date().toISOString();
-      const build=(current?: typeof entry)=>{const {hasReceipt:_incomingReceipt,...fields}=entry;return clean({...fields,category:entry.category.trim(),description:entry.description.trim(),creatorId:current?.creatorId ?? actor.id,createdAt:current?.createdAt ?? now,updatedAt:now,...(current?.hasReceipt ? {hasReceipt:true}:{})});};
+      const build=(current?: typeof entry)=>{const {hasReceipt:_incomingReceipt,memo:_incomingMemo,...fields}=entry;const memo=entry.memo ?? current?.memo;return clean({...fields,...(memo ? {memo}:{}),category:entry.category.trim(),description:entry.description.trim(),creatorId:current?.creatorId ?? actor.id,createdAt:current?.createdAt ?? now,updatedAt:now,...(current?.hasReceipt ? {hasReceipt:true}:{})});};
       if(isDemo) applyDemo({...dataRef.current,ledger:replace(dataRef.current.ledger,build(old))});
       else await runTransaction(database(),async transaction=>{const entryRef=doc(database(),'ledger',entry.id);const snapshot=await transaction.get(entryRef);transaction.set(entryRef,build(snapshot.exists() ? snapshot.data() as typeof entry:undefined));});
     },

@@ -1,4 +1,3 @@
-import { getLocale } from "../lib/i18n";
 import { useI18n } from "../lib/preferences";
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -6,7 +5,7 @@ import { BellRing, Check, Clock3, Trophy, Users, X } from 'lucide-react';
 import { useApp } from '../lib/store';
 import type { MoimEvent } from '../lib/types';
 import { mvpWindow } from '../lib/mvp';
-import { errorMessage } from '../lib/utils';
+import { errorMessage, formatTime } from '../lib/utils';
 import { Avatar, Badge, Button, IconButton, useToast } from './ui';
 import './mvp.css';
 function wasDismissed(key: string) { try {
@@ -42,7 +41,7 @@ export function MvpVoting({ event }: {
         setBusy(false);
     } };
     return <section className="mvp-section" aria-label={t("MVP 투표")}><div className="section-head"><h3><Trophy size={18}/>{t("MVP 투표")}</h3><Badge tone={window.isOpen ? 'blue' : window.isClosed ? 'gray' : 'orange'}>{window.isOpen ? t("투표 중") : window.isClosed ? t("마감") : t("예정")}</Badge></div>
-    <p className="mvp-status">{!window.isOpen && !window.isClosed ? <><Clock3 size={14}/>{t("종료 10분 전 시작 \u00B7")}{new Date(window.opens).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Seoul' })}</> : <>{t("참석자 {0}명 · 응답 {1}명", {"0":candidates.length,"1":votes.length})}</>}</p>
+    <p className="mvp-status">{!window.isOpen && !window.isClosed ? <><Clock3 size={14}/>{t("종료 10분 전 시작 \u00B7")}{formatTime(window.opens)}</> : <>{t("참석자 {0}명 · 응답 {1}명", {"0":candidates.length,"1":votes.length})}</>}</p>
     {candidates.length ? <div className="mvp-candidates">{candidates.map(member => { const count = votes.filter(vote => vote.candidateId === member.id).length; return <button type="button" key={member.id} className={`mvp-candidate ${selected === member.id ? 'is-selected' : ''}`} disabled={!window.isOpen || !eligible || busy} aria-pressed={selected === member.id} aria-label={t("{0} MVP 선택", { "0": member.name })} onClick={() => setSelected(member.id)}><Avatar member={member} size={34}/><strong>{member.name}</strong>{window.isClosed && top > 0 && count === top && <Trophy size={16} className="mvp-winner"/>}<span>{count}{t("표")}</span>{selected === member.id && <Check size={16}/>}</button>; })}</div> : <div className="mvp-empty"><Users size={20}/>{t("참석자가 없어요.")}</div>}
     {window.isOpen && eligible ? <div className="mvp-submit"><span>{t("모임 종료 후 24시간까지")}</span><Button size="sm" icon={Check} disabled={!selected || selected === own?.candidateId} loading={busy} onClick={() => void save()}>{own ? t("투표 변경") : t("투표하기")}</Button></div> : window.isOpen ? <p className="mvp-hint">{t("참석자로 등록한 멤버만 투표할 수 있어요.")}</p> : !window.isClosed ? <p className="mvp-hint">{t("\u2018참여해요\u2019로 등록한 명단이 자동으로 후보가 됩니다.")}</p> : null}
   </section>;

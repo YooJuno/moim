@@ -4,6 +4,8 @@ Firebase Hosting 프런트엔드에 연결하는 별도 Cloudflare Worker입니�
 
 사용자 콘솔 설정: [로그인 설정 안내](../../docs/LOGIN_SETUP.md).
 
+네이버 장소 이름 검색 설정: [NAVER API HUB 연결 안내](../../docs/NAVER_SEARCH_SETUP.md). 검색 키는 로그인 키와 분리하며, 기본 설정은 `NAVER_SEARCH_ENABLED=false`입니다.
+
 ## 준비와 검증
 
 ```sh
@@ -25,6 +27,8 @@ npm run build
 | `AUTH_BASE_URL` | Worker의 공개 origin, 경로·마지막 `/` 제외 |
 | `ALLOWED_ORIGINS` | 프런트엔드 origin을 쉼표로 구분, 와일드카드 없음 |
 | `KAKAO_CALENDAR_ENABLED` | 기본 `false`; 톡캘린더 사용 권한과 사용자 동의 설정 후에만 `true` |
+| `NAVER_SEARCH_ENABLED` | 기본 `false`; 검색용 키 연결과 현재 이용요금 확인 후 `true` |
+| `NAVER_SEARCH_API` | 신규 키는 `hub`(기본), 기존 개발자센터 키는 `legacy` |
 
 비밀값은 `wrangler secret put NAME`으로 설정합니다. 로컬에서만 `.dev.vars.example`을 `.dev.vars`로 복사해 사용합니다.
 
@@ -36,6 +40,7 @@ npm run build
 | `TOKEN_ENCRYPTION_KEY` | 별도로 생성한 무작위 32바이트의 base64url 값 |
 | `KAKAO_REST_API_KEY`, `KAKAO_CLIENT_SECRET` | 카카오 REST 앱 설정 |
 | `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` | 네이버 앱 설정 |
+| `NAVER_SEARCH_CLIENT_ID`, `NAVER_SEARCH_CLIENT_SECRET` | NAVER API HUB 장소 검색 키. OAuth 키와 별도로 저장 |
 
 서비스 계정에는 해당 프로젝트의 Firebase Authentication Admin과 Cloud Datastore User 권한이 필요합니다. 계정 키 JSON은 레포 밖에 보관하고 비밀키를 `VITE_` 변수나 브라우저 코드에 넣지 않습니다. Firebase Admin SDK와 Node 런타임은 사용하지 않습니다.
 
@@ -52,7 +57,8 @@ Worker가 돌아오는 프런트엔드 경로는 허용한 origin의 `/auth/call
 
 | API | 인증·입력 | 응답 |
 | --- | --- | --- |
-| `GET /config` | 공개 | `{providers:{kakao,naver},calendar:{kakao}}`, 불리언만 반환 |
+| `GET /config` | 공개 | `{providers:{kakao,naver},calendar:{kakao},notifications:{sms},places:{naver}}`, 불리언만 반환 |
+| `GET /places/search?q=검색어` | Firebase Bearer 토큰, 승인된 사용자 또는 승인 대기자, 검색어 최대 120자 | `{places:[{id,name,address,roadAddress,latitude?,longitude?,naverUrl}]}`, 최대 5개 |
 | `GET /oauth/:provider/start` | `challenge`, `returnOrigin`, 선택 `intent=signin` | 공급자 동의 화면으로 302 |
 | `POST /oauth/:provider/link/start` | Firebase Bearer 토큰, JSON `{challenge,returnOrigin}` | `{authorizationUrl}` |
 | `GET /oauth/:provider/callback` | 공급자의 `code`, `state` | 프런트엔드 `/auth/callback?code=...&provider=...&intent=...`로 302 |

@@ -63,5 +63,5 @@ function PlaceEditor({ place, onClose }: {
     finally {
         setSaving(false);
     } }
-    return <Modal title={place ? t("장소 수정") : t("장소 추가")} onClose={() => !saving && onClose()} footer={<><Button variant="secondary" disabled={saving} onClick={onClose}>{t("취소")}</Button><Button form="saved-place-form" type="submit" loading={saving}>{t("저장")}</Button></>}><form id="saved-place-form" className="stack" onSubmit={save}><Field label={t("장소 이름")} required><input value={name} onChange={event => setName(event.target.value)} maxLength={80} required autoFocus/></Field><AddressField value={address} onChange={setAddress} required disabled={saving}/></form></Modal>;
+    return <Modal title={place ? t("장소 수정") : t("장소 추가")} onClose={() => !saving && onClose()} footer={<><Button variant="secondary" disabled={saving} onClick={onClose}>{t("취소")}</Button><Button form="saved-place-form" type="submit" loading={saving}>{t("저장")}</Button></>}><form id="saved-place-form" className="stack" onSubmit={save}><Field label={t("장소 이름")} required><input value={name} onChange={event => setName(event.target.value)} maxLength={80} required autoFocus/></Field><AddressField value={address} onChange={setAddress} searchName={name} onPlaceSelect={result => { if (!name.trim()) setName(result.name.slice(0, 80)); }} required disabled={saving}/></form></Modal>;
 }

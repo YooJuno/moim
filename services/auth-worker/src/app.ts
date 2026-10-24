@@ -2,6 +2,7 @@ import {decrypt,encrypt,keyedId,randomToken,sha256} from './crypto';
 import {authorizationUrl,providerEnabled} from './providers';
 import {ConflictError,HttpError} from './types';
 import {createSmsService,smsConfigured} from './sms';
+import {naverSearchConfigured,searchNaverPlaces,validatePlaceQuery} from './naver-places';
 import type {Dependencies,Env,Intent,Mutation,Provider,ProviderIdentity,StoredDocument} from './types';
 
 interface State {provider:Provider;intent:Intent;challenge:string;returnOrigin:string;uid?:string;expiresAt:number}
@@ -52,6 +53,13 @@ async function storeKakaoTokens(uid:string,identity:ProviderIdentity,env:Env,dep
 
 export function createApp(env:Env,deps:Dependencies){
  const sms=createSmsService(env,deps,request=>verified(request,deps));
+ const placeSearch=async(request:Request,url:URL)=>{
+  const identity=await verified(request,deps);
+  const member=await deps.store.get(`members/${identity.uid}`);
+  if(!member || !['active','pending'].includes(String(member.data.status)))throw new HttpError(403,'readable_membership_required');
+  const query=validatePlaceQuery(url.searchParams.get('q'));
+  return json({places:await searchNaverPlaces(query,env)});
+ };
  const callbackUri=(provider:Provider)=>`${allowedWorkerOrigin(env.AUTH_BASE_URL!)}/oauth/${provider}/callback`;
  const start=async(provider:Provider,intent:Intent,challenge:unknown,origin:unknown,uid?:string)=>{
   if(!ready(env) || !providerEnabled(provider,env))throw new HttpError(503,'provider_not_configured');const returnOrigin=allowedOrigin(origin,env);const state=randomToken();const key=await keyedId(`state:${state}`,env.STATE_SECRET!);const data:State={provider,intent,challenge:challengeFrom(challenge),returnOrigin,...(uid ? {uid}:{}),expiresAt:deps.now()+600000};await deps.store.commit([{path:`authStates/${key}`,createOnly:true,data:{...data}}]);return authorizationUrl(provider,state,callbackUri(provider),env);
@@ -85,7 +93,8 @@ export function createApp(env:Env,deps:Dependencies){
   try{
    if(origin && !origins(env).includes(origin))throw new HttpError(403,'origin_not_allowed');const url=new URL(request.url),path=url.pathname;
    if(request.method==='OPTIONS'){if(!origin)throw new HttpError(403,'origin_required');response=new Response(null,{status:204,headers:{'Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'Authorization,Content-Type','Access-Control-Max-Age':'600'}});}
-   else if(request.method==='GET' && path==='/config')response=json({providers:{kakao:ready(env)&&providerEnabled('kakao',env),naver:ready(env)&&providerEnabled('naver',env)},calendar:{kakao:ready(env)&&providerEnabled('kakao',env)&&env.KAKAO_CALENDAR_ENABLED==='true'},notifications:{sms:smsConfigured(env)}});
+   else if(request.method==='GET' && path==='/config')response=json({providers:{kakao:ready(env)&&providerEnabled('kakao',env),naver:ready(env)&&providerEnabled('naver',env)},calendar:{kakao:ready(env)&&providerEnabled('kakao',env)&&env.KAKAO_CALENDAR_ENABLED==='true'},notifications:{sms:smsConfigured(env)},places:{naver:naverSearchConfigured(env)}});
+   else if(request.method==='GET' && path==='/places/search'){throttle(request,'places',deps.now());response=await placeSearch(request,url);}
    else if(request.method==='POST' && /^\/notifications\/sms\/events\/[^/]+\/(preview|send)$/.test(path)){if(!origin)throw new HttpError(403,'origin_required');throttle(request,'sms',deps.now());const eventId=decodeURIComponent(path.split('/')[4]);response=json(path.endsWith('/preview')?await sms.preview(request,eventId):await sms.send(request,eventId,await body(request)));}
    else if(request.method==='GET' && /^\/oauth\/[^/]+\/start$/.test(path)){throttle(request,'start',deps.now());const provider=providerFrom(path.split('/')[2]);if(url.searchParams.get('intent') && url.searchParams.get('intent')!=='signin')throw new HttpError(400,'use_authenticated_link_start');const location=await start(provider,'signin',url.searchParams.get('challenge'),url.searchParams.get('returnOrigin'));response=new Response(null,{status:302,headers:{Location:location,'Cache-Control':'no-store','Referrer-Policy':'no-referrer'}});}
    else if(request.method==='GET' && /^\/oauth\/[^/]+\/callback$/.test(path)){throttle(request,'callback',deps.now());response=await callback(providerFrom(path.split('/')[2]),url);}

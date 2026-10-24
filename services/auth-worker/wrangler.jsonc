@@ -11,6 +11,8 @@
     "FIREBASE_PROJECT_ID": "moim-juno",
     "ALLOWED_ORIGINS": "https://moim-juno.web.app,https://moim-juno.firebaseapp.com,http://localhost:5173,http://127.0.0.1:5173",
     "KAKAO_CALENDAR_ENABLED": "false",
+    "NAVER_SEARCH_ENABLED": "true",
+    "NAVER_SEARCH_API": "hub",
     "SMS_ENABLED": "true",
     "SOLAPI_LMS_UNIT_PRICE": "45",
     "AUTH_BASE_URL": "https://moim-auth.moim-auth-worker.workers.dev"

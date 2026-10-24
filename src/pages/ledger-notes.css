@@ -1,0 +1,24 @@
+.ledger-entry-memo {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  margin: 0;
+  color: var(--text-8793a4);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ledger-memo-input {
+  min-height: 96px;
+  resize: vertical;
+}
+
+@media (max-width: 680px) {
+  .ledger-entry-memo {
+    font-size: 11px;
+  }
+}

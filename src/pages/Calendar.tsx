@@ -11,6 +11,7 @@ import { Avatar, Badge, Button, EmptyState, Field, IconButton, Modal, PageHeader
 import { InviteShare } from '../components/InviteShare';
 import { PlacePicker } from '../components/PlacePicker';
 import { AddressField } from '../components/AddressField';
+import { TimeInput } from '../components/TimeInput';
 import { MapLinks } from '../components/MapLinks';
 import { GoogleCalendarInvite } from '../components/GoogleCalendarInvite';
 import { KakaoCalendarButton } from '../components/KakaoCalendar';
@@ -162,9 +163,9 @@ function EventEditor({ event, initialDate, onClose, onSaved }: {
     } }}>
     <Field label={t("일정 제목")} required><input value={title} onChange={e => setTitle(e.target.value)} maxLength={80} placeholder={t("어떤 만남인가요?")} required autoFocus/></Field>
     <div className="event-editor-date"><h3>{t("날짜")}<span className="muted">{formatDate(date)}</span></h3><div className="poll-date-picker"><MonthNavigation compact month={month} onChange={setMonth}/><MonthGrid compact month={month} selectedDates={[date]} onSelect={value => { setDate(value); const d = new Date(`${value}T12:00:00`); setMonth(new Date(d.getFullYear(), d.getMonth(), 1)); }}/></div></div>
-    <div className="form-grid"><Field label={t("시작 시간")} required><input type="time" value={start} onChange={e => setStart(e.target.value)} required/></Field><div className="event-end-field"><Field label={t("종료 시간")} required><input type="time" value={end === '24:00' ? '00:00' : end} disabled={end === '24:00'} onChange={e => setEnd(e.target.value)} required/></Field><label className="event-midnight"><input type="checkbox" checked={end === '24:00'} onChange={e => setEnd(e.target.checked ? '24:00' : '')}/>{t("자정 (24:00)")}</label></div></div>
+    <div className="form-grid"><Field label={t("시작 시간")} required><TimeInput value={start} onChange={setStart} required/></Field><div className="event-end-field"><Field label={t("종료 시간")} required><TimeInput value={end} disabled={end === '24:00'} onChange={setEnd} allowMidnight required/></Field><label className="event-midnight"><input type="checkbox" checked={end === '24:00'} onChange={e => setEnd(e.target.checked ? '24:00' : '')}/>{t("자정 (24:00)")}</label></div></div>
     <PlacePicker value={location} onChange={setLocation} disabled={busy}/>
-    <AddressField label={t("장소")} value={location} onChange={setLocation} maxLength={500} placeholder={t("장소 이름 또는 주소")} required disabled={busy}/>
+    <AddressField includePlaceName label={t("장소")} value={location} onChange={setLocation} maxLength={500} placeholder={t("장소 이름 또는 주소")} required disabled={busy}/>
     <Field label={t("상세 내용")}><textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={4000} rows={3} placeholder={t("준비물, 안내사항 등")}/></Field>
   </form></Modal>;
 }

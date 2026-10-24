@@ -15,7 +15,7 @@ const english:Record<string,string>={
 };
 export function registerEnglishMessages(messages:Record<string,string>){Object.assign(english,messages);}
 export function translate(text:string,language:Language=getLanguage(),values?:Record<string,string|number>){let result=language==='en'?english[text]??text:text;if(values)for(const [key,value]of Object.entries(values))result=result.replaceAll(`{${key}}`,String(value));return result;}
-export function formatI18nDate(value:Date|string|number,language:Language,options:Intl.DateTimeFormatOptions={month:'long',day:'numeric'}){const date=value instanceof Date?value:new Date(typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)?`${value}T12:00:00+09:00`:value);return new Intl.DateTimeFormat(localeFor(language),{timeZone:'Asia/Seoul',...options}).format(date);}
+export function formatI18nDate(value:Date|string|number,language:Language,options:Intl.DateTimeFormatOptions={month:'long',day:'numeric'}){const date=value instanceof Date?value:new Date(typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)?`${value}T12:00:00+09:00`:value);return new Intl.DateTimeFormat(localeFor(language),{timeZone:'Asia/Seoul',...options,hour12:undefined,hourCycle:'h23'}).format(date);}
 export function formatI18nNumber(value:number,language:Language,options?:Intl.NumberFormatOptions){return new Intl.NumberFormat(localeFor(language),options).format(value);}
 export function formatI18nCurrency(value:number,language:Language){return formatI18nNumber(value,language,{style:'currency',currency:'KRW',maximumFractionDigits:0});}
 

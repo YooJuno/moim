@@ -8,6 +8,11 @@ KAKAO_REST_API_KEY=
 KAKAO_CLIENT_SECRET=
 NAVER_CLIENT_ID=
 NAVER_CLIENT_SECRET=
+# Naver place search is separate from Naver OAuth. New accounts use NAVER API HUB.
+NAVER_SEARCH_ENABLED=false
+NAVER_SEARCH_API=hub
+NAVER_SEARCH_CLIENT_ID=
+NAVER_SEARCH_CLIENT_SECRET=
 # Public origin of THIS worker, with no path; register its /oauth/{provider}/callback.
 AUTH_BASE_URL=http://localhost:8787
 # Set true only after talk_calendar permission and user consent are configured.

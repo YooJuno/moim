@@ -1,13 +1,14 @@
-import { getLocale, translate } from "../lib/i18n";
+import { translate } from "../lib/i18n";
 import { useI18n } from "../lib/preferences";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ArrowRight, BarChart3, CalendarCheck, Check, CheckCheck, ChevronRight, Clock3, ListChecks, MousePointer2, Pencil, Plus, Trash2, Trophy, Users, X } from 'lucide-react';
 import { useApp } from '../lib/store';
 import type { Poll, PollSlot, Vote } from '../lib/types';
-import { errorMessage, formatDate, memberName, shortDate, slotLabel, today, uid } from '../lib/utils';
+import { errorMessage, formatDate, formatTime, memberName, shortDate, slotLabel, today, uid } from '../lib/utils';
 import { PlacePicker } from '../components/PlacePicker';
 import { AddressField } from '../components/AddressField';
+import { TimeInput } from '../components/TimeInput';
 import { notifyEventConfirmed } from '../lib/sms';
 import { Avatar, Badge, Button, EmptyState, Field, IconButton, Modal, PageHeader, useToast } from '../components/ui';
 import { MonthNavigation, ScrollingCalendar } from './ScheduleGrid';
@@ -212,7 +213,7 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
         setSaving(false);
     } };
     return <Modal title={poll.title} onClose={onClose} wide footer={<div className="poll-detail-footer"><div className="poll-detail-tools">{manageable && <><IconButton label={t("투표 수정")} icon={Pencil} onClick={onEdit} disabled={busy || saving}/><IconButton label={t("투표 삭제")} icon={Trash2} onClick={onDelete} disabled={busy || saving}/><Button variant="ghost" size="sm" onClick={onStatus} loading={busy}>{open ? t("투표 마감") : t("다시 열기")}</Button></>}</div><div className="poll-detail-actions">{app.isAdmin && poll.status !== 'confirmed' && <Button variant="secondary" icon={CalendarCheck} onClick={() => onConfirm()} disabled={busy || saving}>{t("일정 확정")}</Button>}{interactive ? <Button icon={Check} loading={saving} disabled={(!selected.length && !unavailable) || busy} onClick={save}>{ownVote ? t("선택 수정하기") : t("선택 저장하기")}</Button> : <Button variant="secondary" onClick={onClose}>{t("닫기")}</Button>}</div></div>}>
-    <div className="poll-detail-meta"><Badge tone={poll.status === 'confirmed' ? 'green' : open ? 'blue' : 'gray'}>{poll.status === 'confirmed' ? t("일정 확정") : open ? t("투표 중") : t("마감")}</Badge><span><Clock3 size={14}/>{poll.deadline ? <>{formatDate(poll.deadline)} {t("{0} 마감", {"0":new Date(poll.deadline).toLocaleTimeString(getLocale(), {hour:"2-digit",minute:"2-digit",hour12:false})})}</> : t("마감 없음")}</span></div>
+    <div className="poll-detail-meta"><Badge tone={poll.status === 'confirmed' ? 'green' : open ? 'blue' : 'gray'}>{poll.status === 'confirmed' ? t("일정 확정") : open ? t("투표 중") : t("마감")}</Badge><span><Clock3 size={14}/>{poll.deadline ? <>{formatDate(poll.deadline)} {t("{0} 마감", {"0":formatTime(poll.deadline)})}</> : t("마감 없음")}</span></div>
     {poll.description && <p className="poll-detail-description">{poll.description}</p>}
     {interactive && ownVote?.slotIds.some(id => !poll.slotIds.includes(id)) && <p className="poll-vote-changed">{t("후보 시간이 변경됐어요. 선택을 확인하고 다시 저장해 주세요.")}</p>}
     {poll.status === 'confirmed' && poll.eventId && <a className="poll-confirmed-link" href={`/calendar?event=${encodeURIComponent(poll.eventId)}`}><CalendarCheck size={20}/><span>{t("확정된 일정 확인하기")}</span><ChevronRight size={17}/></a>}
@@ -345,7 +346,7 @@ function PollEditor({ poll, onClose, onSaved }: {
             if (time.end && !endOptions.includes(time.end))
                 endOptions.push(time.end);
             return <div className="poll-shared-time-row" key={time.id}>
-        <input aria-label={t("{0} 시간 {1} 시작", { "0": date ? formatDate(date) : t("공통"), "1": index + 1 })} type="time" step={3600} value={time.start} onChange={e => updateTimes(date, times.map(value => value.id === time.id ? { ...value, start: e.target.value } : value))} required/>
+        <TimeInput aria-label={t("{0} 시간 {1} 시작", { "0": date ? formatDate(date) : t("공통"), "1": index + 1 })} stepMinutes={60} value={time.start} onChange={start => updateTimes(date, times.map(value => value.id === time.id ? { ...value, start } : value))} required/>
         <span className="poll-time-dash">–</span>
         <select aria-label={t("{0} 시간 {1} 종료", { "0": date ? formatDate(date) : t("공통"), "1": index + 1 })} value={time.end} onChange={e => updateTimes(date, times.map(value => value.id === time.id ? { ...value, end: e.target.value } : value))} required>{endOptions.sort().map(end => <option key={end} value={end}>{end === '24:00' ? t("24:00 (자정)") : end}</option>)}</select>
         <IconButton label={t("{0} 시간 {1} 삭제", { "0": date ?? t("공통"), "1": index + 1 })} icon={X} type="button" disabled={times.length === 1} onClick={() => updateTimes(date, times.filter(value => value.id !== time.id))}/>
@@ -418,7 +419,7 @@ function PollEditor({ poll, onClose, onSaved }: {
         setOverrides([...overrides, date]);
         setDateTimes(current => ({ ...current, [date]: commonTimes.map(time => ({ ...time, id: uid() })) }));
     } }}>{overridden ? t("별도 설정 중") : t("공통 시간")}</button></div>{overridden ? renderTimes(dateTimes[date] ?? commonTimes, date) : <p className="poll-common-summary">{commonTimes.map(time => `${time.start}–${time.end}`).join(' · ')}</p>}</div>; })}</div>}</div>
-    <div className="poll-deadline-editor"><div className="section-head"><h3>{t("투표 마감")}</h3><label className="poll-no-deadline"><input type="checkbox" checked={noDeadline} onChange={event => setNoDeadline(event.target.checked)}/>{t("마감 없음")}</label></div>{!noDeadline && <Field label={t("마감 일시")} required><input type="datetime-local" value={deadline} onChange={e => setDeadline(e.target.value)} required/></Field>}</div>
+    <div className="poll-deadline-editor"><div className="section-head"><h3>{t("투표 마감")}</h3><label className="poll-no-deadline"><input type="checkbox" checked={noDeadline} onChange={event => setNoDeadline(event.target.checked)}/>{t("마감 없음")}</label></div>{!noDeadline && <Field label={t("마감 일시")} required><div className="date-time-input"><input type="date" aria-label={t("마감 날짜")} value={deadline.split("T")[0]} onChange={e => setDeadline(`${e.target.value}T${deadline.split("T")[1] ?? ""}`)} required/><TimeInput aria-label={t("마감 시간")} value={deadline.split("T")[1] ?? ""} onChange={time => setDeadline(`${deadline.split("T")[0]}T${time}`)} required/></div></Field>}</div>
     {poll && <p className="poll-edit-note">{poll.slotMinutes === 30 ? t("기존 후보는 1시간 단위로 변경돼요. 시간을 확인해 주세요. ") : ''}{t("변경한 후보 시간은 새로 투표받아요. 삭제한 후보의 응답은 집계에서 제외돼요.")}</p>}
     <div className="poll-editor-summary"><CalendarCheck size={16}/><span>{dates.length}{t("일 \u00B7 1시간 단위 \u00B7")}{slotCount}{t("개 시간")}</span></div>
   </form></Modal>;
@@ -469,6 +470,6 @@ function ConfirmPoll({ poll, range, onClose }: {
     <Field label={t("종료 시간")} required><select aria-label={t("종료 시간")} value={endSlotId} onChange={event => setEndSlotId(event.target.value)} required>{ends.map(slot => <option key={slot.id} value={slot.id}>{slot.end} · {startSlot ? timeToMinutes(slot.end) - timeToMinutes(startSlot.start) : 0}{t("분")}</option>)}</select></Field>
     {startSlot && chosenEnd && <p className="poll-confirm-range"><Clock3 size={15}/>{startSlot.start}–{chosenEnd.end}<span>{t("전체 시간 가능 {0}명", {"0":availableCount})}</span></p>}
     <PlacePicker value={location} onChange={setLocation} disabled={busy}/>
-    <AddressField label={t("장소")} value={location} onChange={setLocation} maxLength={500} placeholder={t("어디서 만날까요?")} required disabled={busy} autoFocus/>
+    <AddressField includePlaceName label={t("장소")} value={location} onChange={setLocation} maxLength={500} placeholder={t("어디서 만날까요?")} required disabled={busy} autoFocus/>
   </form></Modal>;
 }

@@ -32,7 +32,7 @@ test('shared times, day override, voting, editing, confirmation and RSVP retain 
   await dialog.getByRole('button', { name: '날짜별로 다르게 설정' }).click();
   const override = dialog.locator('.poll-date-override').filter({ hasText: '11월 1일' });
   await override.getByRole('button', { name: '공통 시간', exact: true }).click();
-  await override.locator('input[type=time]').nth(0).fill('15:00');
+  await override.locator('.time-input').nth(0).fill('15:00');
   await override.locator('select').selectOption('17:00');
   await dialog.getByRole('button', { name: '투표 만들기', exact: true }).click();
   dialog = page.getByRole('dialog');
@@ -178,9 +178,10 @@ test('no-deadline poll offers hourly cells, partial availability and editable de
   await dialog.getByRole('button', { name: '투표 수정', exact: true }).click();
   dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('checkbox', { name: '마감 없음', exact: true })).toBeChecked();
-  await expect(dialog.getByLabel('공통 시간 1 시작', { exact: true })).toHaveAttribute('step', '3600');
+  await expect(dialog.getByLabel('공통 시간 1 시작', { exact: true })).toHaveAttribute('data-step-minutes', '60');
   await dialog.getByRole('checkbox', { name: '마감 없음', exact: true }).uncheck();
-  await dialog.getByLabel('마감 일시').fill('2026-10-28T23:00');
+  await dialog.getByLabel('마감 날짜', { exact: true }).fill('2026-10-28');
+  await dialog.getByLabel('마감 시간', { exact: true }).fill('23:00');
   await dialog.getByRole('button', { name: '수정하고 열기', exact: true }).click();
   dialog = page.getByRole('dialog');
   await expect(dialog.locator('.poll-time-cell')).toHaveCount(3);

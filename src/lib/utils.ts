@@ -1,11 +1,12 @@
 import type { Category, Member, PollSlot, Role } from './types';
-import { getLanguage, getLocale, translate } from './i18n';
+import { formatI18nDate, getLanguage, getLocale, translate } from './i18n';
 export const categoryLabels: Record<Category, string> = {notice:'공지사항',chat:'자유게시판',info:'정보 나눔',gallery:'사진첩'};
 export const roleLabels: Record<Role, string> = {leader:'관리자',treasurer:'회계 담당',member:'일반'};
 export const uid = () => crypto.randomUUID();
 export const today = () => localDate(new Date());
 export function localDate(d: Date) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
-export function formatDate(value: string, options?: Intl.DateTimeFormatOptions) { return new Intl.DateTimeFormat(getLocale(),{timeZone:'Asia/Seoul',...(options ?? {month:'long',day:'numeric',weekday:'short'})}).format(new Date(value.length===10 ? `${value}T12:00:00+09:00` : value)); }
+export function formatDate(value: string, options?: Intl.DateTimeFormatOptions) { return formatI18nDate(value,getLanguage(),options ?? {month:'long',day:'numeric',weekday:'short'}); }
+export function formatTime(value: Date|string|number) { return formatI18nDate(value,getLanguage(),{hour:'2-digit',minute:'2-digit'}); }
 export function shortDate(value: string) { return formatDate(value,{month:'numeric',day:'numeric'}); }
 export function relativeDate(value: string) { const diff=Date.now()-new Date(value).getTime(); if(getLanguage()==='en'){if(diff<60_000)return 'Just now';const relative=new Intl.RelativeTimeFormat(getLocale(),{numeric:'auto'});if(diff<3_600_000)return relative.format(-Math.floor(diff/60_000),'minute');if(diff<86_400_000)return relative.format(-Math.floor(diff/3_600_000),'hour');if(diff<7*86_400_000)return relative.format(-Math.floor(diff/86_400_000),'day');return shortDate(value);} if(diff<60_000)return '방금 전'; if(diff<3_600_000)return `${Math.floor(diff/60_000)}분 전`; if(diff<86_400_000)return `${Math.floor(diff/3_600_000)}시간 전`; if(diff<7*86_400_000)return `${Math.floor(diff/86_400_000)}일 전`; return shortDate(value); }
 export function slotLabel(slot: PollSlot) { return `${formatDate(slot.date)} ${slot.start}–${slot.end}`; }

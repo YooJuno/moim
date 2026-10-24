@@ -16,7 +16,7 @@ export interface Rsvp { id: string; eventId: string; memberId: string; status: '
 export interface Bylaws { content: string; updatedAt: string; editorId: string }
 export interface SavedPlace { id: string; name: string; address: string; createdAt: string; updatedAt: string }
 export interface Receipt { entryId: string; fileName: string; imageURL: string; uploadedBy: string; updatedAt: string }
-export interface LedgerEntry { hasReceipt?: boolean; id: string; type: 'income' | 'expense'; category: string; amount: number; date: string; description: string; memberId?: string; creatorId: string; createdAt: string; updatedAt: string }
+export interface LedgerEntry { hasReceipt?: boolean; id: string; type: 'income' | 'expense'; category: string; amount: number; date: string; description: string; memo?: string; memberId?: string; creatorId: string; createdAt: string; updatedAt: string }
 export interface BallotOption { id: string; label: string; detail?: string; menu?: string; memberId?: string }
 export interface EventBallot { id: string; eventId: string; kind: 'venue' | 'mvp'; title: string; options: BallotOption[]; optionIds: string[]; status: 'open' | 'closed' | 'confirmed'; creatorId: string; createdAt: string; updatedAt: string; selectedOptionId?: string }
 export interface BallotResponse { id: string; ballotId: string; eventId: string; memberId: string; optionId: string; updatedAt: string }
