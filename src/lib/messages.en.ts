@@ -958,4 +958,11 @@ export const messagesEn: Record<string, string> = {
   '도로명 주소 검색': 'Search by street address',
   '마감 날짜': 'Deadline date',
   '마감 시간': 'Deadline time',
+  '카카오뱅크': 'KakaoBank',
+  '후원': 'Donate',
+  '후원 계좌': 'Donation account',
+  '후원 계좌번호 복사': 'Copy donation account number',
+  '계좌번호': 'Account number',
+  '계좌번호 복사': 'Copy account number',
+  '카카오뱅크 · 유준호 · 계좌번호를 복사했어요.': 'KakaoBank · 유준호 · Account number copied.',
 };

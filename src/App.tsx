@@ -10,6 +10,7 @@ import { BoardIcon } from './components/BoardIcon';
 import { InviteShare } from './components/InviteShare';
 import { GuidedTour } from './components/GuidedTour';
 import { ProfileMenu } from './components/ProfileMenu';
+import { DonateButton } from './components/DonateButton';
 import { MvpNotifications } from './components/MvpVoting';
 import { Avatar, Badge, Button, Field, IconButton, useToast } from './components/ui';
 import { errorMessage } from './lib/utils';
@@ -28,7 +29,7 @@ const navItems: {
     label: string;
     icon: LucideIcon;
 }[] = [{ to: '/', label: '모임 홈', icon: House }, { to: '/polls', label: '일정 투표', icon: Vote }, { to: '/calendar', label: '모임 캘린더', icon: CalendarDays }, { to: '/board', label: '게시판', icon: BoardIcon }, { to: '/members', label: '멤버', icon: Users }, { to: '/places', label: '자주 가는 장소', icon: MapPin }, { to: '/rules', label: '모임 회칙', icon: BookOpen }, { to: '/ledger', label: '회계 장부', icon: Wallet }];
-function SiteFooter() { const { t } = useI18n(); return <footer className="site-footer"><span>© 2026 Yoo Junho. All rights reserved.</span><a href="/third-party-licenses.txt" target="_blank" rel="noopener noreferrer">{t("오픈소스 고지")}</a></footer>; }
+function SiteFooter() { const { t } = useI18n(); return <footer className="site-footer"><span>© 2026 Yoo Junho. All rights reserved.</span><a href="/third-party-licenses.txt" target="_blank" rel="noopener noreferrer">{t("오픈소스 고지")}</a><DonateButton /></footer>; }
 export function Brand() { return <span className="brand"><span className="brand-mark"><i /><i /><i /><i /></span><span>moim<span className="brand-period">.</span></span></span>; }
 export default function App() {
     const { t } = useI18n();
