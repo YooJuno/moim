@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "moim-auth",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-24",
+  "workers_dev": true,
+  "observability": {
+    "enabled": false
+  },
+  "vars": {
+    "FIREBASE_PROJECT_ID": "moim-juno",
+    "ALLOWED_ORIGINS": "https://moim-juno.web.app,https://moim-juno.firebaseapp.com,http://localhost:5173,http://127.0.0.1:5173",
+    "KAKAO_CALENDAR_ENABLED": "false",
+    "SMS_ENABLED": "true",
+    "SOLAPI_LMS_UNIT_PRICE": "45",
+    "AUTH_BASE_URL": "https://moim-auth.moim-auth-worker.workers.dev"
+  }
+}

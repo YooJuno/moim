@@ -1,0 +1,20 @@
+# Never commit real credentials. Production values belong in Wrangler secrets.
+FIREBASE_CLIENT_EMAIL=
+FIREBASE_PRIVATE_KEY=
+# Both must be independent random base64url values generated from 32 random bytes.
+STATE_SECRET=
+TOKEN_ENCRYPTION_KEY=
+KAKAO_REST_API_KEY=
+KAKAO_CLIENT_SECRET=
+NAVER_CLIENT_ID=
+NAVER_CLIENT_SECRET=
+# Public origin of THIS worker, with no path; register its /oauth/{provider}/callback.
+AUTH_BASE_URL=http://localhost:8787
+# Set true only after talk_calendar permission and user consent are configured.
+KAKAO_CALENDAR_ENABLED=false
+# Optional paid SMS: these remain server-only. Keep disabled until configured and explicitly enabled.
+SMS_ENABLED=false
+SOLAPI_API_KEY=
+SOLAPI_API_SECRET=
+SOLAPI_SENDER=
+SOLAPI_LMS_UNIT_PRICE=45
