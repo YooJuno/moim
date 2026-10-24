@@ -1,0 +1,10 @@
+{
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "모임",
+        "supportEmail": "juno980220@gmail.com"
+      }
+    }
+  }
+}

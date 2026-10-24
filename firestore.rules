@@ -1,0 +1,359 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function me() { return get(/databases/$(database)/documents/members/$(request.auth.uid)).data; }
+    function active() { return signedIn() && me().status == 'active'; }
+    function admin() { return active() && me().role == 'leader'; }
+    function accountant() { return active() && me().role in ['leader','treasurer']; }
+    function pollCreator() { return active() && (admin() || me().canCreatePoll == true); }
+    function managesPoll(poll) { return admin() || (pollCreator() && poll.creatorId == request.auth.uid); }
+    function validBirthday(value) { return value is string && value.matches('^((01|03|05|07|08|10|12)-(0[1-9]|[12][0-9]|3[01])|(04|06|09|11)-(0[1-9]|[12][0-9]|30)|02-(0[1-9]|1[0-9]|2[0-9]))$'); }
+    function canonicalPosition(data) { return !('position' in data) || data.position in ['', '회장', '부회장', '총무']; }
+    function validMember(data, memberId) {
+      return data.keys().hasOnly(['id','name','email','photoURL','role','status','canCreatePoll','joinedAt','isRoster','position','birthday'])
+        && data.keys().hasAll(['id','name','email','role','status','canCreatePoll','joinedAt'])
+        && data.id == memberId && data.name is string && data.name.size() > 0 && data.name.size() <= 30
+        && data.email is string && data.email.size() <= 320
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 2000))
+        && data.role in ['leader','treasurer','member'] && data.status in ['active','pending','rejected']
+        && data.canCreatePoll is bool && data.joinedAt is string
+        && (!('isRoster' in data) || data.isRoster is bool)
+        && (!('position' in data) || (data.position is string && data.position.size() <= 40))
+        && (!('birthday' in data) || validBirthday(data.birthday));
+    }
+    function validPost(data, postId) {
+      return data.keys().hasOnly(['id','category','title','body','authorId','createdAt','updatedAt','images','pinned','likedBy'])
+        && data.keys().hasAll(['id','category','title','body','authorId','createdAt','updatedAt','images','pinned','likedBy'])
+        && data.id == postId && data.category in ['notice','chat','info','gallery']
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 120
+        && data.body is string && data.body.size() <= 20000
+        && data.authorId is string && data.createdAt is string && data.updatedAt is string
+        && data.images is list && data.images.size() <= 8 && data.pinned is bool
+        && data.likedBy is list && data.likedBy.size() == data.likedBy.toSet().size();
+    }
+    function validPoll(data, pollId) {
+      return data.keys().hasOnly(['id','title','description','slots','slotIds','deadline','deadlineAt','status','creatorId','createdAt','updatedAt','eventId','slotMinutes','timeWindows'])
+        && data.keys().hasAll(['id','title','description','slots','slotIds','deadline','deadlineAt','status','creatorId','createdAt','updatedAt'])
+        && data.id == pollId && data.title is string && data.title.size() > 0 && data.title.size() <= 120
+        && data.description is string && data.description.size() <= 5000
+        && data.slots is list && data.slots.size() > 0 && data.slots.size() <= 2000
+        && data.slotIds is list && data.slotIds.size() == data.slots.size() && data.slotIds.size() == data.slotIds.toSet().size()
+        && ((data.deadline == null && data.deadlineAt == null) || (data.deadline is string && data.deadlineAt is timestamp))
+        && (!('slotMinutes' in data) || data.slotMinutes in [30,60])
+        && (!('timeWindows' in data) || (data.timeWindows is list && data.timeWindows.size() <= 248))
+        && data.status in ['open','closed','confirmed'] && data.creatorId is string
+        && data.createdAt is string && data.updatedAt is string
+        && (!('eventId' in data) || data.eventId is string);
+    }
+    function managesBallot(ballot) { return ballot.kind == 'mvp' ? admin() : (admin() || (pollCreator() && ballot.creatorId == request.auth.uid)); }
+    function validBallot(data, ballotId) {
+      return data.keys().hasOnly(['id','eventId','kind','title','options','optionIds','status','creatorId','createdAt','updatedAt','selectedOptionId'])
+        && data.keys().hasAll(['id','eventId','kind','title','options','optionIds','status','creatorId','createdAt','updatedAt'])
+        && data.id == ballotId && data.eventId is string && data.kind in ['venue','mvp']
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 120
+        && data.options is list && data.options.size() > 0 && data.options.size() <= 30
+        && data.optionIds is list && data.optionIds.size() == data.options.size() && data.optionIds.size() == data.optionIds.toSet().size()
+        && data.status in ['open','closed','confirmed'] && data.creatorId is string && data.createdAt is string && data.updatedAt is string
+        && (!('selectedOptionId' in data) || (data.selectedOptionId is string && data.selectedOptionId in data.optionIds));
+    }
+    function optionLocation(option) { return option.label + (('detail' in option && option.detail.size() > 0) ? ' · ' + option.detail : ''); }
+    function selectedVenueMatches(ballot, location) {
+      return (ballot.options.size() > 0 && ballot.options[0].id == ballot.selectedOptionId && location == optionLocation(ballot.options[0]))
+        || (ballot.options.size() > 1 && ballot.options[1].id == ballot.selectedOptionId && location == optionLocation(ballot.options[1]))
+        || (ballot.options.size() > 2 && ballot.options[2].id == ballot.selectedOptionId && location == optionLocation(ballot.options[2]))
+        || (ballot.options.size() > 3 && ballot.options[3].id == ballot.selectedOptionId && location == optionLocation(ballot.options[3]))
+        || (ballot.options.size() > 4 && ballot.options[4].id == ballot.selectedOptionId && location == optionLocation(ballot.options[4]))
+        || (ballot.options.size() > 5 && ballot.options[5].id == ballot.selectedOptionId && location == optionLocation(ballot.options[5]))
+        || (ballot.options.size() > 6 && ballot.options[6].id == ballot.selectedOptionId && location == optionLocation(ballot.options[6]))
+        || (ballot.options.size() > 7 && ballot.options[7].id == ballot.selectedOptionId && location == optionLocation(ballot.options[7]))
+        || (ballot.options.size() > 8 && ballot.options[8].id == ballot.selectedOptionId && location == optionLocation(ballot.options[8]))
+        || (ballot.options.size() > 9 && ballot.options[9].id == ballot.selectedOptionId && location == optionLocation(ballot.options[9]))
+        || (ballot.options.size() > 10 && ballot.options[10].id == ballot.selectedOptionId && location == optionLocation(ballot.options[10]))
+        || (ballot.options.size() > 11 && ballot.options[11].id == ballot.selectedOptionId && location == optionLocation(ballot.options[11]))
+        || (ballot.options.size() > 12 && ballot.options[12].id == ballot.selectedOptionId && location == optionLocation(ballot.options[12]))
+        || (ballot.options.size() > 13 && ballot.options[13].id == ballot.selectedOptionId && location == optionLocation(ballot.options[13]))
+        || (ballot.options.size() > 14 && ballot.options[14].id == ballot.selectedOptionId && location == optionLocation(ballot.options[14]))
+        || (ballot.options.size() > 15 && ballot.options[15].id == ballot.selectedOptionId && location == optionLocation(ballot.options[15]))
+        || (ballot.options.size() > 16 && ballot.options[16].id == ballot.selectedOptionId && location == optionLocation(ballot.options[16]))
+        || (ballot.options.size() > 17 && ballot.options[17].id == ballot.selectedOptionId && location == optionLocation(ballot.options[17]))
+        || (ballot.options.size() > 18 && ballot.options[18].id == ballot.selectedOptionId && location == optionLocation(ballot.options[18]))
+        || (ballot.options.size() > 19 && ballot.options[19].id == ballot.selectedOptionId && location == optionLocation(ballot.options[19]))
+        || (ballot.options.size() > 20 && ballot.options[20].id == ballot.selectedOptionId && location == optionLocation(ballot.options[20]))
+        || (ballot.options.size() > 21 && ballot.options[21].id == ballot.selectedOptionId && location == optionLocation(ballot.options[21]))
+        || (ballot.options.size() > 22 && ballot.options[22].id == ballot.selectedOptionId && location == optionLocation(ballot.options[22]))
+        || (ballot.options.size() > 23 && ballot.options[23].id == ballot.selectedOptionId && location == optionLocation(ballot.options[23]))
+        || (ballot.options.size() > 24 && ballot.options[24].id == ballot.selectedOptionId && location == optionLocation(ballot.options[24]))
+        || (ballot.options.size() > 25 && ballot.options[25].id == ballot.selectedOptionId && location == optionLocation(ballot.options[25]))
+        || (ballot.options.size() > 26 && ballot.options[26].id == ballot.selectedOptionId && location == optionLocation(ballot.options[26]))
+        || (ballot.options.size() > 27 && ballot.options[27].id == ballot.selectedOptionId && location == optionLocation(ballot.options[27]))
+        || (ballot.options.size() > 28 && ballot.options[28].id == ballot.selectedOptionId && location == optionLocation(ballot.options[28]))
+        || (ballot.options.size() > 29 && ballot.options[29].id == ballot.selectedOptionId && location == optionLocation(ballot.options[29]));
+    }
+    function validCalendarLink(link) {
+      return link is map && link.keys().hasOnly(['ownerId','googleEventId','htmlLink','syncedAt','attendeeIds','signature'])
+        && link.keys().hasAll(['ownerId','googleEventId','htmlLink','syncedAt','attendeeIds','signature'])
+        && link.ownerId is string && link.ownerId.size() > 0 && link.ownerId.size() <= 128
+        && link.googleEventId is string && link.googleEventId.size() > 0 && link.googleEventId.size() <= 1024
+        && link.htmlLink is string && link.htmlLink.size() <= 4000 && link.htmlLink.matches('^https://(calendar[.]google[.]com/|www[.]google[.]com/calendar/).*')
+        && link.syncedAt is string && link.signature is string && link.signature.size() <= 20000
+        && link.attendeeIds is list && link.attendeeIds.size() <= 500 && link.attendeeIds.size() == link.attendeeIds.toSet().size();
+    }
+    function validEvent(data, eventId) {
+      return data.keys().hasOnly(['id','title','description','date','start','end','location','creatorId','createdAt','pollId','calendarLink','endAt'])
+        && data.keys().hasAll(['id','title','description','date','start','end','location','creatorId','createdAt'])
+        && data.id == eventId && data.title is string && data.title.size() > 0 && data.title.size() <= 120
+        && data.description is string && data.description.size() <= 10000
+        && data.date is string && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.start is string && data.start.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
+        && data.end is string && data.end.matches('^(([01][0-9]|2[0-3]):[0-5][0-9]|24:00)$') && data.start < data.end
+        && data.location is string && data.location.size() > 0 && data.location.size() <= 500
+        && data.creatorId is string && data.createdAt is string
+        && (!('pollId' in data) || data.pollId is string)
+        && (!('calendarLink' in data) || validCalendarLink(data.calendarLink))
+        && (!('endAt' in data) || data.endAt is timestamp);
+    }
+
+    match /members/{memberId} {
+      allow get: if signedIn() && (request.auth.uid == memberId || admin() || (active() && resource.data.status == 'active'));
+      allow list: if admin() || (active() && resource.data.status == 'active');
+      allow create: if validMember(request.resource.data, memberId) && canonicalPosition(request.resource.data)
+        && ((signedIn() && request.auth.uid == memberId && request.resource.data.email == request.auth.token.email
+          && request.resource.data.role == 'member' && request.resource.data.status == 'pending' && request.resource.data.canCreatePoll == false
+          && (!('isRoster' in request.resource.data) || request.resource.data.isRoster == false) && !('position' in request.resource.data))
+          || (admin() && memberId.matches('^roster-[A-Za-z0-9_-]+$') && request.resource.data.isRoster == true
+            && request.resource.data.email == '' && request.resource.data.role == 'member' && request.resource.data.status == 'active' && request.resource.data.canCreatePoll == false));
+      allow update: if signedIn() && validMember(request.resource.data, memberId)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['position']) || canonicalPosition(request.resource.data))
+        && ((request.auth.uid == memberId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','birthday']))
+          || (admin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','role','status','canCreatePoll','position','isRoster','birthday'])
+            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isRoster']) || request.resource.data.isRoster == false)
+            && (memberId != request.auth.uid || (request.resource.data.role == 'leader' && request.resource.data.status == 'active'))));
+      allow delete: if admin() && resource.data.isRoster == true;
+    }
+    match /profiles/{memberId} {
+      allow read: if signedIn() && (request.auth.uid == memberId || admin());
+      allow create, update: if signedIn() && (request.auth.uid == memberId || admin())
+        && request.resource.data.keys().hasOnly(['id','phone','area','birthday'])
+        && request.resource.data.keys().hasAll(['id','phone','area'])
+        && request.resource.data.id == memberId
+        && request.resource.data.phone is string && request.resource.data.phone.size() <= 30
+        && request.resource.data.area is string && request.resource.data.area.size() <= 100
+        && (!('birthday' in request.resource.data) || validBirthday(request.resource.data.birthday));
+      allow delete: if admin() && get(/databases/$(database)/documents/members/$(memberId)).data.isRoster == true;
+    }
+    match /settings/{settingId} {
+      allow read: if active();
+      allow create, update: if admin() && settingId == 'club'
+        && request.resource.data.keys().hasOnly(['name','description','photoURL'])
+        && request.resource.data.keys().hasAll(['name','description'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 40
+        && request.resource.data.description is string && request.resource.data.description.size() <= 140
+        && (!('photoURL' in request.resource.data) || (request.resource.data.photoURL is string && request.resource.data.photoURL.size() <= 180000
+          && request.resource.data.photoURL.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$')));
+      allow create, update: if admin() && settingId == 'bylaws'
+        && request.resource.data.keys().hasOnly(['content','updatedAt','editorId'])
+        && request.resource.data.keys().hasAll(['content','updatedAt','editorId'])
+        && request.resource.data.content is string && request.resource.data.content.size() <= 50000
+        && request.resource.data.updatedAt is string && request.resource.data.editorId == request.auth.uid;
+      allow delete: if false;
+    }
+    match /posts/{postId} {
+      allow read: if active();
+      allow create: if active() && validPost(request.resource.data, postId)
+        && request.resource.data.authorId == request.auth.uid && request.resource.data.likedBy.size() == 0
+        && (admin() || (request.resource.data.category != 'notice' && request.resource.data.pinned == false));
+      allow update: if active() && validPost(request.resource.data, postId)
+        && request.resource.data.authorId == resource.data.authorId && request.resource.data.createdAt == resource.data.createdAt
+        && (
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy'])
+            && request.resource.data.likedBy.toSet().difference(resource.data.likedBy.toSet()).hasOnly([request.auth.uid])
+            && resource.data.likedBy.toSet().difference(request.resource.data.likedBy.toSet()).hasOnly([request.auth.uid]))
+          || ((admin() || request.auth.uid == resource.data.authorId)
+            && request.resource.data.likedBy == resource.data.likedBy
+            && (admin() || (resource.data.category != 'notice' && request.resource.data.category != 'notice' && request.resource.data.pinned == resource.data.pinned)))
+        );
+      allow delete: if active() && (admin() || (request.auth.uid == resource.data.authorId && resource.data.category != 'notice'));
+    }
+    match /comments/{commentId} {
+      allow read: if active();
+      allow create: if active()
+        && request.resource.data.keys().hasOnly(['id','postId','authorId','body','createdAt'])
+        && request.resource.data.keys().hasAll(['id','postId','authorId','body','createdAt'])
+        && request.resource.data.id == commentId && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.postId is string && exists(/databases/$(database)/documents/posts/$(request.resource.data.postId))
+        && request.resource.data.body is string && request.resource.data.body.size() > 0 && request.resource.data.body.size() <= 2000
+        && request.resource.data.createdAt is string;
+      allow update: if false;
+      allow delete: if active() && (admin() || resource.data.authorId == request.auth.uid);
+    }
+    match /polls/{pollId} {
+      allow read: if active();
+      allow create: if pollCreator() && validPoll(request.resource.data, pollId)
+        && request.resource.data.creatorId == request.auth.uid && request.resource.data.status in ['open','closed']
+        && !('eventId' in request.resource.data);
+      allow update: if active() && validPoll(request.resource.data, pollId)
+        && request.resource.data.creatorId == resource.data.creatorId && request.resource.data.createdAt == resource.data.createdAt
+        && ((resource.data.status != 'confirmed' && managesPoll(resource.data)
+          && ((request.resource.data.status in ['open','closed'] && !('eventId' in request.resource.data))
+            || (admin() && request.resource.data.status == 'confirmed' && request.resource.data.eventId == 'poll-' + pollId
+              && getAfter(/databases/$(database)/documents/events/$(request.resource.data.eventId)).data.pollId == pollId)))
+          || (resource.data.status == 'confirmed' && admin() && request.resource.data.status == 'closed'
+            && !('eventId' in request.resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','eventId','updatedAt'])
+            && !existsAfter(/databases/$(database)/documents/events/$(resource.data.eventId))));
+      allow delete: if active() && resource.data.status != 'confirmed' && managesPoll(resource.data);
+    }
+    match /votes/{voteId} {
+      function poll() { return get(/databases/$(database)/documents/polls/$(request.resource.data.pollId)).data; }
+      allow read: if active();
+      allow create, update: if active()
+        && request.resource.data.keys().hasOnly(['id','pollId','memberId','slotIds','updatedAt'])
+        && request.resource.data.keys().hasAll(['id','pollId','memberId','slotIds','updatedAt'])
+        && request.resource.data.id == voteId && request.resource.data.memberId == request.auth.uid
+        && request.resource.data.pollId is string && voteId == request.resource.data.pollId + '_' + request.auth.uid
+        && request.resource.data.slotIds is list && request.resource.data.slotIds.size() == request.resource.data.slotIds.toSet().size()
+        && request.resource.data.updatedAt is string
+        && poll().status == 'open' && (poll().deadlineAt == null || poll().deadlineAt > request.time)
+        && request.resource.data.slotIds.hasOnly(poll().slotIds);
+      allow delete: if false;
+    }
+    match /events/{eventId} {
+      allow read: if active();
+      allow create: if admin() && validEvent(request.resource.data, eventId) && request.resource.data.creatorId == request.auth.uid && request.resource.data.endAt is timestamp
+        && (!('calendarLink' in request.resource.data) || request.resource.data.calendarLink.ownerId == request.auth.uid);
+      allow update: if admin() && validEvent(request.resource.data, eventId)
+        && request.resource.data.creatorId == resource.data.creatorId && request.resource.data.createdAt == resource.data.createdAt
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['calendarLink'])
+          || ('calendarLink' in request.resource.data && request.resource.data.calendarLink.ownerId == request.auth.uid
+            && (!('calendarLink' in resource.data) || resource.data.calendarLink.ownerId == request.auth.uid)));
+      allow delete: if admin();
+    }
+    match /rsvps/{rsvpId} {
+      allow read: if active();
+      allow create, update: if active()
+        && request.resource.data.keys().hasOnly(['id','eventId','memberId','status','updatedAt'])
+        && request.resource.data.keys().hasAll(['id','eventId','memberId','status','updatedAt'])
+        && request.resource.data.id == rsvpId && request.resource.data.memberId == request.auth.uid
+        && request.resource.data.eventId is string && rsvpId == request.resource.data.eventId + '_' + request.auth.uid
+        && request.resource.data.status in ['going','notGoing'] && request.resource.data.updatedAt is string
+        && exists(/databases/$(database)/documents/events/$(request.resource.data.eventId));
+      allow delete: if false;
+    }
+    match /ballots/{ballotId} {
+      allow read: if active();
+      allow create: if active() && validBallot(request.resource.data, ballotId)
+        && request.resource.data.creatorId == request.auth.uid && request.resource.data.status in ['open','closed']
+        && !('selectedOptionId' in request.resource.data)
+        && (request.resource.data.kind == 'mvp' ? admin() : pollCreator())
+        && exists(/databases/$(database)/documents/events/$(request.resource.data.eventId));
+      allow update: if active() && resource.data.status != 'confirmed' && managesBallot(resource.data)
+        && validBallot(request.resource.data, ballotId)
+        && request.resource.data.eventId == resource.data.eventId && request.resource.data.kind == resource.data.kind
+        && request.resource.data.creatorId == resource.data.creatorId && request.resource.data.createdAt == resource.data.createdAt
+        && ((request.resource.data.status in ['open','closed'] && !('selectedOptionId' in request.resource.data))
+          || (admin() && resource.data.kind == 'venue' && request.resource.data.status == 'confirmed'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','selectedOptionId','updatedAt'])
+            && selectedVenueMatches(request.resource.data,getAfter(/databases/$(database)/documents/events/$(resource.data.eventId)).data.location)));
+      allow delete: if active() && resource.data.status != 'confirmed' && managesBallot(resource.data);
+    }
+    match /ballotResponses/{responseId} {
+      function ballot() { return get(/databases/$(database)/documents/ballots/$(request.resource.data.ballotId)).data; }
+      allow read: if active();
+      allow create, update: if active()
+        && request.resource.data.keys().hasOnly(['id','ballotId','eventId','memberId','optionId','updatedAt'])
+        && request.resource.data.keys().hasAll(['id','ballotId','eventId','memberId','optionId','updatedAt'])
+        && request.resource.data.id == responseId && request.resource.data.memberId == request.auth.uid
+        && request.resource.data.ballotId is string && responseId == request.resource.data.ballotId + '_' + request.auth.uid
+        && request.resource.data.optionId is string && request.resource.data.updatedAt is string
+        && ballot().status == 'open' && request.resource.data.eventId == ballot().eventId
+        && request.resource.data.optionId in ballot().optionIds
+        && exists(/databases/$(database)/documents/events/$(ballot().eventId));
+      allow delete: if active() && get(/databases/$(database)/documents/ballots/$(resource.data.ballotId)).data.status == 'closed'
+        && managesBallot(get(/databases/$(database)/documents/ballots/$(resource.data.ballotId)).data);
+    }
+    match /mvpVotes/{voteId} {
+      function event() { return get(/databases/$(database)/documents/events/$(request.resource.data.eventId)).data; }
+      allow read: if active();
+      allow create, update: if active()
+        && request.resource.data.keys().hasOnly(['id','eventId','memberId','candidateId','updatedAt'])
+        && request.resource.data.keys().hasAll(['id','eventId','memberId','candidateId','updatedAt'])
+        && request.resource.data.id == voteId && request.resource.data.memberId == request.auth.uid
+        && request.resource.data.eventId is string && voteId == request.resource.data.eventId + '_' + request.auth.uid
+        && request.resource.data.candidateId is string && request.resource.data.updatedAt is string
+        && event().endAt is timestamp && request.time >= event().endAt - duration.value(10,'m') && request.time < event().endAt + duration.value(24,'h')
+        && get(/databases/$(database)/documents/rsvps/$(request.resource.data.eventId + '_' + request.auth.uid)).data.status == 'going'
+        && get(/databases/$(database)/documents/rsvps/$(request.resource.data.eventId + '_' + request.resource.data.candidateId)).data.status == 'going'
+        && get(/databases/$(database)/documents/members/$(request.resource.data.candidateId)).data.status == 'active';
+      allow delete: if false;
+    }
+    match /ledger/{entryId} {
+      function validEntry(data) {
+        return data.keys().hasOnly(['id','type','category','amount','date','description','memberId','creatorId','createdAt','updatedAt','hasReceipt'])
+          && data.keys().hasAll(['id','type','category','amount','date','description','creatorId','createdAt','updatedAt'])
+          && data.id == entryId && data.type in ['income','expense']
+          && data.category is string && data.category.size() > 0 && data.category.size() <= 40
+          && data.amount is int && data.amount > 0 && data.amount <= 10000000000
+          && data.date is string && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && data.description is string && data.description.size() > 0 && data.description.size() <= 1000
+          && data.creatorId is string && data.createdAt is string && data.updatedAt is string
+          && (!('memberId' in data) || data.memberId is string)
+          && (!('hasReceipt' in data) || data.hasReceipt is bool);
+      }
+      function validReceiptState(data) {
+        return (('hasReceipt' in data && data.hasReceipt == true)
+          ? (existsAfter(/databases/$(database)/documents/receipts/$(entryId))
+            && getAfter(/databases/$(database)/documents/receipts/$(entryId)).data.entryId == entryId)
+          : !existsAfter(/databases/$(database)/documents/receipts/$(entryId)));
+      }
+      allow read: if active();
+      allow create: if accountant() && validEntry(request.resource.data) && validReceiptState(request.resource.data) && request.resource.data.creatorId == request.auth.uid;
+      allow update: if accountant() && validEntry(request.resource.data) && validReceiptState(request.resource.data)
+        && request.resource.data.creatorId == resource.data.creatorId && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if accountant() && !existsAfter(/databases/$(database)/documents/receipts/$(entryId));
+    }
+    match /places/{placeId} {
+      function validPlace(data) {
+        return data.keys().hasOnly(['id','name','address','createdAt','updatedAt'])
+          && data.keys().hasAll(['id','name','address','createdAt','updatedAt'])
+          && data.id == placeId && data.name is string && data.name.size() > 0 && data.name.size() <= 80
+          && data.address is string && data.address.size() > 0 && data.address.size() <= 300
+          && data.createdAt is string && data.updatedAt is string;
+      }
+      allow read: if active();
+      allow create: if admin() && validPlace(request.resource.data);
+      allow update: if admin() && validPlace(request.resource.data) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if admin();
+    }
+    match /photos/{photoId} {
+      allow read: if active();
+      allow create: if active()
+        && request.resource.data.keys().hasOnly(['id','imageURL','uploadedBy','createdAt'])
+        && request.resource.data.keys().hasAll(['id','imageURL','uploadedBy','createdAt'])
+        && request.resource.data.id == photoId && request.resource.data.uploadedBy == request.auth.uid
+        && request.resource.data.imageURL is string && request.resource.data.imageURL.size() <= 700000
+        && request.resource.data.imageURL.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$')
+        && request.resource.data.createdAt is string;
+      allow update: if false;
+      allow delete: if active() && (admin() || resource.data.uploadedBy == request.auth.uid);
+    }
+    match /receipts/{entryId} {
+      allow read: if active();
+      allow create, update: if accountant()
+        && request.resource.data.keys().hasOnly(['entryId','fileName','imageURL','uploadedBy','updatedAt'])
+        && request.resource.data.keys().hasAll(['entryId','fileName','imageURL','uploadedBy','updatedAt'])
+        && request.resource.data.entryId == entryId && request.resource.data.uploadedBy == request.auth.uid
+        && request.resource.data.fileName is string && request.resource.data.fileName.size() > 0 && request.resource.data.fileName.size() <= 200
+        && request.resource.data.imageURL is string && request.resource.data.imageURL.size() <= 700000
+        && request.resource.data.imageURL.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$')
+        && request.resource.data.updatedAt is string
+        && existsAfter(/databases/$(database)/documents/ledger/$(entryId))
+        && getAfter(/databases/$(database)/documents/ledger/$(entryId)).data.hasReceipt == true;
+      allow delete: if accountant()
+        && (!existsAfter(/databases/$(database)/documents/ledger/$(entryId))
+          || !('hasReceipt' in getAfter(/databases/$(database)/documents/ledger/$(entryId)).data)
+          || getAfter(/databases/$(database)/documents/ledger/$(entryId)).data.hasReceipt == false);
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

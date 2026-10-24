@@ -1,0 +1,236 @@
+import { test, expect } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
+import type { RulesTestEnvironment } from '@firebase/rules-unit-testing';
+import { doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import type { DocumentData } from 'firebase/firestore';
+import { readFileSync } from 'node:fs';
+
+const password='local-integration-password';
+const leaderEmail='leader-integration@example.com';
+const pendingEmail='pending-integration@example.com';
+let environment: RulesTestEnvironment;
+let leaderId:string;
+let pendingId:string;
+
+async function createAccount(email:string):Promise<string> {
+  const response=await fetch('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake-api-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password,returnSecureToken:true})});
+  const result=await response.json();if(!response.ok)throw new Error(JSON.stringify(result));return result.localId as string;
+}
+async function login(page:Page,email:string) {
+  await page.goto('/');
+  await page.evaluate(async ({email,password})=>{
+    const firebase=await import('/src/lib/firebase.ts');
+    const source=await (await fetch('/src/lib/store.tsx')).text();
+    const path=source.match(/from\s+["']([^"']*firebase_auth[^"']*)["']/)?.[1];
+    if(!path)throw new Error('Firebase Auth module was not found in Vite imports.');
+    const auth=await import(path);
+    await auth.signInWithEmailAndPassword(firebase.auth,email,password);
+  },{email,password});
+}
+async function savedPost(title:string) {
+  let result: DocumentData | undefined;
+  await environment.withSecurityRulesDisabled(async context=>{
+    const {getDocs,collection}=await import('firebase/firestore');
+    const docs=await getDocs(collection(context.firestore(),'posts'));
+    result=docs.docs.map(d=>d.data()).find(d=>d.title===title);
+  });
+  return result;
+}
+
+test.beforeAll(async()=>{
+  if(!process.env.FIRESTORE_EMULATOR_HOST || !process.env.FIREBASE_AUTH_EMULATOR_HOST)throw new Error('Run this suite through Firebase Auth + Firestore emulators.');
+  environment=await initializeTestEnvironment({projectId:'demo-moim',firestore:{rules:readFileSync(new URL('../firestore.rules',import.meta.url),'utf8')}});
+  await environment.clearFirestore();
+  await fetch('http://127.0.0.1:9099/emulator/v1/projects/demo-moim/accounts',{method:'DELETE'});
+  leaderId=await createAccount(leaderEmail);pendingId=await createAccount(pendingEmail);
+  await environment.withSecurityRulesDisabled(async context=>{
+    const db=context.firestore();const batch=writeBatch(db);const now=new Date().toISOString();
+    batch.set(doc(db,'members',leaderId),{id:leaderId,name:'테스트 관리자',email:leaderEmail,role:'leader',status:'active',canCreatePoll:true,joinedAt:now});
+    batch.set(doc(db,'members',pendingId),{id:pendingId,name:'가입 신청자',email:pendingEmail,role:'member',status:'pending',canCreatePoll:false,joinedAt:now});
+    batch.set(doc(db,'profiles',leaderId),{id:leaderId,phone:'010-1111-1111',area:'서울 마포구'});
+    batch.set(doc(db,'profiles',pendingId),{id:pendingId,phone:'010-2222-2222',area:'서울 성동구'});
+    batch.set(doc(db,'settings','club'),{name:'Firebase 연동 검증',description:'로컬 에뮬레이터'});
+    batch.set(doc(db,'settings','bylaws'),{content:'검증용 회칙',updatedAt:now,editorId:leaderId});
+    await batch.commit();
+  });
+});
+test.afterAll(async()=>{await environment?.cleanup();});
+
+test('real Firebase provider saves and edits posts and polls, closes, reopens and confirms atomically',async({page})=>{
+  await login(page,leaderEmail);
+  await expect(page.locator('.sidebar')).toContainText('Firebase 연동 검증');
+  await page.goto('/board');
+  await page.getByRole('button',{name:'글쓰기',exact:true}).first().click();
+  let dialog=page.getByRole('dialog');
+  await dialog.getByLabel('제목').fill('Firebase 실제 저장 글');
+  await dialog.getByLabel('내용').fill('Firestore 보안 규칙을 적용한 게시물');
+  await dialog.getByRole('button',{name:'올리기',exact:true}).click();
+  await expect(dialog.getByRole('heading',{name:'Firebase 실제 저장 글',exact:true})).toBeVisible();
+  const firstPost=await savedPost('Firebase 실제 저장 글');
+  expect(firstPost).toBeTruthy();
+  await dialog.getByRole('button',{name:'좋아요 0',exact:true}).click();
+  await expect(dialog.getByRole('button',{name:'좋아요 1',exact:true})).toBeVisible();
+  await dialog.getByRole('button',{name:'게시글 관리'}).click();
+  await dialog.getByRole('button',{name:'수정하기',exact:true}).click();
+  dialog=page.getByRole('dialog');
+  await dialog.getByLabel('제목').fill('Firebase 실제 저장 글 · 수정');
+  await dialog.getByRole('button',{name:'수정 완료',exact:true}).click();
+  await expect(dialog.getByRole('heading',{name:'Firebase 실제 저장 글 · 수정',exact:true})).toBeVisible();
+  const revisedPost=await savedPost('Firebase 실제 저장 글 · 수정');
+  expect(revisedPost!.updatedAt).not.toBe(firstPost!.updatedAt);
+  expect(revisedPost!.likedBy).toEqual([leaderId]);
+  await page.reload();
+  await expect(page.getByRole('dialog').getByRole('heading',{name:'Firebase 실제 저장 글 · 수정',exact:true})).toBeVisible();
+
+  await page.goto('/polls?create=1');
+  dialog=page.getByRole('dialog');
+  await dialog.getByRole('button',{name:'선택 초기화',exact:true}).click();
+  await dialog.getByLabel('투표 제목').fill('Firebase 일정 투표');
+  const future=new Date();future.setDate(future.getDate()+3);
+  const dayLabel=`${future.getFullYear()}년 ${future.getMonth()+1}월 ${future.getDate()}일`;
+  // The picker shows adjacent-month dates too, so +3 days is always visible.
+  await dialog.locator(`.schedule-day[aria-label^="${dayLabel}"]`).click();
+  await dialog.getByLabel('공통 시간 1 시작',{exact:true}).fill('14:00');
+  await dialog.getByLabel('공통 시간 1 종료',{exact:true}).selectOption('16:00');
+  await dialog.getByRole('button',{name:'투표 만들기',exact:true}).click();
+  dialog=page.getByRole('dialog');
+  await expect(dialog).toHaveAccessibleName('Firebase 일정 투표');
+  await dialog.locator('.poll-time-cell').first().click();
+  await dialog.getByRole('button',{name:'선택 저장하기',exact:true}).click();
+  await expect(dialog.getByRole('button',{name:'선택 수정하기'})).toBeVisible();
+  const pollId=new URL(page.url()).searchParams.get('poll')!;
+  let before: DocumentData | undefined;
+  await environment.withSecurityRulesDisabled(async context=>{before=(await getDoc(doc(context.firestore(),'polls',pollId))).data();});
+  await dialog.getByRole('button',{name:'투표 수정',exact:true}).click();
+  await page.getByRole('dialog').getByLabel('투표 제목').fill('Firebase 일정 투표 · 수정');
+  await page.getByRole('button',{name:'수정하고 열기',exact:true}).click();
+  dialog=page.getByRole('dialog');
+  await expect(dialog).toHaveAccessibleName('Firebase 일정 투표 · 수정');
+  await expect(dialog.locator('.poll-time-cell.is-selected')).toHaveCount(1);
+  await dialog.getByRole('button',{name:'투표 마감',exact:true}).click();
+  await expect(dialog.getByRole('button',{name:'다시 열기',exact:true})).toBeVisible();
+  await dialog.getByRole('button',{name:'다시 열기',exact:true}).click();
+  await expect(dialog.getByRole('button',{name:'투표 마감',exact:true})).toBeVisible();
+  await dialog.getByRole('button',{name:'일정 확정',exact:true}).click();
+  await page.getByLabel('장소',{exact:false}).fill('서울숲 테스트 장소');
+  await page.getByRole('button',{name:'확정하기',exact:true}).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await environment.withSecurityRulesDisabled(async context=>{
+    const db=context.firestore();const poll=(await getDoc(doc(db,'polls',pollId))).data()!;
+    expect(poll.status).toBe('confirmed');expect(poll.updatedAt).not.toBe(before!.updatedAt);
+    expect(poll.slotIds).toEqual(before!.slotIds);
+    const vote=(await getDoc(doc(db,'votes',`${pollId}_${leaderId}`))).data()!;
+    expect(vote.slotIds).toEqual([poll.slotIds[0]]);
+    const event=(await getDoc(doc(db,'events',poll.eventId))).data()!;
+    expect(event.pollId).toBe(pollId);expect(event.location).toBe('서울숲 테스트 장소');
+    expect(poll.deadline).toBeNull();expect(poll.deadlineAt).toBeNull();
+  });
+  // Seed only emulator metadata: no Google API request or real invitation is made.
+  const calendarLink={ownerId:leaderId,googleEventId:'local-fake-google-event',htmlLink:'https://calendar.google.com/calendar/event?eid=local-test',syncedAt:new Date().toISOString(),attendeeIds:[],signature:'original-calendar-signature'};
+  await environment.withSecurityRulesDisabled(async context=>{await updateDoc(doc(context.firestore(),'events',`poll-${pollId}`),{calendarLink});});
+  await page.goto(`/calendar?event=poll-${pollId}`);
+  dialog=page.getByRole('dialog');
+  await dialog.getByRole('button',{name:'일정 수정',exact:true}).click();
+  await page.getByRole('dialog').getByLabel('일정 제목').fill('Firebase 일정 · 캘린더 연결 유지');
+  await page.getByRole('button',{name:'수정하기',exact:true}).click();
+  await expect(page.getByRole('dialog')).toHaveAccessibleName('Firebase 일정 · 캘린더 연결 유지');
+  await environment.withSecurityRulesDisabled(async context=>{
+    const saved=(await getDoc(doc(context.firestore(),'events',`poll-${pollId}`))).data()!;
+    expect(saved.calendarLink).toEqual(calendarLink);expect(saved.pollId).toBe(pollId);
+  });
+});
+
+test('pending users load and update their private signup profile without reading group content',async({page})=>{
+  await login(page,pendingEmail);
+  await expect(page.getByRole('heading',{name:'가입 승인 대기'})).toBeVisible();
+  await expect(page.getByLabel('전화번호')).toHaveValue('010-2222-2222');
+  await expect(page.getByLabel('거주 지역')).toHaveValue('서울 성동구');
+  await page.getByLabel('전화번호').fill('010-3333-3333');
+  await page.getByLabel('거주 지역').fill('서울 강서구');
+  await page.getByRole('button',{name:'가입 정보 저장',exact:true}).click();
+  await expect(page.getByText('가입 정보를 저장했어요.',{exact:true})).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel('전화번호')).toHaveValue('010-3333-3333');
+  await expect(page.getByLabel('거주 지역')).toHaveValue('서울 강서구');
+  await expect(page.locator('.sidebar')).toHaveCount(0);
+  await environment.withSecurityRulesDisabled(async context=>{
+    expect((await getDoc(doc(context.firestore(),'members',pendingId))).data()!.status).toBe('pending');
+    expect((await getDoc(doc(context.firestore(),'profiles',pendingId))).data()!.phone).toBe('010-3333-3333');
+  });
+});
+
+test('real Firebase receipts upload atomically, load on demand, survive entry edits and delete cleanly',async({page})=>{
+  await login(page,leaderEmail);
+  await page.goto('/ledger');
+  await page.getByRole('button',{name:'내역 추가',exact:true}).first().click();
+  let dialog=page.getByRole('dialog');
+  await dialog.getByLabel('금액').fill('20000');
+  await dialog.getByLabel('내역',{exact:false}).fill('Firebase 영수증 정산');
+  await dialog.getByLabel('영수증 사진',{exact:true}).setInputFiles({name:'receipt-test.jpg',mimeType:'image/jpeg',buffer:readFileSync(new URL('../public/images/gallery-cafe.jpg',import.meta.url))});
+  await expect(dialog.getByRole('img',{name:'영수증 미리보기'})).toBeVisible();
+  await dialog.getByRole('button',{name:'저장',exact:true}).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  let row=page.locator('.ledger-row').filter({hasText:'Firebase 영수증 정산'});
+  await expect(row.getByRole('button',{name:'영수증 보기',exact:true})).toBeVisible();
+  let entryId='';let imageURL='';
+  await environment.withSecurityRulesDisabled(async context=>{
+    const {getDocs,collection}=await import('firebase/firestore');const entries=await getDocs(collection(context.firestore(),'ledger'));const entry=entries.docs.find(item=>item.data().description==='Firebase 영수증 정산')!;entryId=entry.id;
+    expect(entry.data().hasReceipt).toBe(true);const receipt=(await getDoc(doc(context.firestore(),'receipts',entryId))).data()!;expect(receipt.uploadedBy).toBe(leaderId);expect(receipt.imageURL.length).toBeLessThanOrEqual(700000);imageURL=receipt.imageURL;
+  });
+  await row.getByRole('button',{name:'영수증 보기',exact:true}).click();
+  dialog=page.getByRole('dialog');await expect(dialog).toHaveAccessibleName('영수증');
+  await expect(dialog.getByRole('img',{name:'Firebase 영수증 정산 영수증'})).toBeVisible();
+  await dialog.getByRole('button',{name:'닫기',exact:true}).last().click();
+  await row.getByRole('button',{name:'Firebase 영수증 정산 수정',exact:true}).click();
+  dialog=page.getByRole('dialog');await expect(dialog.getByRole('img',{name:'영수증 미리보기'})).toBeVisible();
+  await dialog.getByLabel('금액').fill('25000');await dialog.getByLabel('내역',{exact:false}).fill('Firebase 영수증 정산 · 수정');
+  await dialog.getByRole('button',{name:'저장',exact:true}).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  row=page.locator('.ledger-row').filter({hasText:'Firebase 영수증 정산 · 수정'});
+  await expect(row.getByRole('button',{name:'영수증 보기',exact:true})).toBeVisible();
+  await environment.withSecurityRulesDisabled(async context=>{expect((await getDoc(doc(context.firestore(),'ledger',entryId))).data()!.hasReceipt).toBe(true);expect((await getDoc(doc(context.firestore(),'receipts',entryId))).data()!.imageURL).toBe(imageURL);});
+  await row.getByRole('button',{name:'영수증 보기',exact:true}).click();
+  dialog=page.getByRole('dialog');await dialog.getByRole('button',{name:'영수증 삭제',exact:true}).click();
+  await dialog.locator('.community-confirm').getByRole('button',{name:'삭제',exact:true}).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(row.getByRole('button',{name:'영수증 보기',exact:true})).toHaveCount(0);
+  await environment.withSecurityRulesDisabled(async context=>{expect((await getDoc(doc(context.firestore(),'ledger',entryId))).data()!.hasReceipt).toBe(false);expect((await getDoc(doc(context.firestore(),'receipts',entryId))).exists()).toBe(false);});
+});
+
+test('real Firebase gallery uses compact private photo documents and preserves references before image loading',async({page,context})=>{
+  await login(page,leaderEmail);await page.goto('/board?category=gallery');
+  await page.getByRole('button',{name:'글쓰기',exact:true}).first().click();let dialog=page.getByRole('dialog');
+  await dialog.getByLabel('제목').fill('Firebase 사진 저장');await dialog.getByLabel('내용').fill('Firestore 사진 참조 검증');
+  await dialog.locator('input[type=file]').setInputFiles({name:'group-photo.jpg',mimeType:'image/jpeg',buffer:readFileSync(new URL('../public/images/gallery-cafe.jpg',import.meta.url))});
+  await expect(dialog.getByRole('img',{name:'첨부 사진 1'})).toBeVisible();await dialog.getByRole('button',{name:'올리기',exact:true}).click();
+  await expect(dialog.getByRole('heading',{name:'Firebase 사진 저장',exact:true})).toBeVisible();
+  let postId='',reference='';
+  await environment.withSecurityRulesDisabled(async testContext=>{
+    const {getDocs,collection}=await import('firebase/firestore');const posts=await getDocs(collection(testContext.firestore(),'posts'));const post=posts.docs.find(item=>item.data().title==='Firebase 사진 저장')!;postId=post.id;reference=post.data().images[0];expect(reference).toMatch(/^photo:/);
+    const photo=(await getDoc(doc(testContext.firestore(),'photos',reference.slice(6)))).data()!;expect(photo.uploadedBy).toBe(leaderId);expect(photo.imageURL).toMatch(/^data:image\/(jpeg|png|webp);base64,/);expect(photo.imageURL.length).toBeLessThanOrEqual(700000);
+  });
+  // Hold viewport loading so editing exercises unresolved private-image placeholders.
+  await page.addInitScript(()=>{window.IntersectionObserver=class {observe(){}unobserve(){}disconnect(){}takeRecords(){return [];}readonly root=null;readonly rootMargin='0px';readonly thresholds=[];} as unknown as typeof IntersectionObserver;});
+  await page.reload();dialog=page.getByRole('dialog');await expect(dialog.getByRole('heading',{name:'Firebase 사진 저장',exact:true})).toBeVisible();
+  await expect(dialog.getByRole('img',{name:'Firebase 사진 저장 사진 1'})).toHaveAttribute('src',/^data:image\/svg\+xml/);
+  await dialog.getByRole('button',{name:'게시글 관리'}).click();await dialog.getByRole('button',{name:'수정하기',exact:true}).click();
+  dialog=page.getByRole('dialog');await dialog.getByLabel('제목').fill('Firebase 사진 저장 · 수정');await dialog.getByRole('button',{name:'수정 완료',exact:true}).click();
+  await expect(dialog.getByRole('heading',{name:'Firebase 사진 저장 · 수정',exact:true})).toBeVisible();
+  await environment.withSecurityRulesDisabled(async testContext=>{expect((await getDoc(doc(testContext.firestore(),'posts',postId))).data()!.images).toEqual([reference]);});
+  const restored=await context.newPage();await restored.goto(page.url());const image=restored.getByRole('dialog').getByRole('img',{name:'Firebase 사진 저장 · 수정 사진 1'});
+  await expect(image).toBeVisible();await expect(image).toHaveAttribute('src',/^blob:/);await expect.poll(()=>image.evaluate((element:HTMLImageElement)=>element.naturalWidth)).toBeGreaterThan(0);await restored.close();
+});
+
+test('real Firebase profile mirrors public month-day birthday while keeping contact data private',async({page})=>{
+  await login(page,leaderEmail);await page.goto('/profile');const form=page.locator('form').filter({has:page.getByPlaceholder('02-29')});
+  await form.getByPlaceholder('02-29').fill('02-29');await form.getByRole('button',{name:'저장하기',exact:true}).click();
+  await expect(page.getByText('내 정보를 저장했어요.',{exact:true})).toBeVisible();
+  await environment.withSecurityRulesDisabled(async testContext=>{
+    const publicMember=(await getDoc(doc(testContext.firestore(),'members',leaderId))).data()!;const profile=(await getDoc(doc(testContext.firestore(),'profiles',leaderId))).data()!;
+    expect(publicMember.birthday).toBe('02-29');expect(profile.birthday).toBe('02-29');expect(publicMember.phone).toBeUndefined();expect(publicMember.area).toBeUndefined();expect(profile.phone).toBe('010-1111-1111');
+  });
+  await page.reload();const refreshed=page.locator('form').filter({has:page.getByPlaceholder('02-29')});await expect(refreshed.getByPlaceholder('02-29')).toHaveValue('02-29');
+  await refreshed.getByPlaceholder('02-29').fill('');await refreshed.getByRole('button',{name:'저장하기',exact:true}).click();await expect(page.getByText('내 정보를 저장했어요.',{exact:true})).toBeVisible();
+  await environment.withSecurityRulesDisabled(async testContext=>{expect((await getDoc(doc(testContext.firestore(),'members',leaderId))).data()!.birthday).toBeUndefined();expect((await getDoc(doc(testContext.firestore(),'profiles',leaderId))).data()!.birthday).toBeUndefined();});
+});

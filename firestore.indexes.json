@@ -1,0 +1,15 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "receipts",
+      "fieldPath": "imageURL",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "photos",
+      "fieldPath": "imageURL",
+      "indexes": []
+    }
+  ]
+}

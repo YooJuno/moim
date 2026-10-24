@@ -1,0 +1,2 @@
+import { defineConfig } from '@playwright/test';
+export default defineConfig({ testDir:'./tests', testMatch:'**/*.spec.ts', fullyParallel:true, timeout:45000, expect:{timeout:8000}, use:{baseURL:'http://localhost:5173',channel:'chrome',headless:true,screenshot:'only-on-failure',trace:'retain-on-failure'}, reporter:'list', webServer:{command:'npm run dev:demo -- --port 5173',url:'http://localhost:5173',reuseExistingServer:true,timeout:30000} });

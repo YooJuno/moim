@@ -1,0 +1,21 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function active() {
+      return request.auth != null
+        && firestore.get(/databases/(default)/documents/members/$(request.auth.uid)).data.status == 'active';
+    }
+    function admin() {
+      return active() && firestore.get(/databases/(default)/documents/members/$(request.auth.uid)).data.role == 'leader';
+    }
+    match /members/{memberId}/{imageId} {
+      allow read: if active();
+      allow create: if active() && request.auth.uid == memberId
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp|gif)');
+      allow update: if false;
+      allow delete: if active() && (request.auth.uid == memberId || admin());
+    }
+    match /{allPaths=**} { allow read, write: if false; }
+  }
+}
