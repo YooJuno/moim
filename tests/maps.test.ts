@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { mapLinks, mapProviderOptions } from '../src/lib/map-links';
+import { addressForMap, mapLinks, mapProviderOptions } from '../src/lib/map-links';
 
 describe('external map links', () => {
-  it('encodes a place name and address into Google Maps search and directions URLs without a key', () => {
+  it('encodes only the address into Google Maps search and directions URLs without a key', () => {
     const result = mapLinks('서울 마포구 월드컵로 1 (2층)', '모임 & 코트')!;
     const search = new URL(result.search); const directions = new URL(result.directions);
     expect(search.origin).toBe('https://www.google.com'); expect(search.pathname).toBe('/maps/search/');
-    expect(search.searchParams.get('api')).toBe('1'); expect(search.searchParams.get('query')).toBe('모임 & 코트, 서울 마포구 월드컵로 1 (2층)');
+    expect(search.searchParams.get('api')).toBe('1'); expect(search.searchParams.get('query')).toBe('서울 마포구 월드컵로 1 (2층)');
     expect(directions.pathname).toBe('/maps/dir/'); expect(directions.searchParams.get('destination')).toBe(search.searchParams.get('query'));
     expect(directions.searchParams.has('origin')).toBe(false); expect(search.searchParams.has('key')).toBe(false);
   });
@@ -17,8 +17,8 @@ describe('external map links', () => {
     expect([...search.searchParams.keys()]).toEqual(['api','query']);
     expect(search.searchParams.get('query')).toBe('javascript:alert(1)?origin=evil#test&key=leak');
   });
-  it('avoids repeating names already in location snapshots and omits empty destinations', () => {
-    expect(new URL(mapLinks('시민체육관 · 서울 마포구 모임로 2','시민체육관')!.search).searchParams.get('query')).toBe('시민체육관 · 서울 마포구 모임로 2');
+  it('uses the address inside saved location snapshots and omits empty destinations', () => {
+    expect(new URL(mapLinks('시민체육관 · 서울 마포구 모임로 2','시민체육관')!.search).searchParams.get('query')).toBe('서울 마포구 모임로 2');
     expect(mapLinks('  ')).toBeNull();
     expect(new URL(mapLinks('', ' 시민체육관 ')!.directions).searchParams.get('destination')).toBe('시민체육관');
   });
@@ -30,10 +30,10 @@ describe('external map links', () => {
 });
 
 describe('map provider choices', () => {
-  it('lists Naver first and safely encodes a named place for every provider', () => {
+  it('lists Naver first and safely encodes only the address for every provider', () => {
     const location = '서울 마포구 월드컵로 1 (2층)?q=외부&x=#층';
     const name = '모임 & 코트';
-    const query = `${name}, ${location}`;
+    const query = location;
     const options = mapProviderOptions(location, name);
     expect(options.map(option => option.id)).toEqual(['naver', 'kakao', 'google']);
     expect(options.map(option => option.label)).toEqual(['네이버지도', '카카오맵', 'Google 지도']);
@@ -53,7 +53,7 @@ describe('map provider choices', () => {
     expect(routes.map(option => option.selectPlaceFirst)).toEqual([true, true, false]);
     const google = new URL(routes[2].href);
     expect(google.pathname).toBe('/maps/dir/');
-    expect(google.searchParams.get('destination')).toBe('시민체육관, 서울 중랑구 모임로 10');
+    expect(google.searchParams.get('destination')).toBe('서울 중랑구 모임로 10');
   });
 
   it('keeps free-form destinations on fixed provider origins without duplicating names', () => {
@@ -69,5 +69,36 @@ describe('map provider choices', () => {
     expect(mapProviderOptions('  ', ' ')).toEqual([]);
     expect(mapProviderOptions('서울특별시'.repeat(100))).toEqual([]);
     expect(mapProviderOptions('', ' 시민체육관 ')[0].href).toBe(`https://map.naver.com/p/search/${encodeURIComponent('시민체육관')}`);
+  });
+});
+
+describe('addresses used by map providers', () => {
+  const name = '삼성리틀썬더스 농구클럽 구리다산점';
+  const address = '경기 남양주시 경춘로 320-93';
+
+  it('keeps a saved place name out of search and directions for all three providers', () => {
+    expect(addressForMap(address, name)).toBe(address);
+    for (const action of ['map', 'directions'] as const) {
+      const providers = mapProviderOptions(address, name, action);
+      expect(decodeURIComponent(new URL(providers[0].href).pathname.slice('/p/search/'.length))).toBe(address);
+      expect(decodeURIComponent(new URL(providers[1].href).pathname.slice('/link/search/'.length))).toBe(address);
+      expect(new URL(providers[2].href).searchParams.get(action === 'map' ? 'query' : 'destination')).toBe(address);
+    }
+  });
+
+  it.each([' · ', ', '])('extracts an address from a saved event using the %s separator without changing that snapshot', separator => {
+    const snapshot = `${name}${separator}${address}`;
+    expect(addressForMap(snapshot)).toBe(address);
+    expect(addressForMap(snapshot, name)).toBe(address);
+    expect(new URL(mapLinks(snapshot)!.search).searchParams.get('query')).toBe(address);
+    expect(new URL(mapLinks(snapshot)!.directions).searchParams.get('destination')).toBe(address);
+    expect(snapshot).toBe(`${name}${separator}${address}`);
+  });
+
+  it('keeps manual place descriptions and a name-only fallback available', () => {
+    expect(addressForMap(' 연남동 · 카페 레이어드 ')).toBe('연남동 · 카페 레이어드');
+    expect(addressForMap(' 서울숲 3번 출입구 ', '산책 출발점')).toBe('서울숲 3번 출입구');
+    expect(addressForMap('  ', ` ${name} `)).toBe(name);
+    expect(addressForMap(' ', ' ')).toBe('');
   });
 });

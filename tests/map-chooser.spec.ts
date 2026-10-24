@@ -1,18 +1,19 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const placeName = '지도 & 코트 #1';
-const address = '서울 중랑구 모임로 10 (2층)?동=가&호=1';
-const query = `${placeName}, ${address}`;
+const placeName = '삼성리틀썬더스 농구클럽 구리다산점';
+const address = '경기 남양주시 경춘로 320-93';
+const query = address;
 const mapHosts = new Set(['map.naver.com', 'map.kakao.com', 'www.google.com']);
 
-async function preparePlace(page: Page) {
+async function preparePlace(page: Page, separator = ' · ') {
   await page.goto('/profile');
   await page.getByRole('button', { name: '저장하기', exact: true }).click();
-  await page.evaluate(({ name, address }) => {
+  await page.evaluate(({ name, address, separator }) => {
     const data = JSON.parse(localStorage.getItem('moim-demo-v1')!);
     data.places[0] = { ...data.places[0], name, address };
+    data.events.find((event: { id: string }) => event.id === 'event-coffee').location = `${name}${separator}${address}`;
     localStorage.setItem('moim-demo-v1', JSON.stringify(data));
-  }, { name: placeName, address });
+  }, { name: placeName, address, separator });
   await page.goto('/places');
   return page.locator('.place-directory-card').filter({ has: page.getByRole('heading', { name: placeName, exact: true }) });
 }
@@ -27,7 +28,8 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
         requests.push(route.request().url());
         await route.fulfill({ contentType: 'text/html', body: '<title>Map fixture</title>' });
       });
-      const place = await preparePlace(page);
+      const separator = viewport.name === 'desktop' ? ' · ' : ', ';
+      const place = await preparePlace(page, separator);
       const originalURL = page.url();
       const before = await page.evaluate(() => localStorage.getItem('moim-demo-v1'));
       await place.getByRole('button', { name: '지도 보기', exact: true }).click();
@@ -58,15 +60,28 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
       await popup.close();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await page.goto('/');
+      await expect(page.locator('.hero-meta')).toContainText(`${placeName}${separator}${address}`);
       const hero = page.locator('.hero-location-links');
       for (const button of await hero.getByRole('button').all()) {
         await expect(button).toBeVisible();
         await expect(button).toHaveCSS('color', 'rgb(255, 255, 255)');
       }
       await expect(hero.getByRole('button')).toHaveCount(2);
+      await hero.getByRole('button', { name: '지도 보기', exact: true }).click();
+      let homeChooser = page.getByRole('dialog', { name: '지도 앱 선택', exact: true });
+      for (const [index, link] of (await homeChooser.getByRole('link').all()).entries()) await expect(link).toHaveAttribute('href', expected[index]);
+      await homeChooser.getByRole('button', { name: '닫기', exact: true }).click();
+      await hero.getByRole('button', { name: '길찾기', exact: true }).click();
+      homeChooser = page.getByRole('dialog', { name: '길찾기 앱 선택', exact: true });
+      await expect(homeChooser.getByRole('link', { name: '네이버지도', exact: true })).toHaveAttribute('href', expected[0]);
+      await expect(homeChooser.getByRole('link', { name: '카카오맵', exact: true })).toHaveAttribute('href', expected[1]);
+      expect(new URL((await homeChooser.getByRole('link', { name: 'Google 지도', exact: true }).getAttribute('href'))!).searchParams.get('destination')).toBe(address);
+      await homeChooser.getByRole('button', { name: '닫기', exact: true }).click();
+      expect(await page.evaluate(() => localStorage.getItem('moim-demo-v1'))).toBe(before);
     });
 
     test('directions explain the place-selection step and Escape returns to the open event', async ({ page }) => {
+      await preparePlace(page, viewport.name === 'desktop' ? ', ' : ' · ');
       await page.goto('/calendar?event=event-coffee');
       const event = page.getByRole('dialog', { name: '커피 한 잔, 함께해요', exact: true });
       await expect(event).toBeVisible();
@@ -80,6 +95,9 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
       const google = chooser.getByRole('link', { name: 'Google 지도', exact: true });
       await expect(google).not.toHaveAttribute('aria-describedby');
       expect(new URL((await google.getAttribute('href'))!).pathname).toBe('/maps/dir/');
+      expect(new URL((await google.getAttribute('href'))!).searchParams.get('destination')).toBe(address);
+      await expect(chooser.getByRole('link', { name: '네이버지도', exact: true })).toHaveAttribute('href', `https://map.naver.com/p/search/${encodeURIComponent(address)}`);
+      await expect(chooser.getByRole('link', { name: '카카오맵', exact: true })).toHaveAttribute('href', `https://map.kakao.com/link/search/${encodeURIComponent(address)}`);
       await expect(page.getByRole('dialog')).toHaveCount(2);
       await page.keyboard.press('Escape');
       await expect(chooser).toHaveCount(0); await expect(event).toBeVisible();

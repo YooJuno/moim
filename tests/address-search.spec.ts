@@ -49,11 +49,11 @@ test('postcode loads after an explicit click, selects an editable saved address 
   expect(await chooser.getByRole('link').evaluateAll(links=>links.map(link=>link.getAttribute('aria-label')))).toEqual(['네이버지도','카카오맵','Google 지도']);
   const map = chooser.getByRole('link', {name:'네이버지도',exact:true});
   await expect(map).toHaveAttribute('target','_blank'); await expect(map).toHaveAttribute('rel',/noopener/);
-  expect(decodeURIComponent(new URL((await map.getAttribute('href'))!).pathname.slice('/p/search/'.length))).toBe('모임 코트, 서울 마포구 월드컵로 1 (모임빌딩) 2층');
+  expect(decodeURIComponent(new URL((await map.getAttribute('href'))!).pathname.slice('/p/search/'.length))).toBe('서울 마포구 월드컵로 1 (모임빌딩) 2층');
   await chooser.getByRole('button', {name:'닫기',exact:true}).click();
   await row.getByRole('button', {name:'길찾기',exact:true}).click();
   chooser = page.getByRole('dialog', {name:'길찾기 앱 선택',exact:true});
-  expect(new URL((await chooser.getByRole('link', {name:'Google 지도',exact:true}).getAttribute('href'))!).searchParams.get('destination')).toBe('모임 코트, 서울 마포구 월드컵로 1 (모임빌딩) 2층');
+  expect(new URL((await chooser.getByRole('link', {name:'Google 지도',exact:true}).getAttribute('href'))!).searchParams.get('destination')).toBe('서울 마포구 월드컵로 1 (모임빌딩) 2층');
   await chooser.getByRole('button', {name:'닫기',exact:true}).click();
   await page.reload(); await expect(row).toContainText('모임빌딩) 2층');
 });

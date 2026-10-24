@@ -80,7 +80,7 @@ export async function searchNaverPlaces(query: string, env: Env): Promise<NaverP
       const name = naverPlainText(item.title, 200), address = naverPlainText(item.address, 300), roadAddress = naverPlainText(item.roadAddress, 300);
       if (!name || !(address || roadAddress)) continue;
       // `item.link` may be an unrelated business website, so never trust it as a map URL.
-      const mapQuery = `${name} ${roadAddress || address}`;
+      const mapQuery = roadAddress || address;
       const place = { name, address, roadAddress, ...coordinates(item) };
       places.push({ id: `naver-${(await sha256(JSON.stringify(place))).slice(0, 24)}`, ...place, naverUrl: `https://map.naver.com/p/search/${encodeURIComponent(mapQuery)}` });
     }

@@ -60,6 +60,7 @@ describe('authenticated Naver place search', () => {
       expect(data.places[0]).toMatchObject({ name: '테스트 코트 & 카페', address: item.address, roadAddress: item.roadAddress, latitude: 37.5666103, longitude: 126.9873882 });
       expect(data.places[0].id).toMatch(/^naver-[A-Za-z0-9_-]{24}$/);
       expect(new URL(data.places[0].naverUrl).origin).toBe('https://map.naver.com');
+      expect(decodeURIComponent(new URL(data.places[0].naverUrl).pathname.slice('/p/search/'.length))).toBe(item.roadAddress);
       expect(JSON.stringify(data)).not.toMatch(/search-test|fake-private|private-|javascript|<b>/);
       expect(response.headers.get('Cache-Control')).toBe('no-store');
       expect(response.headers.get('Access-Control-Allow-Origin')).toBe(origin);
