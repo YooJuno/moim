@@ -1,23 +1,91 @@
+import { useI18n } from "../lib/preferences";
 import { createContext, useContext, useEffect, useId, useRef, useState } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, LoaderCircle, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Member } from '../lib/types';
-
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {variant?:'primary'|'secondary'|'ghost'|'danger'; size?:'sm'|'md'; icon?:LucideIcon; loading?:boolean};
-export function Button({variant='primary',size='md',icon:Icon,loading=false,children,className='',type='button',disabled,...props}:ButtonProps) { return <button {...props} type={type} className={`button button-${variant} button-${size} ${className}`} disabled={disabled||loading}>{loading?<LoaderCircle size={17} className="spin"/>:Icon?<Icon size={17}/>:null}{children}</button>; }
-export function IconButton({label,icon:Icon,className='',type='button',...props}:ButtonHTMLAttributes<HTMLButtonElement>&{label:string;icon:LucideIcon}) { return <button {...props} type={type} aria-label={label} title={label} className={`icon-button ${className}`}><Icon size={19}/></button>; }
-export function Badge({tone='gray',children}: {tone?:'blue'|'green'|'orange'|'gray'|'red';children:ReactNode}) {return <span className={`badge badge-${tone}`}>{children}</span>;}
-export function Avatar({member,name,size=36}: {member?:Member;name?:string;size?:number}) { const label=member?.name||name||'멤버'; let hash=0; for(const c of label)hash+=c.charCodeAt(0); return <span className={`avatar avatar-${hash%6}`} style={{width:size,height:size,fontSize:size*.35}} title={label}>{member?.photoURL?<img src={member.photoURL} alt={label} referrerPolicy="no-referrer" onError={e=>{e.currentTarget.style.display='none';}}/>:label.slice(-2)}</span>; }
-export function PageHeader({title,description,action,tourId}: {title:string;description?:ReactNode;action?:ReactNode;tourId?:string}) {return <div className="page-header" data-tour={tourId}><div><h1>{title}</h1>{description&&<p className="page-subtitle">{description}</p>}</div>{action&&<div className="page-header-action">{action}</div>}</div>;}
-export function Field({label,required,hint,children}: {label:string;required?:boolean;hint?:string;children:ReactNode}) {return <label className="field"><span className="field-label">{label}{required&&<span className="required">*</span>}</span>{children}{hint&&<span className="field-hint">{hint}</span>}</label>;}
-export function EmptyState({icon:Icon,title,description,action}: {icon:LucideIcon;title:string;description?:string;action?:ReactNode}) {return <div className="empty-state"><span className="empty-icon"><Icon size={27}/></span><h3>{title}</h3>{description&&<p>{description}</p>}{action}</div>;}
-const modalStack:string[]=[];
-export function Modal({title,onClose,children,footer,wide=false}: {title:string;onClose:()=>void;children:ReactNode;footer?:ReactNode;wide?:boolean}) { const id=useId(); const box=useRef<HTMLDivElement>(null); const closeRef=useRef(onClose); closeRef.current=onClose;
-useEffect(()=>{const previous=document.activeElement as HTMLElement|null;modalStack.push(id);document.body.style.overflow='hidden';const frame=requestAnimationFrame(()=>box.current?.focus());const onKey=(e:KeyboardEvent)=>{if(modalStack.at(-1)!==id)return;if(e.key==='Escape'){e.preventDefault();closeRef.current();}if(e.key==='Tab'){const elements=box.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex="0"]');if(!elements?.length)return;const first=elements[0],last=elements[elements.length-1];if(e.shiftKey&&(document.activeElement===first||document.activeElement===box.current)){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}};document.addEventListener('keydown',onKey);return()=>{cancelAnimationFrame(frame);modalStack.splice(modalStack.indexOf(id),1);if(!modalStack.length)document.body.style.overflow='';document.removeEventListener('keydown',onKey);previous?.focus();};},[id]);
-return createPortal(<div className="modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}><div ref={box} role="dialog" aria-modal="true" aria-labelledby={id} tabIndex={-1} className={`modal ${wide?'modal-wide':''}`}><div className="modal-header"><h2 id={id}>{title}</h2><IconButton label="닫기" icon={X} onClick={onClose}/></div><div className="modal-body">{children}</div>{footer&&<div className="modal-footer">{footer}</div>}</div></div>,document.body);}
-type ToastFn=(message:string,tone?:'success'|'error')=>void;
-const ToastContext=createContext<ToastFn>(()=>{});
-export function ToastProvider({children}:{children:ReactNode}) {const [toasts,setToasts]=useState<{id:number;message:string;tone:string}[]>([]);const timers=useRef<ReturnType<typeof setTimeout>[]>([]);useEffect(()=>()=>timers.current.forEach(clearTimeout),[]);const show:ToastFn=(message,tone='success')=>{const id=Date.now()+Math.random();setToasts(items=>[...items.slice(-2),{id,message,tone}]);timers.current.push(setTimeout(()=>setToasts(items=>items.filter(t=>t.id!==id)),4200));};return <ToastContext.Provider value={show}>{children}<div className="toast-container" aria-live="polite">{toasts.map(t=><div key={t.id} className={`toast toast-${t.tone}`}>{t.tone==='success'?<Check size={18}/>:<X size={18}/>}<span>{t.message}</span></div>)}</div></ToastContext.Provider>;}
-export const useToast=()=>useContext(ToastContext);
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+    variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+    size?: 'sm' | 'md';
+    icon?: LucideIcon;
+    loading?: boolean;
+};
+export function Button({ variant = 'primary', size = 'md', icon: Icon, loading = false, children, className = '', type = 'button', disabled, ...props }: ButtonProps) { return <button {...props} type={type} className={`button button-${variant} button-${size} ${className}`} disabled={disabled || loading}>{loading ? <LoaderCircle size={17} className="spin"/> : Icon ? <Icon size={17}/> : null}{children}</button>; }
+export function IconButton({ label, icon: Icon, className = '', type = 'button', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & {
+    label: string;
+    icon: LucideIcon;
+}) { return <button {...props} type={type} aria-label={label} title={label} className={`icon-button ${className}`}><Icon size={19}/></button>; }
+export function Badge({ tone = 'gray', children }: {
+    tone?: 'blue' | 'green' | 'orange' | 'gray' | 'red';
+    children: ReactNode;
+}) { return <span className={`badge badge-${tone}`}>{children}</span>; }
+export function Avatar({ member, name, size = 36 }: {
+    member?: Member;
+    name?: string;
+    size?: number;
+}) { const {t}=useI18n(); const label = member?.name || name || t('멤버'); let hash = 0; for (const c of label)
+    hash += c.charCodeAt(0); return <span className={`avatar avatar-${hash % 6}`} style={{ width: size, height: size, fontSize: size * .35 }} title={label}>{member?.photoURL ? <img src={member.photoURL} alt={label} referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.display = 'none'; }}/> : label.slice(-2)}</span>; }
+export function PageHeader({ title, description, action, tourId }: {
+    title: string;
+    description?: ReactNode;
+    action?: ReactNode;
+    tourId?: string;
+}) { return <div className="page-header" data-tour={tourId}><div><h1>{title}</h1>{description && <p className="page-subtitle">{description}</p>}</div>{action && <div className="page-header-action">{action}</div>}</div>; }
+export function Field({ label, required, hint, children }: {
+    label: string;
+    required?: boolean;
+    hint?: string;
+    children: ReactNode;
+}) { return <label className="field"><span className="field-label">{label}{required && <span className="required">*</span>}</span>{children}{hint && <span className="field-hint">{hint}</span>}</label>; }
+export function EmptyState({ icon: Icon, title, description, action }: {
+    icon: LucideIcon;
+    title: string;
+    description?: string;
+    action?: ReactNode;
+}) { return <div className="empty-state"><span className="empty-icon"><Icon size={27}/></span><h3>{title}</h3>{description && <p>{description}</p>}{action}</div>; }
+const modalStack: string[] = [];
+export function Modal({ title, onClose, children, footer, wide = false }: {
+    title: string;
+    onClose: () => void;
+    children: ReactNode;
+    footer?: ReactNode;
+    wide?: boolean;
+}) {
+    const { t } = useI18n();
+    const id = useId();
+    const box = useRef<HTMLDivElement>(null);
+    const closeRef = useRef(onClose);
+    closeRef.current = onClose;
+    useEffect(() => { const previous = document.activeElement as HTMLElement | null; modalStack.push(id); document.body.style.overflow = 'hidden'; const frame = requestAnimationFrame(() => box.current?.focus()); const onKey = (e: KeyboardEvent) => { if (modalStack.at(-1) !== id)
+        return; if (e.key === 'Escape') {
+        e.preventDefault();
+        closeRef.current();
+    } if (e.key === 'Tab') {
+        const elements = box.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex="0"]');
+        if (!elements?.length)
+            return;
+        const first = elements[0], last = elements[elements.length - 1];
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === box.current)) {
+            e.preventDefault();
+            last.focus();
+        }
+        else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+        }
+    } }; document.addEventListener('keydown', onKey); return () => { cancelAnimationFrame(frame); modalStack.splice(modalStack.indexOf(id), 1); if (!modalStack.length)
+        document.body.style.overflow = ''; document.removeEventListener('keydown', onKey); previous?.focus(); }; }, [id]);
+    return createPortal(<div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget)
+        onClose(); }}><div ref={box} role="dialog" aria-modal="true" aria-labelledby={id} tabIndex={-1} className={`modal ${wide ? 'modal-wide' : ''}`}><div className="modal-header"><h2 id={id}>{title}</h2><IconButton label={t("닫기")} icon={X} onClick={onClose}/></div><div className="modal-body">{children}</div>{footer && <div className="modal-footer">{footer}</div>}</div></div>, document.body);
+}
+type ToastFn = (message: string, tone?: 'success' | 'error') => void;
+const ToastContext = createContext<ToastFn>(() => { });
+export function ToastProvider({ children }: {
+    children: ReactNode;
+}) { const {t:translateToast}=useI18n(); const [toasts, setToasts] = useState<{
+    id: number;
+    message: string;
+    tone: string;
+}[]>([]); const timers = useRef<ReturnType<typeof setTimeout>[]>([]); useEffect(() => () => timers.current.forEach(clearTimeout), []); const show: ToastFn = (message, tone = 'success') => { const id = Date.now() + Math.random(); setToasts(items => [...items.slice(-2), { id, message, tone }]); timers.current.push(setTimeout(() => setToasts(items => items.filter(t => t.id !== id)), 4200)); }; return <ToastContext.Provider value={show}>{children}<div className="toast-container" aria-live="polite">{toasts.map(t => <div key={t.id} className={`toast toast-${t.tone}`}>{t.tone === 'success' ? <Check size={18}/> : <X size={18}/>}<span>{translateToast(t.message)}</span></div>)}</div></ToastContext.Provider>; }
+export const useToast = () => useContext(ToastContext);

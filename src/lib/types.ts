@@ -1,8 +1,9 @@
 export type Role = 'leader' | 'treasurer' | 'member';
 export type MemberStatus = 'active' | 'pending' | 'rejected';
 export interface Member { id: string; name: string; email: string; photoURL?: string; isRoster?: boolean; position?: string; birthday?: string; role: Role; status: MemberStatus; canCreatePoll: boolean; joinedAt: string }
-export interface Profile { id: string; phone: string; area: string; birthday?: string }
-export interface Settings { name: string; description: string; photoURL?: string }
+export interface UserPreferences { language: 'ko' | 'en'; theme: 'system' | 'light' | 'dark' }
+export interface Profile { id: string; phone: string; area: string; birthday?: string; language?: UserPreferences['language']; theme?: UserPreferences['theme'] }
+export interface Settings { name: string; description: string; photoURL?: string; smsEnabled?: boolean; smsAutoOnConfirm?: boolean }
 export type Category = 'notice' | 'chat' | 'info' | 'gallery';
 export interface Post { id: string; category: Category; title: string; body: string; authorId: string; createdAt: string; updatedAt: string; images: string[]; pinned: boolean; likedBy: string[] }
 export interface Comment { id: string; postId: string; authorId: string; body: string; createdAt: string }
@@ -22,7 +23,7 @@ export interface BallotResponse { id: string; ballotId: string; eventId: string;
 export interface MvpVote { id: string; eventId: string; memberId: string; candidateId: string; updatedAt: string }
 export interface AppData { places: SavedPlace[]; mvpVotes: MvpVote[]; ballots: EventBallot[]; ballotResponses: BallotResponse[]; bylaws: Bylaws; ledger: LedgerEntry[]; settings: Settings; members: Member[]; profiles: Profile[]; posts: Post[]; comments: Comment[]; polls: Poll[]; votes: Vote[]; events: MoimEvent[]; rsvps: Rsvp[] }
 export interface AppContextValue extends AppData {
-  user: Member | null; loading: boolean; isDemo: boolean; isAdmin: boolean; canCreatePoll: boolean; error: string | null;
+  user: Member | null; loading: boolean; isDemo: boolean; isAdmin: boolean; canParticipate: boolean; canCreatePoll: boolean; error: string | null;
   login: () => Promise<void>; logout: () => Promise<void>;
   savePlace: (place: SavedPlace) => Promise<void>;
   deletePlace: (id: string) => Promise<void>;
@@ -31,6 +32,7 @@ export interface AppContextValue extends AppData {
   getReceipt: (entryId: string) => Promise<Receipt | null>;
   saveReceipt: (entryId: string, file: File | null) => Promise<void>;
   saveSettings: (settings: Settings) => Promise<void>;
+  savePreferences: (preferences: UserPreferences) => Promise<void>;
   saveProfile: (id: string, data: { name: string; phone: string; area: string; birthday?: string }) => Promise<void>;
   updateMember: (id: string, patch: Partial<Pick<Member, 'role' | 'status' | 'canCreatePoll' | 'position'>>) => Promise<void>;
   addRosterMember: (data: { name: string; phone: string; area: string; birthday?: string; position?: string }) => Promise<void>;

@@ -12,7 +12,7 @@ import { preparePostPhoto, prepareReceipt } from './receipt';
 import { errorMessage, uid } from './utils';
 
 const DEMO_KEY = 'moim-demo-v1';
-const emptyData = (): AppData => ({settings:{name:'우리 모임',description:''},bylaws:{content:'',updatedAt:'',editorId:''},places:[],ledger:[],ballots:[],ballotResponses:[],mvpVotes:[],members:[],profiles:[],posts:[],comments:[],polls:[],votes:[],events:[],rsvps:[]});
+const emptyData = (): AppData => ({settings:{name:'우리 모임',description:'',smsEnabled:false,smsAutoOnConfirm:false},bylaws:{content:'',updatedAt:'',editorId:''},places:[],ledger:[],ballots:[],ballotResponses:[],mvpVotes:[],members:[],profiles:[],posts:[],comments:[],polls:[],votes:[],events:[],rsvps:[]});
 function initialData(): AppData {
   if (!isDemo) return emptyData();
   try { const raw = localStorage.getItem(DEMO_KEY); if(raw) { const data = JSON.parse(raw) as AppData; if(data.settings && data.bylaws && Array.isArray(data.ledger) && Array.isArray(data.members) && Array.isArray(data.polls)) return {...data,places:data.places ?? [],ballots:data.ballots ?? [],ballotResponses:data.ballotResponses ?? [],mvpVotes:data.mvpVotes ?? []}; } } catch { /* An invalid saved demo is replaced with the sample. */ }
@@ -39,6 +39,7 @@ export function AppProvider({children}: {children: ReactNode}) {
   const pendingImages = useRef(new Set<string>());
   const imageGeneration = useRef(0);
   const user = isDemo ? (demoSignedIn ? data.members.find(m=>m.id===DEMO_USER_ID) ?? null : null) : self;
+  const canParticipate=user?.status==='active';
   const isAdmin = user?.status === 'active' && user.role === 'leader';
   const canCreatePoll = user?.status === 'active' && (isAdmin || user.canCreatePoll);
 
@@ -48,6 +49,7 @@ export function AppProvider({children}: {children: ReactNode}) {
     dataRef.current = next; setData(next);
   };
   const active = () => { if(!user || user.status!=='active') throw new Error('승인된 멤버만 사용할 수 있어요.'); return user; };
+  const readable=()=>{if(!user || !['active','pending'].includes(user.status))throw new Error('로그인 후 모임 내용을 볼 수 있어요.');return user;};
   const admin = () => { const actor=active(); if(actor.role!=='leader') throw new Error('관리자만 변경할 수 있어요.'); return actor; };
   const managePoll = (poll: Poll) => { const actor=active(); if(!isAdmin && !(actor.canCreatePoll && poll.creatorId===actor.id)) throw new Error('투표를 관리할 권한이 없어요.'); if(poll.status==='confirmed') throw new Error('확정한 투표는 변경할 수 없어요. 캘린더에서 일정을 수정해 주세요.'); return actor; };
   const database = () => { if(!db) throw new Error(configurationError ?? 'Firebase에 연결할 수 없어요.'); return db; };
@@ -77,14 +79,14 @@ export function AppProvider({children}: {children: ReactNode}) {
   },[authUid]);
 
   useEffect(()=>{
-    if(isDemo || !db || !self || self.status==='active') return;
+    if(isDemo || !db || !self || ['active','pending'].includes(self.status)) return;
     return onSnapshot(doc(db,'profiles',self.id),snapshot=>{
       setData(previous=>({...previous,profiles:snapshot.exists() ? [{...snapshot.data(),id:snapshot.id} as AppData['profiles'][number]] : []}));
     },displayError);
   },[self?.id,self?.status]);
 
   useEffect(()=>{
-    if(isDemo || !db || !self || self.status!=='active') return;
+    if(isDemo || !db || !self || !['active','pending'].includes(self.status)) return;
     const database=db;
     const unsubscribers: (()=>void)[]=[];
     const listen = (key: keyof Omit<AppData,'settings' | 'bylaws'>, target: ReturnType<typeof collection> | ReturnType<typeof query>) => {
@@ -93,24 +95,24 @@ export function AppProvider({children}: {children: ReactNode}) {
         setData(previous=>({...previous,[key]:values}));
       },displayError));
     };
-    const leader=self.role==='leader';
+    const leader=self.status==='active' && self.role==='leader';
     listen('members',leader ? collection(database,'members') : query(collection(database,'members'),where('status','==','active')));
     if(leader) listen('profiles',collection(database,'profiles'));
     else unsubscribers.push(onSnapshot(doc(database,'profiles',self.id),snapshot=>setData(previous=>({...previous,profiles:snapshot.exists() ? [{...snapshot.data(),id:snapshot.id} as AppData['profiles'][number]] : []})),displayError));
     for(const key of ['posts','comments','polls','votes','events','rsvps','ledger','ballots','ballotResponses','mvpVotes','places'] as const) listen(key,collection(database,key));
     unsubscribers.push(onSnapshot(doc(database,'settings','club'),snapshot=>{
-      if(snapshot.exists()) setData(previous=>({...previous,settings:snapshot.data() as AppData['settings']}));
+      if(snapshot.exists()) setData(previous=>({...previous,settings:{...snapshot.data(),smsEnabled:snapshot.data().smsEnabled===true,smsAutoOnConfirm:snapshot.data().smsAutoOnConfirm===true} as AppData['settings']}));
     },displayError));
     unsubscribers.push(onSnapshot(doc(database,'settings','bylaws'),snapshot=>{ if(snapshot.exists()) setData(previous=>({...previous,bylaws:snapshot.data() as AppData['bylaws']})); },displayError));
     return ()=>unsubscribers.forEach(unsubscribe=>unsubscribe());
   },[self?.id,self?.status,self?.role]);
 
   useEffect(()=>{
-    if(!isDemo && (!self || self.status!=='active')) setData(emptyData());
+    if(!isDemo && (!self || !['active','pending'].includes(self.status))) setData(emptyData());
   },[self?.id,self?.status]);
 
   useEffect(()=>{
-    if(isDemo || self?.status==='active') return;
+    if(isDemo || (self && ['active','pending'].includes(self.status))) return;
     imageGeneration.current+=1;
     for(const url of imageCache.current.values()) URL.revokeObjectURL(url);
     imageCache.current.clear(); reverseImages.current.clear(); pendingImages.current.clear(); setImageUrls({});
@@ -133,7 +135,7 @@ export function AppProvider({children}: {children: ReactNode}) {
     }
   },[data.posts]);
   useEffect(()=>{
-    if(isDemo || !db || self?.status!=='active')return;
+    if(isDemo || !db || !self || !['active','pending'].includes(self.status))return;
     const loadPhoto=async(path:string)=>{
       if(imageCache.current.has(path) || pendingImages.current.has(path))return;
       const generation=imageGeneration.current;pendingImages.current.add(path);
@@ -158,8 +160,9 @@ export function AppProvider({children}: {children: ReactNode}) {
   const value: AppContextValue = useMemo(()=>({
     ...data,
     posts:data.posts.map(post=>({...post,images:post.images.map(displayImage)})),
+    members:isAdmin ? data.members:data.members.filter(member=>member.status==='active'),
     profiles:isAdmin ? data.profiles : data.profiles.filter(profile=>profile.id===user?.id),
-    user,loading,isDemo,isAdmin,canCreatePoll,error,
+    user,loading,isDemo,isAdmin,canParticipate,canCreatePoll,error,
     async login() {
       if(isDemo) { setDemoSignedIn(true); return; }
       if(!auth) throw new Error(configurationError ?? 'Firebase 설정을 확인해 주세요.');
@@ -176,11 +179,13 @@ export function AppProvider({children}: {children: ReactNode}) {
     },
     async logout() { if(isDemo) { setDemoSignedIn(false); return; } if(auth) await signOut(auth); },
     async saveSettings(settings) {
-      admin();
-      const next={name:settings.name.trim(),description:settings.description.trim(),...(settings.photoURL ? {photoURL:settings.photoURL}:{})};
-      if(!next.name || next.name.length>40 || next.description.length>140) throw new Error('모임 이름은 1–40자, 소개는 140자 이내로 입력해 주세요.');
-      if(next.photoURL && (next.photoURL.length>180000 || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(next.photoURL))) throw new Error('모임 사진은 JPG, PNG, WebP 형식의 작은 이미지로 올려주세요.');
-      if(isDemo) applyDemo({...dataRef.current,settings:next}); else await setDoc(doc(database(),'settings','club'),next);
+      admin();const base={name:settings.name.trim(),description:settings.description.trim(),...(settings.photoURL ? {photoURL:settings.photoURL}:{})};
+      if(!base.name || base.name.length>40 || base.description.length>140)throw new Error('모임 이름은 1–40자, 소개는 140자 이내로 입력해 주세요.');
+      if(base.photoURL && (base.photoURL.length>180000 || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(base.photoURL)))throw new Error('모임 사진은 JPG, PNG, WebP 형식의 작은 이미지로 올려주세요.');
+      if((settings.smsEnabled!==undefined && typeof settings.smsEnabled!=='boolean') || (settings.smsAutoOnConfirm!==undefined && typeof settings.smsAutoOnConfirm!=='boolean'))throw new Error('문자 알림 설정을 확인해 주세요.');
+      const build=(current?:AppData['settings'])=>({...base,smsEnabled:settings.smsEnabled ?? current?.smsEnabled ?? false,smsAutoOnConfirm:settings.smsAutoOnConfirm ?? current?.smsAutoOnConfirm ?? false});
+      if(isDemo)applyDemo({...dataRef.current,settings:build(dataRef.current.settings)});
+      else await runTransaction(database(),async transaction=>{const settingsRef=doc(database(),'settings','club');const snapshot=await transaction.get(settingsRef);transaction.set(settingsRef,build(snapshot.exists() ? snapshot.data() as AppData['settings']:undefined));});
     },
     async savePlace(place) {
       admin();const name=place.name.trim(),address=place.address.trim();if(!name || name.length>80 || !address || address.length>300)throw new Error('장소 이름은 80자, 주소는 300자 이내로 입력해 주세요.');
@@ -211,7 +216,7 @@ export function AppProvider({children}: {children: ReactNode}) {
       else {const batch=writeBatch(database());batch.delete(doc(database(),'receipts',id));batch.delete(doc(database(),'ledger',id));await batch.commit();}
     },
     async getReceipt(entryId) {
-      active();if(isDemo && !dataRef.current.ledger.some(entry=>entry.id===entryId && entry.hasReceipt))return null;
+      readable();if(isDemo && !dataRef.current.ledger.some(entry=>entry.id===entryId && entry.hasReceipt))return null;
       if(isDemo){const blob=await readDemoImage(`receipt-${entryId}`);return blob ? JSON.parse(await blob.text()) as Receipt:null;}
       const snapshot=await getDoc(doc(database(),'receipts',entryId));return snapshot.exists() ? snapshot.data() as Receipt:null;
     },
@@ -225,11 +230,18 @@ export function AppProvider({children}: {children: ReactNode}) {
       if(isDemo){if(receipt)await saveDemoImage(`receipt-${entryId}`,new Blob([JSON.stringify(receipt)],{type:'application/json'}));applyDemo({...dataRef.current,ledger:dataRef.current.ledger.map(entry=>entry.id===entryId ? {...entry,hasReceipt:!!receipt}:entry)});if(!receipt)await deleteDemoImage(`receipt-${entryId}`);}
       else {const batch=writeBatch(database());const receiptRef=doc(database(),'receipts',entryId);if(receipt)batch.set(receiptRef,receipt);else batch.delete(receiptRef);batch.update(doc(database(),'ledger',entryId),{hasReceipt:!!receipt});await batch.commit();}
     },
+    async savePreferences(preferences) {
+      if(!user)throw new Error('로그인 후 개인 설정을 저장할 수 있어요.');
+      if(!['ko','en'].includes(preferences.language) || !['system','light','dark'].includes(preferences.theme))throw new Error('언어와 화면 설정을 확인해 주세요.');
+      const id=user.id;const build=(current?:AppData['profiles'][number])=>({...current,id,phone:current?.phone ?? '',area:current?.area ?? '',language:preferences.language,theme:preferences.theme});
+      if(isDemo)applyDemo({...dataRef.current,profiles:replace(dataRef.current.profiles,build(dataRef.current.profiles.find(profile=>profile.id===id)))});
+      else await runTransaction(database(),async transaction=>{const profileRef=doc(database(),'profiles',id);const snapshot=await transaction.get(profileRef);transaction.set(profileRef,build(snapshot.exists() ? snapshot.data() as AppData['profiles'][number]:undefined));});
+    },
     async saveProfile(id,profile) {
       if(!user || (id!==user.id && !isAdmin))throw new Error('프로필을 변경할 권한이 없어요.');
       const name=profile.name.trim(),phone=profile.phone.trim(),area=profile.area.trim(),birthday=profile.birthday?.trim();
       if(!name || name.length>30 || phone.length>30 || area.length>100 || (birthday!==undefined && !validBirthday(birthday)))throw new Error('프로필 입력 내용을 확인해 주세요.');
-      const build=(current?:AppData['profiles'][number],member?:Member)=>{const value=birthday===undefined ? member?.birthday ?? current?.birthday:birthday;return {id,phone,area,...(value ? {birthday:value}:{})};};
+      const build=(current?:AppData['profiles'][number],member?:Member)=>{const value=birthday===undefined ? member?.birthday ?? current?.birthday:birthday;return {id,phone,area,...(value ? {birthday:value}:{}),...(current?.language ? {language:current.language}:{}),...(current?.theme ? {theme:current.theme}:{})};};
       if(isDemo){const current=dataRef.current;const next=build(current.profiles.find(item=>item.id===id),current.members.find(member=>member.id===id));applyDemo({...current,members:current.members.map(member=>{if(member.id!==id)return member;const {birthday:_oldBirthday,...fields}=member;return {...fields,name,...(next.birthday ? {birthday:next.birthday}:{})};}),profiles:replace(current.profiles,next)});}
       else await runTransaction(database(),async transaction=>{const profileRef=doc(database(),'profiles',id),memberRef=doc(database(),'members',id);const [snapshot,member]=await Promise.all([transaction.get(profileRef),transaction.get(memberRef)]);const next=build(snapshot.exists() ? snapshot.data() as AppData['profiles'][number]:undefined,member.exists() ? member.data() as Member:undefined);transaction.update(memberRef,{name,birthday:next.birthday ?? deleteField()});transaction.set(profileRef,next);});
     },
@@ -246,7 +258,7 @@ export function AppProvider({children}: {children: ReactNode}) {
         if(!source?.isRoster || !target || target.isRoster || !target.email)throw new Error('명부와 가입 계정을 다시 확인해 주세요.');
         const birthday=source.birthday ?? sourceProfile?.birthday ?? target.birthday ?? targetProfile?.birthday;
         const member:Member={...target,name:source.name,status:'active',isRoster:false,...(source.position && canonicalPositions.includes(source.position) ? {position:source.position}:{}),...(birthday ? {birthday}:{})};
-        const profile={id:userId,phone:sourceProfile?.phone || targetProfile?.phone || '',area:sourceProfile?.area || targetProfile?.area || '',...(birthday ? {birthday}:{})};
+        const profile={id:userId,phone:sourceProfile?.phone || targetProfile?.phone || '',area:sourceProfile?.area || targetProfile?.area || '',...(birthday ? {birthday}:{}),...(targetProfile?.language ? {language:targetProfile.language}:{}),...(targetProfile?.theme ? {theme:targetProfile.theme}:{})};
         return {member,profile};
       };
       if(isDemo){const current=dataRef.current;const merged=merge(current.members.find(item=>item.id===rosterId),current.members.find(item=>item.id===userId),current.profiles.find(item=>item.id===rosterId),current.profiles.find(item=>item.id===userId));applyDemo({...current,members:replace(current.members.filter(item=>item.id!==rosterId),merged.member),profiles:replace(current.profiles.filter(item=>item.id!==rosterId),merged.profile)});}
@@ -376,7 +388,7 @@ export function AppProvider({children}: {children: ReactNode}) {
       const actor=admin();
       if(link.ownerId!==actor.id || !link.googleEventId || link.googleEventId.length>1024 || !/^https:\/\/(calendar\.google\.com\/|www\.google\.com\/calendar\/)/.test(link.htmlLink) || link.htmlLink.length>4000 || !Number.isFinite(new Date(link.syncedAt).getTime()) || typeof link.signature!=='string' || link.signature.length>20000 || link.attendeeIds.length>500 || link.attendeeIds.some(id=>typeof id!=='string' || !id || id.length>128) || new Set(link.attendeeIds).size!==link.attendeeIds.length) throw new Error('Google 캘린더 연결 정보를 확인해 주세요.');
       const next: CalendarLink=clean(link);
-      const validate=(event: MoimEvent) => {if(event.calendarLink && event.calendarLink.ownerId!==actor.id)throw new Error('처음 캘린더에 연결한 관리자이 업데이트할 수 있어요.');};
+      const validate=(event: MoimEvent) => {if(event.calendarLink && event.calendarLink.ownerId!==actor.id)throw new Error('처음 캘린더에 연결한 관리자가 업데이트할 수 있어요.');};
       if(isDemo){const event=dataRef.current.events.find(item=>item.id===eventId);if(!event)throw new Error('일정을 찾을 수 없어요.');validate(event);applyDemo({...dataRef.current,events:replace(dataRef.current.events,{...event,calendarLink:next})});}
       else await runTransaction(database(),async transaction=>{const eventRef=doc(database(),'events',eventId);const snapshot=await transaction.get(eventRef);if(!snapshot.exists())throw new Error('일정을 찾을 수 없어요.');validate(snapshot.data() as MoimEvent);transaction.update(eventRef,{calendarLink:next});});
     },
@@ -417,7 +429,7 @@ export function AppProvider({children}: {children: ReactNode}) {
       }));
     },
     resetDemo() { if(!isDemo) return; const next=createDemoData();applyDemo(next);setDemoSignedIn(true);setError(null); },
-  }),[data,user,loading,isAdmin,canCreatePoll,error,imageUrls]);
+  }),[data,user,loading,isAdmin,canParticipate,canCreatePoll,error,imageUrls]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

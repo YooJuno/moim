@@ -4,6 +4,7 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function me() { return get(/databases/$(database)/documents/members/$(request.auth.uid)).data; }
     function active() { return signedIn() && me().status == 'active'; }
+    function readable() { return signedIn() && me().status in ['active','pending']; }
     function admin() { return active() && me().role == 'leader'; }
     function accountant() { return active() && me().role in ['leader','treasurer']; }
     function pollCreator() { return active() && (admin() || me().canCreatePoll == true); }
@@ -115,8 +116,8 @@ service cloud.firestore {
     }
 
     match /members/{memberId} {
-      allow get: if signedIn() && (request.auth.uid == memberId || admin() || (active() && resource.data.status == 'active'));
-      allow list: if admin() || (active() && resource.data.status == 'active');
+      allow get: if signedIn() && (request.auth.uid == memberId || admin() || (readable() && resource.data.status == 'active'));
+      allow list: if admin() || (readable() && resource.data.status == 'active');
       allow create: if validMember(request.resource.data, memberId) && canonicalPosition(request.resource.data)
         && ((signedIn() && request.auth.uid == memberId && request.resource.data.email == request.auth.token.email
           && request.resource.data.role == 'member' && request.resource.data.status == 'pending' && request.resource.data.canCreatePoll == false
@@ -134,21 +135,25 @@ service cloud.firestore {
     match /profiles/{memberId} {
       allow read: if signedIn() && (request.auth.uid == memberId || admin());
       allow create, update: if signedIn() && (request.auth.uid == memberId || admin())
-        && request.resource.data.keys().hasOnly(['id','phone','area','birthday'])
+        && request.resource.data.keys().hasOnly(['id','phone','area','birthday','language','theme'])
         && request.resource.data.keys().hasAll(['id','phone','area'])
         && request.resource.data.id == memberId
         && request.resource.data.phone is string && request.resource.data.phone.size() <= 30
         && request.resource.data.area is string && request.resource.data.area.size() <= 100
-        && (!('birthday' in request.resource.data) || validBirthday(request.resource.data.birthday));
+        && (!('birthday' in request.resource.data) || validBirthday(request.resource.data.birthday))
+        && (!('language' in request.resource.data) || request.resource.data.language in ['ko','en'])
+        && (!('theme' in request.resource.data) || request.resource.data.theme in ['system','light','dark']);
       allow delete: if admin() && get(/databases/$(database)/documents/members/$(memberId)).data.isRoster == true;
     }
     match /settings/{settingId} {
-      allow read: if active();
+      allow read: if readable();
       allow create, update: if admin() && settingId == 'club'
-        && request.resource.data.keys().hasOnly(['name','description','photoURL'])
+        && request.resource.data.keys().hasOnly(['name','description','photoURL','smsEnabled','smsAutoOnConfirm'])
         && request.resource.data.keys().hasAll(['name','description'])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 40
         && request.resource.data.description is string && request.resource.data.description.size() <= 140
+        && (!('smsEnabled' in request.resource.data) || request.resource.data.smsEnabled is bool)
+        && (!('smsAutoOnConfirm' in request.resource.data) || request.resource.data.smsAutoOnConfirm is bool)
         && (!('photoURL' in request.resource.data) || (request.resource.data.photoURL is string && request.resource.data.photoURL.size() <= 180000
           && request.resource.data.photoURL.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$')));
       allow create, update: if admin() && settingId == 'bylaws'
@@ -159,7 +164,7 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /posts/{postId} {
-      allow read: if active();
+      allow read: if readable();
       allow create: if active() && validPost(request.resource.data, postId)
         && request.resource.data.authorId == request.auth.uid && request.resource.data.likedBy.size() == 0
         && (admin() || (request.resource.data.category != 'notice' && request.resource.data.pinned == false));
@@ -176,7 +181,7 @@ service cloud.firestore {
       allow delete: if active() && (admin() || (request.auth.uid == resource.data.authorId && resource.data.category != 'notice'));
     }
     match /comments/{commentId} {
-      allow read: if active();
+      allow read: if readable();
       allow create: if active()
         && request.resource.data.keys().hasOnly(['id','postId','authorId','body','createdAt'])
         && request.resource.data.keys().hasAll(['id','postId','authorId','body','createdAt'])
@@ -188,7 +193,7 @@ service cloud.firestore {
       allow delete: if active() && (admin() || resource.data.authorId == request.auth.uid);
     }
     match /polls/{pollId} {
-      allow read: if active();
+      allow read: if readable();
       allow create: if pollCreator() && validPoll(request.resource.data, pollId)
         && request.resource.data.creatorId == request.auth.uid && request.resource.data.status in ['open','closed']
         && !('eventId' in request.resource.data);
@@ -206,7 +211,7 @@ service cloud.firestore {
     }
     match /votes/{voteId} {
       function poll() { return get(/databases/$(database)/documents/polls/$(request.resource.data.pollId)).data; }
-      allow read: if active();
+      allow read: if readable();
       allow create, update: if active()
         && request.resource.data.keys().hasOnly(['id','pollId','memberId','slotIds','updatedAt'])
         && request.resource.data.keys().hasAll(['id','pollId','memberId','slotIds','updatedAt'])
@@ -219,7 +224,7 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /events/{eventId} {
-      allow read: if active();
+      allow read: if readable();
       allow create: if admin() && validEvent(request.resource.data, eventId) && request.resource.data.creatorId == request.auth.uid && request.resource.data.endAt is timestamp
         && (!('calendarLink' in request.resource.data) || request.resource.data.calendarLink.ownerId == request.auth.uid);
       allow update: if admin() && validEvent(request.resource.data, eventId)
@@ -230,7 +235,7 @@ service cloud.firestore {
       allow delete: if admin();
     }
     match /rsvps/{rsvpId} {
-      allow read: if active();
+      allow read: if readable();
       allow create, update: if active()
         && request.resource.data.keys().hasOnly(['id','eventId','memberId','status','updatedAt'])
         && request.resource.data.keys().hasAll(['id','eventId','memberId','status','updatedAt'])
@@ -241,7 +246,7 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /ballots/{ballotId} {
-      allow read: if active();
+      allow read: if readable();
       allow create: if active() && validBallot(request.resource.data, ballotId)
         && request.resource.data.creatorId == request.auth.uid && request.resource.data.status in ['open','closed']
         && !('selectedOptionId' in request.resource.data)
@@ -259,7 +264,7 @@ service cloud.firestore {
     }
     match /ballotResponses/{responseId} {
       function ballot() { return get(/databases/$(database)/documents/ballots/$(request.resource.data.ballotId)).data; }
-      allow read: if active();
+      allow read: if readable();
       allow create, update: if active()
         && request.resource.data.keys().hasOnly(['id','ballotId','eventId','memberId','optionId','updatedAt'])
         && request.resource.data.keys().hasAll(['id','ballotId','eventId','memberId','optionId','updatedAt'])
@@ -274,7 +279,7 @@ service cloud.firestore {
     }
     match /mvpVotes/{voteId} {
       function event() { return get(/databases/$(database)/documents/events/$(request.resource.data.eventId)).data; }
-      allow read: if active();
+      allow read: if readable();
       allow create, update: if active()
         && request.resource.data.keys().hasOnly(['id','eventId','memberId','candidateId','updatedAt'])
         && request.resource.data.keys().hasAll(['id','eventId','memberId','candidateId','updatedAt'])
@@ -306,7 +311,7 @@ service cloud.firestore {
             && getAfter(/databases/$(database)/documents/receipts/$(entryId)).data.entryId == entryId)
           : !existsAfter(/databases/$(database)/documents/receipts/$(entryId)));
       }
-      allow read: if active();
+      allow read: if readable();
       allow create: if accountant() && validEntry(request.resource.data) && validReceiptState(request.resource.data) && request.resource.data.creatorId == request.auth.uid;
       allow update: if accountant() && validEntry(request.resource.data) && validReceiptState(request.resource.data)
         && request.resource.data.creatorId == resource.data.creatorId && request.resource.data.createdAt == resource.data.createdAt;
@@ -320,13 +325,13 @@ service cloud.firestore {
           && data.address is string && data.address.size() > 0 && data.address.size() <= 300
           && data.createdAt is string && data.updatedAt is string;
       }
-      allow read: if active();
+      allow read: if readable();
       allow create: if admin() && validPlace(request.resource.data);
       allow update: if admin() && validPlace(request.resource.data) && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if admin();
     }
     match /photos/{photoId} {
-      allow read: if active();
+      allow read: if readable();
       allow create: if active()
         && request.resource.data.keys().hasOnly(['id','imageURL','uploadedBy','createdAt'])
         && request.resource.data.keys().hasAll(['id','imageURL','uploadedBy','createdAt'])
@@ -338,7 +343,7 @@ service cloud.firestore {
       allow delete: if active() && (admin() || resource.data.uploadedBy == request.auth.uid);
     }
     match /receipts/{entryId} {
-      allow read: if active();
+      allow read: if readable();
       allow create, update: if accountant()
         && request.resource.data.keys().hasOnly(['entryId','fileName','imageURL','uploadedBy','updatedAt'])
         && request.resource.data.keys().hasAll(['entryId','fileName','imageURL','uploadedBy','updatedAt'])

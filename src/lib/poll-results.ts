@@ -1,5 +1,6 @@
 import type { Poll, PollSlot, Vote } from './types';
 import { timeToMinutes } from './poll-times';
+import { getLanguage } from './i18n';
 
 export interface PollAvailabilityWindow {
   date: string;
@@ -79,5 +80,6 @@ export function getPollAvailabilityWindows(poll: Pick<Poll, 'id' | 'slots'>, vot
 
 export function formatPollDuration(minutes: number): string {
   const hours = Math.floor(minutes / 60); const remainder = minutes % 60;
+  if (getLanguage() === 'en') return [hours ? `${hours}h` : '', remainder ? `${remainder}m` : ''].filter(Boolean).join(' ') || '0m';
   return [hours ? `${hours}시간` : '', remainder ? `${remainder}분` : ''].filter(Boolean).join(' ') || '0분';
 }

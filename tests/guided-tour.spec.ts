@@ -24,19 +24,21 @@ test('첫 방문 안내는 다음·이전·건너뛰기와 완료 기록을 지�
   await expect(tour(page)).toHaveCount(0);
 });
 
-test('데모에서는 자동으로 열리지 않고 내 정보에서 안내를 다시 연다',async({page})=>{
+test('내 정보에 안내 다시 보기 버튼이 없고 내부 안내 이벤트는 키보드 제어를 지원한다',async({page})=>{
   await page.goto('/profile');
   await expect(page.getByRole('heading',{name:'내 정보',exact:true})).toBeVisible();
   await page.waitForTimeout(850);
   await expect(tour(page)).toHaveCount(0);
-  const reopen=page.getByRole('button',{name:'화면 안내 다시 보기',exact:true});
-  await reopen.click();
+  await expect(page.getByRole('button',{name:'화면 안내 다시 보기',exact:true})).toHaveCount(0);
+  const previous=page.getByRole('button',{name:'저장하기',exact:true});
+  await previous.focus();
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('moim:start-tour')));
   await expect(tour(page)).toBeVisible();
   await expect(tour(page).locator('[data-tour-next]')).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(tour(page)).toHaveCount(0);
-  await expect(reopen).toBeFocused();
-  await reopen.click();
+  await expect(previous).toBeFocused();
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('moim:start-tour')));
   await expect(tour(page)).toBeVisible();
   for(let i=0;i<15;i++){
     const dialog=tour(page);const next=dialog.getByRole('button',{name:'다음',exact:true});
@@ -55,7 +57,7 @@ for(const viewport of [{name:'desktop',width:1440,height:1000},{name:'mobile',wi
       await page.getByRole('button',{name:'저장하기',exact:true}).click();
       await page.evaluate(()=>{const data=JSON.parse(localStorage.getItem('moim-demo-v1')!);const member=data.members.find((item:{id:string})=>item.id==='demo-me');member.role='member';member.canCreatePoll=false;localStorage.setItem('moim-demo-v1',JSON.stringify(data));});
       await page.reload();
-      await page.getByRole('button',{name:'화면 안내 다시 보기',exact:true}).click();
+      await page.evaluate(()=>window.dispatchEvent(new CustomEvent('moim:start-tour')));
       const seen:string[]=[];const descriptions:string[]=[];
       for(let i=0;i<15;i++){
         const dialog=tour(page);await expect(dialog).toBeVisible();const id=(await dialog.getAttribute('data-tour-step'))!;seen.push(id);descriptions.push(await dialog.innerText());

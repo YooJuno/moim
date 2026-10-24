@@ -48,8 +48,8 @@ describe.skipIf(!enabled)('Firebase access boundaries',()=>{
   });
   afterAll(async()=>{await environment?.cleanup();});
 
-  it('blocks anonymous, pending and rejected users from member content',async()=>{
-    for(const db of [environment.unauthenticatedContext().firestore(),client('pending'),client('rejected')]) {
+  it('blocks anonymous and rejected users from member content',async()=>{
+    for(const db of [environment.unauthenticatedContext().firestore(),client('rejected')]) {
       await assertFails(getDoc(doc(db,'settings','club')));
       await assertFails(getDocs(collection(db,'posts')));
       await assertFails(getDoc(doc(db,'ledger','l1')));
@@ -285,7 +285,7 @@ describe.skipIf(!enabled)('Firebase access boundaries',()=>{
     const memberDb=client('member');const unauthorized=writeBatch(memberDb);unauthorized.set(doc(memberDb,'receipts','l1'),{...receipt,uploadedBy:'member'});unauthorized.update(doc(memberDb,'ledger','l1'),{hasReceipt:true});await assertFails(unauthorized.commit());
     const batch=writeBatch(db);batch.set(doc(db,'receipts','l1'),receipt);batch.update(doc(db,'ledger','l1'),{hasReceipt:true});await assertSucceeds(batch.commit());
     await assertSucceeds(getDoc(doc(client('member'),'receipts','l1')));
-    await assertFails(getDoc(doc(client('pending'),'receipts','l1')));
+    await assertSucceeds(getDoc(doc(client('pending'),'receipts','l1')));
     await assertFails(updateDoc(doc(db,'receipts','l1'),{imageURL:'data:image/svg+xml;base64,aGVsbG8='}));
     await assertFails(updateDoc(doc(db,'receipts','l1'),{imageURL:'data:image/png;base64,'+'a'.repeat(700000)}));
     await assertFails(updateDoc(doc(db,'receipts','l1'),{uploadedBy:'leader'}));
@@ -306,7 +306,7 @@ describe.skipIf(!enabled)('Firebase access boundaries',()=>{
   it('exposes saved places only to active members',async()=>{
     await assertSucceeds(getDocs(collection(client('member'),'places')));
     await assertSucceeds(getDoc(doc(client('treasurer'),'places','saved')));
-    await assertFails(getDocs(collection(client('pending'),'places')));
+    await assertSucceeds(getDocs(collection(client('pending'),'places')));
     await assertFails(getDoc(doc(client('rejected'),'places','saved')));
     await assertFails(getDoc(doc(environment.unauthenticatedContext().firestore(),'places','saved')));
   });
@@ -335,7 +335,7 @@ describe.skipIf(!enabled)('Firebase access boundaries',()=>{
     const db=client('member');const photo={id:'group-photo',imageURL:'data:image/jpeg;base64,aGVsbG8=',uploadedBy:'member',createdAt:now};
     await assertSucceeds(setDoc(doc(db,'photos',photo.id),photo));
     await assertSucceeds(getDoc(doc(client('creator'),'photos',photo.id)));
-    await assertFails(getDoc(doc(client('pending'),'photos',photo.id)));
+    await assertSucceeds(getDoc(doc(client('pending'),'photos',photo.id)));
     await assertFails(updateDoc(doc(db,'photos',photo.id),{imageURL:'data:image/jpeg;base64,YQ=='}));
     await assertFails(deleteDoc(doc(client('creator'),'photos',photo.id)));
     await assertSucceeds(deleteDoc(doc(client('leader'),'photos',photo.id)));
@@ -384,6 +384,55 @@ describe.skipIf(!enabled)('Firebase access boundaries',()=>{
     await assertSucceeds(updateDoc(doc(db,'members','member'),{canCreatePoll:true}));
     await assertSucceeds(updateDoc(doc(db,'members','member'),{position:'총무'}));
     await assertFails(updateDoc(doc(client('member'),'members','member'),{role:'treasurer'}));
+  });
+
+
+  it('stores private per-account language/theme without exposing them or granting authority',async()=>{
+    const db=client('member');await assertSucceeds(updateDoc(doc(db,'profiles','member'),{language:'en',theme:'dark'}));
+    await assertSucceeds(updateDoc(doc(db,'profiles','member'),{language:'ko',theme:'system'}));
+    await assertFails(updateDoc(doc(db,'profiles','member'),{language:'ja'}));
+    await assertFails(updateDoc(doc(db,'profiles','member'),{theme:'automatic'}));
+    await assertFails(updateDoc(doc(db,'profiles','creator'),{language:'en',theme:'light'}));
+    await assertFails(getDoc(doc(client('creator'),'profiles','member')));
+    await assertFails(updateDoc(doc(db,'profiles','member'),{language:'en',role:'leader'}));
+    await assertFails(updateDoc(doc(db,'members','member'),{theme:'dark'}));
+    await assertSucceeds(updateDoc(doc(db,'members','member'),{name:'개인 정보 수정',birthday:'02-29'}));
+    await assertSucceeds(updateDoc(doc(db,'profiles','member'),{phone:'010-0000-0000',area:'테스트 지역',birthday:'02-29'}));
+    await assertSucceeds(updateDoc(doc(client('leader'),'profiles','member'),{area:'관리자 수정 지역'}));
+  });
+
+
+  it('restricts explicit SMS master and automatic-confirm settings to typed admin flags',async()=>{
+    const settings={name:'알림 설정',description:'',smsEnabled:false,smsAutoOnConfirm:false};
+    await assertSucceeds(setDoc(doc(client('leader'),'settings','club'),settings));
+    await assertFails(updateDoc(doc(client('member'),'settings','club'),{smsEnabled:true}));
+    await assertFails(updateDoc(doc(client('treasurer'),'settings','club'),{smsAutoOnConfirm:true}));
+    await assertFails(updateDoc(doc(client('leader'),'settings','club'),{smsEnabled:'true'}));
+    await assertSucceeds(updateDoc(doc(client('leader'),'settings','club'),{smsEnabled:true,smsAutoOnConfirm:true}));
+  });
+
+
+  it('lets pending accounts read group content and active directory without reading other private profiles',async()=>{
+    const db=client('pending');
+    for(const name of ['posts','comments','polls','votes','events','rsvps','ballots','ballotResponses','mvpVotes','ledger','receipts','photos','settings','places'])await assertSucceeds(getDocs(collection(db,name)));
+    await assertSucceeds(getDocs(query(collection(db,'members'),where('status','==','active'))));
+    await assertSucceeds(getDoc(doc(db,'members','member')));await assertSucceeds(getDoc(doc(db,'profiles','pending')));
+    await assertFails(getDoc(doc(db,'profiles','member')));await assertFails(getDocs(collection(db,'profiles')));
+    await assertFails(getDocs(collection(db,'members')));await assertFails(getDoc(doc(db,'members','rejected')));
+  });
+  it('keeps pending accounts unable to participate or write content while allowing their own profile and preferences',async()=>{
+    const db=client('pending');await assertSucceeds(updateDoc(doc(db,'members','pending'),{name:'가입 대기자',birthday:'03-15'}));await assertSucceeds(updateDoc(doc(db,'profiles','pending'),{phone:'010-0000-0000',area:'테스트 지역',birthday:'03-15',language:'en',theme:'dark'}));
+    await assertFails(updateDoc(doc(db,'members','pending'),{status:'active'}));
+    await assertFails(setDoc(doc(db,'posts','pending-post'),post('pending-post','pending')));
+    await assertFails(updateDoc(doc(db,'posts','p1'),{likedBy:['pending']}));
+    await assertFails(setDoc(doc(db,'comments','pending-comment'),{id:'pending-comment',postId:'p1',authorId:'pending',body:'댓글',createdAt:now}));
+    await assertFails(setDoc(doc(db,'votes','open_pending'),{id:'open_pending',pollId:'open',memberId:'pending',slotIds:['s1'],updatedAt:now}));
+    await assertFails(setDoc(doc(db,'rsvps','e1_pending'),{id:'e1_pending',eventId:'e1',memberId:'pending',status:'going',updatedAt:now}));
+    await assertFails(setDoc(doc(db,'ballotResponses','venue_pending'),{id:'venue_pending',ballotId:'venue',eventId:'e1',memberId:'pending',optionId:'o1',updatedAt:now}));
+    await assertFails(setDoc(doc(db,'mvpVotes','mvp-open_pending'),{id:'mvp-open_pending',eventId:'mvp-open',memberId:'pending',candidateId:'member',updatedAt:now}));
+    await assertFails(updateDoc(doc(db,'ledger','l1'),{amount:20000}));
+    await assertFails(setDoc(doc(db,'photos','pending-photo'),{id:'pending-photo',imageURL:'data:image/png;base64,aGVsbG8=',uploadedBy:'pending',createdAt:now}));
+    await assertFails(updateDoc(doc(db,'settings','club'),{name:'무단 수정'}));
   });
 
   it('lets treasurers manage positive integer accounting entries without gaining member management',async()=>{

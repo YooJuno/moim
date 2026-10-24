@@ -103,7 +103,7 @@ test('회계 수입 추가·수정·필터·CSV 내보내기·삭제', async ({ 
   let dialog=page.getByRole('dialog');
   await dialog.getByLabel('금액').fill('25000');
   await dialog.getByLabel('내역',{exact:false}).fill('테스트 회비 입금');
-  await dialog.getByLabel('관련 멤버').selectOption('m-seo');
+  await expect(dialog.getByLabel('관련 멤버')).toHaveCount(0);
   await dialog.getByRole('button',{name:'저장',exact:true}).click();
   let row=page.locator('.ledger-row').filter({hasText:'테스트 회비 입금'});
   await expect(row).toContainText('+25,000');

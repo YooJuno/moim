@@ -2,7 +2,7 @@
 
 ## 초대 링크 공유
 
-`모임 초대`는 현재 사이트의 루트 주소를, `일정 공유`는 `/calendar?event=일정ID` 주소를 복사하거나 기기의 공유 화면으로 전달합니다. 전화번호, 이메일, 참석자 명단은 공유하지 않습니다. 링크를 받은 신규 사용자는 로그인한 뒤 관리자의 승인을 받아야 합니다.
+`모임 초대`는 현재 사이트의 루트 주소를, `일정 공유`는 `/calendar?event=일정ID` 주소를 복사하거나 기기의 공유 화면으로 전달합니다. 전화번호, 이메일, 참석자 명단은 공유하지 않습니다. 링크를 받은 신규 사용자는 로그인 후 둘러볼 수 있고, 글쓰기·투표 등 참여는 관리자 승인 후 가능합니다.
 
 카카오톡 전용 공유 버튼을 사용하려면 카카오디벨로퍼스에서 이 서비스의 앱을 등록하고 다음을 설정합니다.
 
@@ -17,10 +17,15 @@
 
 ## 카카오·네이버 로그인과 계정 연결
 
-로그인 연동은 아직 활성화하지 않았습니다. 각 서비스의 앱 등록, Client ID·Secret, 콜백 주소 설정과 OAuth 응답을 검증할 보안 서버가 필요합니다. 네이버 로그인은 일반 사용자에게 정식 제공하기 전에 사전 검수를 통과해야 합니다. Client Secret이나 Firebase 서명용 비밀키는 `VITE_` 환경 변수나 프런트엔드 코드에 넣지 않습니다.
+로그인·계정 연결 코드와 별도 OAuth 인증 서비스는 준비했습니다. **현재 활성화 전**이며, 카카오·네이버 앱 등록과 키 발급, 콜백 주소 설정이 남아 있습니다. 인증 서버와 Firebase 연결은 완료했습니다. 설정이 없거나 서비스의 `/config`에 제공자가 비활성으로 표시되면 해당 로그인 버튼은 나오지 않습니다. Google 로그인은 그대로 사용할 수 있습니다.
 
-기존 Google 로그인 상태에서 추가 로그인 인증을 완료하고 명시적으로 계정을 연결해야 합니다. 서비스별 고유 사용자 ID를 기존 Firebase UID에 서버에서 연결하며 이름·이메일만으로 동일인이라고 판단하지 않습니다.
+기존 멤버는 Google 등 기존 계정으로 로그인한 뒤 **내 정보 → 계정 → 연결**에서 카카오·네이버를 추가합니다. 이름·이메일만으로 같은 사람이라고 판단하지 않고, 검증한 제공자 사용자 ID를 현재 Firebase UID에 명시적으로 연결합니다. 다른 계정에 이미 연결된 인증 정보는 자동으로 병합하지 않습니다.
 
-Firebase의 일반 OIDC 공급자는 Identity Platform 업그레이드가 필요합니다. 업그레이드된 **Spark의 OIDC 제한은 하루 활성 사용자 2명**이며, OIDC 월 50명 무료 구간은 Blaze에 해당합니다. Spark를 유지하며 멤버 전체에게 카카오·네이버 로그인을 제공하려면 별도 보안 서버에서 OAuth 검증 후 Firebase Custom Token을 발급하는 구성을 검토해야 합니다. Firebase Functions를 배포하려면 Blaze가 필요하므로 자동으로 유료 전환하지 않습니다.
+별도 서비스 `services/auth-worker`가 OAuth 응답과 일회용 코드를 검증하고 Firebase Custom Token을 발급합니다. 제공자 Client Secret과 Firebase 서명용 비밀키는 Worker의 비밀 설정에 두며 `VITE_` 환경 변수나 브라우저 코드에 넣지 않습니다. 프런트엔드에는 공개 서비스 주소인 `VITE_AUTH_API_URL`만 설정합니다. 네이버 일반 사용자 제공 전에는 사전 검수도 필요합니다.
 
-[Firebase 제한](https://firebase.google.com/docs/auth/) · [계정 연결](https://firebase.google.com/docs/auth/web/account-linking) · [Custom Token](https://firebase.google.com/docs/auth/admin/create-custom-tokens) · [네이버 검수](https://developers.naver.com/docs/login/verify/verify.md)
+- [등록·설정 안내](LOGIN_SETUP.md)
+- [프런트엔드 흐름과 활성화 상태](SOCIAL_AUTH.md)
+- [인증 서비스 설치·운영](../services/auth-worker/README.md)
+- [Firebase Custom Token](https://firebase.google.com/docs/auth/admin/create-custom-tokens) · [계정 연결](https://firebase.google.com/docs/auth/web/account-linking) · [네이버 검수](https://developers.naver.com/docs/login/verify/verify.md)
+
+카카오톡 공유, 카카오 로그인, 카카오 캘린더는 별도 설정입니다. 로그인 연결만으로 캘린더 기능이 활성화됐다고 표시하지 않습니다.

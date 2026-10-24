@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { chooseBirthday } from './helpers/birthday';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import type { RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
@@ -52,6 +53,7 @@ test.beforeAll(async()=>{
     batch.set(doc(db,'profiles',pendingId),{id:pendingId,phone:'010-2222-2222',area:'서울 성동구'});
     batch.set(doc(db,'settings','club'),{name:'Firebase 연동 검증',description:'로컬 에뮬레이터'});
     batch.set(doc(db,'settings','bylaws'),{content:'검증용 회칙',updatedAt:now,editorId:leaderId});
+    batch.set(doc(db,'posts','pending-readable-post'),{id:'pending-readable-post',category:'notice',title:'열람용 공지',body:'가입 대기 계정도 읽을 수 있어요.',authorId:leaderId,createdAt:now,updatedAt:now,images:[],pinned:false,likedBy:[]});
     await batch.commit();
   });
 });
@@ -141,23 +143,12 @@ test('real Firebase provider saves and edits posts and polls, closes, reopens an
   });
 });
 
-test('pending users load and update their private signup profile without reading group content',async({page})=>{
+test('pending accounts subscribe to readable group content without participating or accessing other private profiles',async({page})=>{
   await login(page,pendingEmail);
-  await expect(page.getByRole('heading',{name:'가입 승인 대기'})).toBeVisible();
-  await expect(page.getByLabel('전화번호')).toHaveValue('010-2222-2222');
-  await expect(page.getByLabel('거주 지역')).toHaveValue('서울 성동구');
-  await page.getByLabel('전화번호').fill('010-3333-3333');
-  await page.getByLabel('거주 지역').fill('서울 강서구');
-  await page.getByRole('button',{name:'가입 정보 저장',exact:true}).click();
-  await expect(page.getByText('가입 정보를 저장했어요.',{exact:true})).toBeVisible();
-  await page.reload();
-  await expect(page.getByLabel('전화번호')).toHaveValue('010-3333-3333');
-  await expect(page.getByLabel('거주 지역')).toHaveValue('서울 강서구');
-  await expect(page.locator('.sidebar')).toHaveCount(0);
-  await environment.withSecurityRulesDisabled(async context=>{
-    expect((await getDoc(doc(context.firestore(),'members',pendingId))).data()!.status).toBe('pending');
-    expect((await getDoc(doc(context.firestore(),'profiles',pendingId))).data()!.phone).toBe('010-3333-3333');
-  });
+  const access=await page.evaluate(async uid=>{const {exercisePendingAccess}=await import('/tests/fixtures/preferences-probe.tsx');return await exercisePendingAccess(uid);},pendingId);
+  expect(access).toMatchObject({canParticipate:false,isAdmin:false,canCreatePoll:false,profiles:[pendingId],blocked:['vote','like','rsvp','upload']});expect(access.postCount).toBeGreaterThan(0);expect(access.memberStatuses.every(status=>status==='active')).toBe(true);
+  const privateRead=await page.evaluate(async uid=>{const config=await import('/src/lib/firebase.ts');const source=await(await fetch('/src/lib/store.tsx')).text();const path=source.match(/from\s+["']([^"']*firebase_firestore[^"']*)["']/)?.[1];if(!path)throw Error('Firestore module not found');const sdk=await import(path);try{await sdk.getDoc(sdk.doc(config.db,'profiles',uid));return 'unexpected-success';}catch(error){return (error as {code:string}).code;}},leaderId);expect(privateRead).toBe('permission-denied');
+  await environment.withSecurityRulesDisabled(async testContext=>{expect((await getDoc(doc(testContext.firestore(),'members',pendingId))).data()!.status).toBe('pending');expect((await getDoc(doc(testContext.firestore(),'profiles',pendingId))).data()).toMatchObject({phone:'010-3333-3333',area:'서울 강서구'});expect((await getDoc(doc(testContext.firestore(),'votes',`unused-poll_${pendingId}`))).exists()).toBe(false);});
 });
 
 test('real Firebase receipts upload atomically, load on demand, survive entry edits and delete cleanly',async({page})=>{
@@ -223,14 +214,25 @@ test('real Firebase gallery uses compact private photo documents and preserves r
 });
 
 test('real Firebase profile mirrors public month-day birthday while keeping contact data private',async({page})=>{
-  await login(page,leaderEmail);await page.goto('/profile');const form=page.locator('form').filter({has:page.getByPlaceholder('02-29')});
-  await form.getByPlaceholder('02-29').fill('02-29');await form.getByRole('button',{name:'저장하기',exact:true}).click();
+  await login(page,leaderEmail);await page.goto('/profile');
+  await chooseBirthday(page,'02-29');await page.getByRole('button',{name:'저장하기',exact:true}).click();
   await expect(page.getByText('내 정보를 저장했어요.',{exact:true})).toBeVisible();
   await environment.withSecurityRulesDisabled(async testContext=>{
     const publicMember=(await getDoc(doc(testContext.firestore(),'members',leaderId))).data()!;const profile=(await getDoc(doc(testContext.firestore(),'profiles',leaderId))).data()!;
     expect(publicMember.birthday).toBe('02-29');expect(profile.birthday).toBe('02-29');expect(publicMember.phone).toBeUndefined();expect(publicMember.area).toBeUndefined();expect(profile.phone).toBe('010-1111-1111');
   });
-  await page.reload();const refreshed=page.locator('form').filter({has:page.getByPlaceholder('02-29')});await expect(refreshed.getByPlaceholder('02-29')).toHaveValue('02-29');
-  await refreshed.getByPlaceholder('02-29').fill('');await refreshed.getByRole('button',{name:'저장하기',exact:true}).click();await expect(page.getByText('내 정보를 저장했어요.',{exact:true})).toBeVisible();
+  await page.reload();await expect(page.getByRole('textbox',{name:'생일',exact:true})).toHaveValue('02-29');
+  await chooseBirthday(page,'');await page.getByRole('button',{name:'저장하기',exact:true}).click();await expect(page.getByText('내 정보를 저장했어요.',{exact:true})).toBeVisible();
   await environment.withSecurityRulesDisabled(async testContext=>{expect((await getDoc(doc(testContext.firestore(),'members',leaderId))).data()!.birthday).toBeUndefined();expect((await getDoc(doc(testContext.firestore(),'profiles',leaderId))).data()!.birthday).toBeUndefined();});
+});
+
+test('real Firebase account preferences preserve private contact and birthday fields across ordinary profile edits',async({page})=>{
+  await environment.withSecurityRulesDisabled(async testContext=>{await updateDoc(doc(testContext.firestore(),'members',leaderId),{birthday:'03-15'});await updateDoc(doc(testContext.firestore(),'profiles',leaderId),{birthday:'03-15'});});
+  await login(page,leaderEmail);
+  await page.evaluate(async uid=>{const {exercisePreferences}=await import('/tests/fixtures/preferences-probe.tsx');await exercisePreferences(uid);},leaderId);
+  await environment.withSecurityRulesDisabled(async testContext=>{
+    const profile=(await getDoc(doc(testContext.firestore(),'profiles',leaderId))).data()!;const member=(await getDoc(doc(testContext.firestore(),'members',leaderId))).data()!;
+    expect(profile).toMatchObject({id:leaderId,phone:'010-1111-1111',area:'서울 마포구',birthday:'03-15',language:'en',theme:'dark'});
+    expect(member).toMatchObject({role:'leader',canCreatePoll:true,birthday:'03-15'});expect(member.theme).toBeUndefined();expect(member.language).toBeUndefined();
+  });
 });

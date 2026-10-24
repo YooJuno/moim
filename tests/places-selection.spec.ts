@@ -22,7 +22,7 @@ test('saved venue fills a calendar event without truncation and manual edits rem
   await dialog.getByLabel('저장한 장소', { exact:true }).selectOption({ label:`${name} (${address})` });
   const snapshot = `${name} · ${address}`;
   await expect(dialog.getByLabel('장소', { exact:false }).last()).toHaveValue(snapshot);
-  await expect(dialog.locator('input[placeholder="어디서 만날까요?"]')).toHaveAttribute('maxlength','500');
+  await expect(dialog.getByRole('textbox', { name:'장소', exact:true })).toHaveAttribute('maxlength','500');
   await dialog.getByRole('button', { name:'일정 만들기', exact:true }).click();
   dialog = page.getByRole('dialog');
   await expect(dialog).toHaveAccessibleName('저장한 장소의 정기 모임');
@@ -35,7 +35,7 @@ test('saved venue fills a calendar event without truncation and manual edits rem
   await dialog.getByRole('button', { name:'일정 수정', exact:true }).click();
   dialog = page.getByRole('dialog');
   await expect(dialog.getByLabel('저장한 장소', { exact:true }).locator('option:checked')).toHaveText(`${name} (${address})`);
-  await dialog.locator('input[placeholder="어디서 만날까요?"]').fill(`${snapshot} · 정문 집결`);
+  await dialog.getByRole('textbox', { name:'장소', exact:true }).fill(`${snapshot} · 정문 집결`);
   await expect(dialog.getByLabel('저장한 장소', { exact:true })).toHaveValue('');
   await dialog.getByRole('button', { name:'수정하기', exact:true }).click();
   await page.goto('/settings');
@@ -52,7 +52,7 @@ test('poll confirmation selects a saved venue and stores its name and address as
   await page.getByRole('dialog').getByRole('button', { name:'일정 확정', exact:true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('저장한 장소', { exact:true }).selectOption({ label:'시민체육관 (서울 테스트구 운동장길 52)' });
-  await expect(dialog.locator('input[placeholder="어디서 만날까요?"]')).toHaveValue('시민체육관 · 서울 테스트구 운동장길 52');
+  await expect(dialog.getByRole('textbox', { name:'장소', exact:true })).toHaveValue('시민체육관 · 서울 테스트구 운동장길 52');
   await dialog.getByRole('button', { name:'확정하기', exact:true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   const event = await page.evaluate(() => {

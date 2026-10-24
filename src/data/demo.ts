@@ -6,8 +6,8 @@ const time = (days: number, hours = 12) => { const d = new Date(); d.setDate(d.g
 export const DEMO_USER_ID = 'demo-me';
 export function createDemoData(): AppData {
   return {
-    settings: { name: '오후의 모임', description: '좋은 사람들과 채우는 우리의 주말' },
-    bylaws: { content: '제1조 · 모임의 이름\n우리 모임은 오후의 모임이라 부릅니다.\n\n제2조 · 함께하는 방식\n서로를 존중하고, 누구나 편안하게 의견을 나눕니다. 개인의 연락처와 사진을 동의 없이 외부에 공유하지 않습니다.\n\n제3조 · 정기 모임\n월 2회 모임을 기본으로 합니다. 일정 투표로 가능한 시간을 모으고, 관리자이 일정을 확정합니다. 참석이 어려워지면 미리 알려주세요.\n\n제4조 · 운영과 역할\n관리자은 가입 승인과 모임 운영을 맡습니다. 총무는 회비와 지출을 관리하고 정산 내역을 공유합니다. 투표 생성 권한은 관리자이 부여합니다.\n\n제5조 · 회비와 정산\n모임별 실제 발생한 비용을 참석 인원으로 나누어 정산합니다. 수입과 지출은 회계 내역에 기록하고 모든 멤버에게 공개합니다.\n\n제6조 · 회칙의 변경\n회칙은 멤버와 충분히 논의한 뒤 변경하며, 변경한 내용은 공지사항으로 안내합니다.', updatedAt: time(-20), editorId: DEMO_USER_ID },
+    settings: { name: '오후의 모임', description: '좋은 사람들과 채우는 우리의 주말', smsEnabled:false, smsAutoOnConfirm:false },
+    bylaws: { content: '제1조 · 모임의 이름\n우리 모임은 오후의 모임이라 부릅니다.\n\n제2조 · 함께하는 방식\n서로를 존중하고, 누구나 편안하게 의견을 나눕니다. 개인의 연락처와 사진을 동의 없이 외부에 공유하지 않습니다.\n\n제3조 · 정기 모임\n월 2회 모임을 기본으로 합니다. 일정 투표로 가능한 시간을 모으고, 관리자가 일정을 확정합니다. 참석이 어려워지면 미리 알려주세요.\n\n제4조 · 운영과 역할\n관리자는 가입 승인과 모임 운영을 맡습니다. 총무는 회비와 지출을 관리하고 정산 내역을 공유합니다. 투표 생성 권한은 관리자가 부여합니다.\n\n제5조 · 회비와 정산\n모임별 실제 발생한 비용을 참석 인원으로 나누어 정산합니다. 수입과 지출은 회계 내역에 기록하고 모든 멤버에게 공개합니다.\n\n제6조 · 회칙의 변경\n회칙은 멤버와 충분히 논의한 뒤 변경하며, 변경한 내용은 공지사항으로 안내합니다.', updatedAt: time(-20), editorId: DEMO_USER_ID },
     places: [{id:'place-demo-cafe',name:'오후 카페',address:'서울 마포구 연남동',createdAt:time(-20),updatedAt:time(-20)},{id:'place-demo-park',name:'주말 공원',address:'서울 성동구 성수동',createdAt:time(-20),updatedAt:time(-20)}],
     ballots: [],ballotResponses: [],mvpVotes: [],
     ledger: [
