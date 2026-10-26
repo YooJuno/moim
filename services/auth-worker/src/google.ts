@@ -31,6 +31,13 @@ export class FirestoreStore implements Store {
   if(!response.ok)throw new HttpError(503,'database_unavailable');const result=await response.json() as {document?:{fields?:Record<string,unknown>;updateTime:string}}[];
   const docs=result.flatMap(item=>item.document?[{data:documentFrom(item.document.fields??{}) as T,version:item.document.updateTime}]:[]);if(docs.length>200)throw new HttpError(422,'sms_audience_too_large');return docs;
  }
+ async recentErrors<T=Record<string,unknown>>(limit:number,since:string):Promise<StoredDocument<T>[]> {
+  if(!Number.isInteger(limit)||limit<1||limit>50||!Number.isFinite(Date.parse(since)))throw new HttpError(400,'invalid_query');
+  const response=await fetch(`https://firestore.googleapis.com/v1/${this.root()}:runQuery`,{method:'POST',headers:{Authorization:`Bearer ${await serviceToken(this.env)}`,'Content-Type':'application/json'},body:JSON.stringify({structuredQuery:{from:[{collectionId:'appErrors'}],where:{fieldFilter:{field:{fieldPath:'lastSeenAt'},op:'GREATER_THAN_OR_EQUAL',value:{stringValue:since}}},orderBy:[{field:{fieldPath:'lastSeenAt'},direction:'DESCENDING'}],limit}})});
+  if(!response.ok)throw new HttpError(503,'database_unavailable');
+  const result=await response.json() as {document?:{fields?:Record<string,unknown>;updateTime:string}}[];
+  return result.flatMap(item=>item.document?[{data:documentFrom(item.document.fields??{}) as T,version:item.document.updateTime}]:[]).slice(0,limit);
+ }
  async commit(writes:Mutation[]){
   const token=await serviceToken(this.env),headers={Authorization:`Bearer ${token}`,'Content-Type':'application/json'};const root=`https://firestore.googleapis.com/v1/${this.root()}`;const checks=writes.filter(write=>write.verify);let transaction:string|undefined;
   try {

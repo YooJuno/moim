@@ -6,6 +6,8 @@ Firebase Hosting 프런트엔드에 연결하는 별도 Cloudflare Worker입니�
 
 네이버 장소 이름 검색 설정: [NAVER API HUB 연결 안내](../../docs/NAVER_SEARCH_SETUP.md). 검색 키는 로그인 키와 분리하며, 기본 설정은 `NAVER_SEARCH_ENABLED=false`입니다.
 
+관리자용 오류 기록: [오류 수집 범위와 API](../../docs/ERROR_LOGGING.md). 허용된 코드·경로·파일 위치만 기록하며 일반 요청 로그는 활성화하지 않습니다.
+
 ## 준비와 검증
 
 ```sh
@@ -29,6 +31,8 @@ npm run build
 | `KAKAO_CALENDAR_ENABLED` | 기본 `false`; 톡캘린더 사용 권한과 사용자 동의 설정 후에만 `true` |
 | `NAVER_SEARCH_ENABLED` | 기본 `false`; 검색용 키 연결과 현재 이용요금 확인 후 `true` |
 | `NAVER_SEARCH_API` | 신규 키는 `hub`(기본), 기존 개발자센터 키는 `legacy` |
+| `TELEMETRY_ENABLED` | `true`일 때 안전한 오류 필드만 최대 하루 200건·256개 슬롯으로 기록 |
+| `TELEMETRY_RELEASE` | 선택 Git SHA 또는 `GitSHA-YYYYMMDDTHHMMSSZ`. 미설정 시 `unknown` |
 
 비밀값은 `wrangler secret put NAME`으로 설정합니다. 로컬에서만 `.dev.vars.example`을 `.dev.vars`로 복사해 사용합니다.
 
@@ -59,6 +63,8 @@ Worker가 돌아오는 프런트엔드 경로는 허용한 origin의 `/auth/call
 | --- | --- | --- |
 | `GET /config` | 공개 | `{providers:{kakao,naver},calendar:{kakao},notifications:{sms},places:{naver}}`, 불리언만 반환 |
 | `GET /places/search?q=검색어` | Firebase Bearer 토큰, 승인된 사용자 또는 승인 대기자, 검색어 최대 120자 | `{places:[{id,name,address,roadAddress,latitude?,longitude?,naverUrl}]}`, 최대 5개 |
+| `POST /telemetry/errors` | 허용된 Origin, 최대 4KiB의 허용된 오류 필드, 익명 허용 | `202 {accepted:true}`, 저장 오류가 기존 앱 동작에 영향을 주지 않음 |
+| `GET /telemetry/errors?limit=50` | Firebase Bearer 토큰, 현재 승인된 관리자 | `{enabled,errors}`, 최근 7일·최대 50개 |
 | `GET /oauth/:provider/start` | `challenge`, `returnOrigin`, 선택 `intent=signin` | 공급자 동의 화면으로 302 |
 | `POST /oauth/:provider/link/start` | Firebase Bearer 토큰, JSON `{challenge,returnOrigin}` | `{authorizationUrl}` |
 | `GET /oauth/:provider/callback` | 공급자의 `code`, `state` | 프런트엔드 `/auth/callback?code=...&provider=...&intent=...`로 302 |

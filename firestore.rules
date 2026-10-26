@@ -445,6 +445,8 @@ service cloud.firestore {
           || !('hasReceipt' in getAfter(/databases/$(database)/documents/ledger/$(entryId)).data)
           || getAfter(/databases/$(database)/documents/ledger/$(entryId)).data.hasReceipt == false);
     }
+    match /appErrors/{documentId} { allow read, write: if false; }
+    match /appErrorMeta/{documentId} { allow read, write: if false; }
     match /{document=**} { allow read, write: if false; }
   }
 }

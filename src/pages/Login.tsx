@@ -6,6 +6,8 @@ import { startSocialAuth, useAuthProviderConfig } from '../lib/social-auth';
 import type { SocialProvider } from '../lib/social-auth';
 import { errorMessage } from '../lib/utils';
 import { KakaoMark } from '../components/AccountConnections';
+import { ExternalBrowserLogin } from '../components/ExternalBrowserLogin';
+import { isKakaoInAppBrowser } from '../lib/external-browser';
 import '../components/social-auth.css';
 import './login.css';
 const slides = [
@@ -14,14 +16,16 @@ const slides = [
     { id: 'board', title: '게시판', description: '공지와 이야기를 나누고 사진을 모아요.', alt: '공지사항과 멤버들의 글을 모아 보여 주는 게시판 화면' },
     { id: 'ledger', title: '회계 장부', description: '회비와 지출, 영수증을 확인해요.', alt: '잔액과 수입·지출 내역을 표시한 회계 장부 화면' },
 ];
-export function LoginScreen({ onLogin, loading, isDemo, error }: {
+export function LoginScreen({ onLogin, onChangeAccount, loading, isDemo, error }: {
     onLogin: () => void;
+    onChangeAccount?: () => void;
     loading: boolean;
     isDemo: boolean;
     error: string | null;
 }) {
     const { t } = useI18n();
     const providerConfig = useAuthProviderConfig();
+    const inKakao = !isDemo && isKakaoInAppBrowser(navigator.userAgent);
     const [socialBusy, setSocialBusy] = useState<SocialProvider | null>(null);
     const [socialError, setSocialError] = useState('');
     const hasSocial = !isDemo && providerConfig.enabled && (providerConfig.providers.kakao || providerConfig.providers.naver);
@@ -88,7 +92,7 @@ export function LoginScreen({ onLogin, loading, isDemo, error }: {
         <div className="login-carousel-controls"><div className="login-slide-dots">{slides.map((item, position) => <button key={item.id} type="button" aria-label={t("{0} 보기", { "0": t(item.title) })} aria-pressed={index === position} onClick={() => navigate(position)}><span /></button>)}</div><span className="login-slide-position" aria-hidden="true">{index + 1} / {slides.length}</span><div className="login-slide-arrows">{!reducedMotion && <IconButton label={paused ? t("자동 넘김 재생") : t("자동 넘김 일시정지")} icon={paused ? Play : Pause} onClick={() => setPaused(!paused)} aria-pressed={paused}/>}<IconButton label={t("이전 기능")} icon={ChevronLeft} onClick={() => navigate(index - 1)}/><IconButton label={t("다음 기능")} icon={ChevronRight} onClick={() => navigate(index + 1)}/></div></div>
         <span className="sr-only" aria-live="polite" aria-atomic="true">{announcement}</span>
       </section>
-      <section className="login-panel" aria-labelledby="login-title"><h1 id="login-title">{t("로그인")}</h1><div className="social-login-buttons"><Button variant="secondary" className="login-google-button" onClick={() => { setSocialError(''); onLogin(); }} loading={loading} disabled={socialBusy !== null}>{!isDemo && !loading && <GoogleLogo />}{isDemo ? t("데모 둘러보기") : t("Google로 로그인")}</Button>{hasSocial && (['kakao', 'naver'] as const).filter(provider => providerConfig.providers[provider]).map(provider => <Button key={provider} className={`social-login-button ${provider}`} loading={socialBusy === provider} disabled={busy} onClick={() => void socialLogin(provider)}>{socialBusy !== provider && (provider === 'kakao' ? <KakaoMark /> : <span className="social-login-naver" aria-hidden="true">N</span>)}{provider === 'kakao' ? t("카카오로 로그인") : t("네이버로 로그인")}</Button>)}</div><p className="login-approval-note">{t("로그인 후 관리자 승인이 필요해요.")}</p>{hasSocial && <p className="social-login-note">{t("기존 계정은 로그인 후 연결해 주세요.")}</p>}{(socialError || error) && <p className="login-error" role="alert">{t(socialError || error || "")}</p>}</section>
+      <section className="login-panel" aria-labelledby="login-title"><h1 id="login-title">{t("로그인")}</h1><div className="social-login-buttons">{inKakao ? <ExternalBrowserLogin /> : <Button variant="secondary" className="login-google-button" onClick={() => { setSocialError(''); onLogin(); }} loading={loading} disabled={socialBusy !== null}>{!isDemo && !loading && <GoogleLogo />}{isDemo ? t("데모 둘러보기") : t("Google로 로그인")}</Button>}{hasSocial && (['kakao', 'naver'] as const).filter(provider => providerConfig.providers[provider]).map(provider => <Button key={provider} className={`social-login-button ${provider}`} loading={socialBusy === provider} disabled={busy} onClick={() => void socialLogin(provider)}>{socialBusy !== provider && (provider === 'kakao' ? <KakaoMark /> : <span className="social-login-naver" aria-hidden="true">N</span>)}{provider === 'kakao' ? t("카카오로 로그인") : t("네이버로 로그인")}</Button>)}</div><p className="login-approval-note">{t("로그인 후 관리자 승인이 필요해요.")}</p>{hasSocial && <p className="social-login-note">{t("기존 계정은 로그인 후 연결해 주세요.")}</p>}{(socialError || error) && <><p className="login-error" role="alert">{t(socialError || error || "")}</p>{!isDemo && !inKakao && onChangeAccount && <Button variant="ghost" className="login-other-account" disabled={busy} onClick={onChangeAccount}>{t("다른 계정으로 로그인")}</Button>}</>}</section>
     </div>
   </main>;
 }

@@ -14,6 +14,48 @@ let environment: RulesTestEnvironment;
 let leaderId:string;
 let pendingId:string;
 
+test('an editor cannot recreate a post deleted by another session', async ({ page }) => {
+  await environment.withSecurityRulesDisabled(async context => {
+    const { setDoc } = await import('firebase/firestore');
+    const original = (await getDoc(doc(context.firestore(), 'posts', 'pending-readable-post'))).data()!;
+    await setDoc(doc(context.firestore(), 'posts', 'deleted-while-editing'), { ...original, id: 'deleted-while-editing', title: '삭제 중인 글 수정' });
+  });
+  await login(page, leaderEmail);
+  await page.goto('/board?post=deleted-while-editing');
+  let dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: '게시글 관리', exact: true }).click();
+  await dialog.getByRole('button', { name: '수정하기', exact: true }).click();
+  dialog = page.getByRole('dialog');
+  await dialog.getByLabel('내용').fill('삭제 후 저장을 시도하는 내용');
+  await environment.withSecurityRulesDisabled(async context => { const { deleteDoc } = await import('firebase/firestore'); await deleteDoc(doc(context.firestore(), 'posts', 'deleted-while-editing')); });
+  await dialog.getByRole('button', { name: '수정 완료', exact: true }).click();
+  await expect(page.getByText('이미 삭제된 게시글이에요. 목록에서 다시 확인해 주세요.', { exact: true })).toBeVisible();
+  await environment.withSecurityRulesDisabled(async context => { expect((await getDoc(doc(context.firestore(), 'posts', 'deleted-while-editing'))).exists()).toBe(false); });
+});
+
+test('restored Auth session recovers an interrupted member signup without another popup', async ({ page }) => {
+  const email = 'interrupted-signin@example.com';
+  const id = await createAccount(email);
+  await login(page, email);
+  await expect(page.locator('.pending-access')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '모임 홈', exact: true })).toBeVisible();
+  await environment.withSecurityRulesDisabled(async context => {
+    expect((await getDoc(doc(context.firestore(), 'members', id))).data()).toMatchObject({ id, email, role: 'member', status: 'pending', canCreatePoll: false });
+    expect((await getDoc(doc(context.firestore(), 'profiles', id))).data()).toEqual({ id, phone: '', area: '' });
+  });
+  await page.goto('/profile');
+  await page.getByLabel('거주 지역', { exact: false }).fill('서울 중랑구');
+  await page.getByRole('button', { name: '저장하기', exact: true }).click();
+  await expect(page.locator('.toast').filter({ hasText: '내 정보를 저장했어요.' })).toBeVisible();
+  await page.reload();
+  await expect(page.locator('.pending-access')).toBeVisible();
+  await expect(page.getByLabel('거주 지역', { exact: false })).toHaveValue('서울 중랑구');
+  await environment.withSecurityRulesDisabled(async context => {
+    expect((await getDoc(doc(context.firestore(), 'members', id))).data()).toMatchObject({ role: 'member', status: 'pending', canCreatePoll: false });
+    expect((await getDoc(doc(context.firestore(), 'profiles', id))).data()?.area).toBe('서울 중랑구');
+  });
+});
+
 test('real Firebase file attachments preserve maximum-size bytes, editing and pending downloads', async ({ page, browser }) => {
   test.setTimeout(90000);
   const title = 'Firebase 문서 첨부';

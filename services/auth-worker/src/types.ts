@@ -7,6 +7,7 @@ export interface Env {
  NAVER_SEARCH_ENABLED?:string;NAVER_SEARCH_API?:string;NAVER_SEARCH_CLIENT_ID?:string;NAVER_SEARCH_CLIENT_SECRET?:string;
  KAKAO_CALENDAR_ENABLED?:string;
  SMS_ENABLED?:string;SOLAPI_API_KEY?:string;SOLAPI_API_SECRET?:string;SOLAPI_SENDER?:string;SOLAPI_LMS_UNIT_PRICE?:string;
+ TELEMETRY_ENABLED?:string;TELEMETRY_RELEASE?:string;
 }
 export interface StoredDocument<T=Record<string,unknown>> {data:T;version:string}
 export interface Mutation {path:string;data?:Record<string,unknown>;remove?:boolean;version?:string;createOnly?:boolean;verify?:boolean}
@@ -14,6 +15,7 @@ export interface Store {
  get<T=Record<string,unknown>>(path:string):Promise<StoredDocument<T>|null>;
  commit(writes:Mutation[]):Promise<void>;
  query?<T=Record<string,unknown>>(collection:string,field:string,value:string):Promise<StoredDocument<T>[]>;
+ recentErrors?<T=Record<string,unknown>>(limit:number,since:string):Promise<StoredDocument<T>[]>;
 }
 export interface FirebaseIdentity {uid:string;email?:string;name?:string;disabled?:boolean;providers?:string[];authTime?:number;validSince?:number}
 export interface ProviderIdentity {subject:string;name:string;email:string;accessToken:string;refreshToken?:string;expiresAt:number;scopes:string[]}
@@ -27,6 +29,7 @@ export interface Dependencies {
  calendarCall?:(token:string,eventId:string|null,payload:Record<string,unknown>)=>Promise<string>;
  refreshKakao?:(refreshToken:string)=>Promise<{accessToken:string;refreshToken?:string;expiresAt:number;scopes?:string[]}>;
  sendSms?:(messages:{id:string;to:string;text:string}[])=>Promise<import('./sms-provider').SmsProviderResult[]>;
+ waitUntil?:(promise:Promise<unknown>)=>void;
 }
 export class HttpError extends Error {constructor(public status:number,public code:string){super(code);}}
 export class ConflictError extends Error {constructor(){super('concurrent_update');}}

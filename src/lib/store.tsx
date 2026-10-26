@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { DocumentData } from 'firebase/firestore';
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import { signOut } from 'firebase/auth';
 import { Bytes, collection, deleteDoc, deleteField, doc, getDoc, getDocs, onSnapshot, query, runTransaction, setDoc, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { getBlob, ref } from 'firebase/storage';
 import { auth, configurationError, db, isDemo, storage } from './firebase';
@@ -13,6 +13,9 @@ import { assemblePostAttachment, MAX_POST_FILE_CHUNKS, POST_FILE_CHUNK_BYTES, pr
 import type { PostFileManifest } from './attachments';
 import { preparePostPhoto, prepareReceipt } from './receipt';
 import { errorMessage, uid } from './utils';
+import { observeAuthSession, signInWithGoogle } from './google-auth';
+import { reportError } from './telemetry';
+import type { TelemetryContext } from '../../shared/error-telemetry';
 
 const DEMO_KEY = 'moim-demo-v1';
 const emptyData = (): AppData => ({settings:{name:'우리 모임',description:'',smsEnabled:false,smsAutoOnConfirm:false},bylaws:{content:'',updatedAt:'',editorId:''},places:[],ledger:[],ballots:[],ballotResponses:[],mvpVotes:[],members:[],profiles:[],posts:[],comments:[],polls:[],votes:[],events:[],rsvps:[]});
@@ -34,6 +37,7 @@ export function AppProvider({children}: {children: ReactNode}) {
   const [loading,setLoading] = useState(!isDemo && !configurationError);
   const [error,setError] = useState<string | null>(configurationError);
   const [authUid,setAuthUid] = useState<string | null>(null);
+  const [authRetry,setAuthRetry] = useState(0);
   const [self,setSelf] = useState<Member | null>(null);
   const [demoSignedIn,setDemoSignedIn] = useState(true);
   const [imageUrls,setImageUrls] = useState<Record<string,string>>({});
@@ -82,24 +86,19 @@ export function AppProvider({children}: {children: ReactNode}) {
 
   useEffect(()=>{
     if(isDemo || !auth || !db) return;
-    return onAuthStateChanged(auth,(firebaseUser)=>{
-      setError(null); setSelf(null); setData(emptyData()); setAuthUid(firebaseUser?.uid ?? null); setLoading(Boolean(firebaseUser));
-    },displayError);
-  },[]);
-
-  useEffect(()=>{
-    if(isDemo || !db || !authUid) return;
-    return onSnapshot(doc(db,'members',authUid),(snapshot)=>{
-      const member=snapshot.exists() ? { ...snapshot.data(), id:snapshot.id } as Member : null;
-      setSelf(member); setLoading(false);
-    },displayError);
-  },[authUid]);
+    let previousUid:string|null=null;
+    return observeAuthSession(auth,db,state=>{
+      if(state.uid!==previousUid){setData(emptyData());previousUid=state.uid;}
+      setAuthUid(state.uid);setSelf(state.member);setLoading(state.loading);
+      setError(state.error ? errorMessage(state.error):null);
+    });
+  },[authRetry]);
 
   useEffect(()=>{
     if(isDemo || !db || !self || ['active','pending'].includes(self.status)) return;
     return onSnapshot(doc(db,'profiles',self.id),snapshot=>{
       setData(previous=>({...previous,profiles:snapshot.exists() ? [{...snapshot.data(),id:snapshot.id} as AppData['profiles'][number]] : []}));
-    },displayError);
+    },problem=>{reportError(problem,{kind:'data',context:'subscription-profiles'});displayError(problem);});
   },[self?.id,self?.status]);
 
   useEffect(()=>{
@@ -110,17 +109,17 @@ export function AppProvider({children}: {children: ReactNode}) {
       unsubscribers.push(onSnapshot(target,snapshot=>{
         const values=snapshot.docs.map(item=>({...(item.data() as DocumentData),id:item.id}));
         setData(previous=>({...previous,[key]:values}));
-      },displayError));
+      },problem=>{reportError(problem,{kind:'data',context:`subscription-${key}` as TelemetryContext});displayError(problem);}));
     };
     const leader=self.status==='active' && self.role==='leader';
     listen('members',leader ? collection(database,'members') : query(collection(database,'members'),where('status','==','active')));
     if(leader) listen('profiles',collection(database,'profiles'));
-    else unsubscribers.push(onSnapshot(doc(database,'profiles',self.id),snapshot=>setData(previous=>({...previous,profiles:snapshot.exists() ? [{...snapshot.data(),id:snapshot.id} as AppData['profiles'][number]] : []})),displayError));
+    else unsubscribers.push(onSnapshot(doc(database,'profiles',self.id),snapshot=>setData(previous=>({...previous,profiles:snapshot.exists() ? [{...snapshot.data(),id:snapshot.id} as AppData['profiles'][number]] : []})),problem=>{reportError(problem,{kind:'data',context:'subscription-profiles'});displayError(problem);}));
     for(const key of ['posts','comments','polls','votes','events','rsvps','ledger','ballots','ballotResponses','mvpVotes','places'] as const) listen(key,collection(database,key));
     unsubscribers.push(onSnapshot(doc(database,'settings','club'),snapshot=>{
       if(snapshot.exists()) setData(previous=>({...previous,settings:{...snapshot.data(),smsEnabled:snapshot.data().smsEnabled===true,smsAutoOnConfirm:snapshot.data().smsAutoOnConfirm===true} as AppData['settings']}));
-    },displayError));
-    unsubscribers.push(onSnapshot(doc(database,'settings','bylaws'),snapshot=>{ if(snapshot.exists()) setData(previous=>({...previous,bylaws:snapshot.data() as AppData['bylaws']})); },displayError));
+    },problem=>{reportError(problem,{kind:'data',context:'subscription-settings'});displayError(problem);}));
+    unsubscribers.push(onSnapshot(doc(database,'settings','bylaws'),snapshot=>{ if(snapshot.exists()) setData(previous=>({...previous,bylaws:snapshot.data() as AppData['bylaws']})); },problem=>{reportError(problem,{kind:'data',context:'subscription-bylaws'});displayError(problem);}));
     return ()=>unsubscribers.forEach(unsubscribe=>unsubscribe());
   },[self?.id,self?.status,self?.role]);
 
@@ -180,19 +179,11 @@ export function AppProvider({children}: {children: ReactNode}) {
     members:isAdmin ? data.members:data.members.filter(member=>member.status==='active'),
     profiles:isAdmin ? data.profiles : data.profiles.filter(profile=>profile.id===user?.id),
     user,loading,isDemo,isAdmin,canParticipate,canCreatePoll,error,
-    async login() {
+    async login(forceAccountPicker=false) {
       if(isDemo) { setDemoSignedIn(true); return; }
       if(!auth) throw new Error(configurationError ?? 'Firebase 설정을 확인해 주세요.');
-      const provider=new GoogleAuthProvider(); provider.setCustomParameters({prompt:'select_account'});
-      const credential=await signInWithPopup(auth,provider);
-      const actor=credential.user;
-      const memberRef=doc(database(),'members',actor.uid);
-      await runTransaction(database(),async transaction=>{
-        const current=await transaction.get(memberRef); if(current.exists()) return;
-        const member: Member={id:actor.uid,name:actor.displayName?.slice(0,30) || '새 멤버',email:actor.email || '',...(actor.photoURL ? {photoURL:actor.photoURL}:{}),role:'member',status:'pending',canCreatePoll:false,joinedAt:new Date().toISOString()};
-        transaction.set(memberRef,member);
-        transaction.set(doc(database(),'profiles',actor.uid),{id:actor.uid,phone:'',area:''});
-      });
+      if(!forceAccountPicker && auth.currentUser && !self){setAuthRetry(attempt=>attempt+1);return;}
+      await signInWithGoogle(auth);
     },
     async logout() { if(isDemo) { setDemoSignedIn(false); return; } if(auth) await signOut(auth); },
     async saveSettings(settings) {
@@ -290,8 +281,10 @@ export function AppProvider({children}: {children: ReactNode}) {
       if(!['leader','treasurer','member'].includes(next.role) || !['active','pending','rejected'].includes(next.status)) throw new Error('유효한 역할과 가입 상태를 선택해 주세요.');
       if(isDemo) applyDemo({...dataRef.current,members:replace(dataRef.current.members,next)}); else await updateDoc(doc(database(),'members',id),clean(patch));
     },
-    async savePost(post,newFiles=[]) {
+    async savePost(post,newFiles=[],editing) {
       const actor=active(); const old=dataRef.current.posts.find(item=>item.id===post.id);
+      const expectedExisting=editing ?? Boolean(old);
+      if(expectedExisting && !old)throw new Error('이미 삭제된 게시글이에요. 목록에서 다시 확인해 주세요.');
       if(old && old.updatedAt!==post.updatedAt) throw new Error('다른 변경이 있어요. 글을 다시 확인한 뒤 수정해 주세요.');
       if(old && old.authorId!==actor.id && !isAdmin) throw new Error('작성자만 글을 수정할 수 있어요.');
       if(!isAdmin && (post.category==='notice' || post.pinned!==(old?.pinned ?? false) || old?.category==='notice')) throw new Error('공지사항은 관리자만 작성할 수 있어요.');
@@ -323,6 +316,7 @@ export function AppProvider({children}: {children: ReactNode}) {
         } else removed=await runTransaction(database(),async transaction=>{
           const postRef=doc(database(),'posts',post.id);const snapshot=await transaction.get(postRef);
           checkFileSession(session,actor.id);
+          if(expectedExisting && !snapshot.exists())throw new Error('이미 삭제된 게시글이에요. 목록에서 다시 확인해 주세요.');
           if(snapshot.exists()) {
             const current=snapshot.data() as Post;
             if(current.updatedAt!==post.updatedAt)throw new Error('다른 변경이 있어요. 글을 다시 확인한 뒤 수정해 주세요.');
@@ -508,7 +502,7 @@ export function AppProvider({children}: {children: ReactNode}) {
       }));
     },
     resetDemo() { if(!isDemo) return; const next=createDemoData();applyDemo(next);void clearDemoAttachments().catch(()=>{});setDemoSignedIn(true);setError(null); },
-  }),[data,user,loading,isAdmin,canParticipate,canCreatePoll,error,imageUrls]);
+  }),[data,user,loading,isAdmin,canParticipate,canCreatePoll,error,imageUrls,self]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

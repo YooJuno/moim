@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { GoogleAuthProvider, linkWithPopup, signInWithCustomToken, signOut } from 'firebase/auth';
 import { auth } from './firebase';
+import { getAuthAPIURL } from './api-url';
+export { getAuthAPIURL } from './api-url';
 
 export type SocialProvider='kakao'|'naver';
 export type SocialIntent='signin'|'link';
@@ -15,12 +17,6 @@ const isProvider=(value:unknown):value is SocialProvider=>value==='kakao'||value
 const isIntent=(value:unknown):value is SocialIntent=>value==='signin'||value==='link';
 const validUID=(value:unknown):value is string=>typeof value==='string'&&value.length>0&&value.length<=128&&!/[\s\u0000-\u001f]/.test(value);
 const object=(value:unknown):value is Record<string,unknown>=>!!value&&typeof value==='object'&&!Array.isArray(value);
-
-export function getAuthAPIURL(value?:string):string|null {
-  const configured=value??import.meta.env.VITE_AUTH_API_URL;
-  if(typeof configured!=='string'||!configured.trim())return null;
-  try{const url=new URL(configured);const local=['localhost','127.0.0.1','[::1]'].includes(url.hostname);if((url.protocol!=='https:'&&!(url.protocol==='http:'&&local))||url.username||url.password||url.search||url.hash)return null;url.pathname=url.pathname.replace(/\/+$/,'')+'/';return url.href;}catch{return null;}
-}
 
 function requestError(status:number,code?:string,calendar=false){if(code==='kakao_calendar_consent_required'||code==='calendar_consent_required')return new Error('카카오 계정을 연결하고 캘린더 사용에 동의해 주세요.');if(code==='kakao_reconnect_required'||code==='reconnect_required')return new Error('카카오 계정을 다시 연결해 주세요.');if(code==='event_attendance_required')return new Error('참여 예정으로 등록한 뒤 캘린더에 추가해 주세요.');if(code==='active_membership_required')return new Error('승인된 멤버만 캘린더에 추가할 수 있어요.');if(code==='kakao_time_requires_five_minutes')return new Error('모임 시간을 5분 단위로 맞춘 뒤 다시 시도해 주세요.');if(code==='kakao_calendar_not_configured')return new Error('지금은 카카오 캘린더를 사용할 수 없어요.');if(status===409&&!calendar)return new Error('이미 다른 계정에 연결된 로그인 계정이에요. 기존 계정으로 로그인해 주세요.');if(status===401||status===403)return new Error('로그인 계정을 다시 확인해 주세요.');if(status===410)return new Error('로그인 요청이 만료됐어요. 다시 시작해 주세요.');return new Error(calendar?'캘린더에 일정을 추가하지 못했어요. 잠시 후 다시 시도해 주세요.':'로그인을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.');}
 async function requestJSON(path:string,init:RequestInit={},apiURL=getAuthAPIURL(),calendar=false):Promise<unknown>{

@@ -55,6 +55,7 @@ function AuthScreen() {
     const { t } = useI18n();
     const app = useApp(), toast = useToast();
     const [busy, setBusy] = useState(false);
+    const [loginError, setLoginError] = useState('');
     const [name, setName] = useState(app.user?.name || ''), [phone, setPhone] = useState(''), [area, setArea] = useState('');
     const pending = app.user?.status === 'pending';
     const ownProfile = app.profiles.find(profile => profile.id === app.user?.id);
@@ -65,13 +66,15 @@ function AuthScreen() {
             setArea(ownProfile.area);
         }
     }, [ownProfile?.id, ownProfile?.phone, ownProfile?.area]);
-    const login = async () => {
+    const login = async (forceAccountPicker = false) => {
+        if (busy) return;
+        setLoginError('');
         setBusy(true);
         try {
-            await app.login();
+            await app.login(forceAccountPicker);
         }
         catch (e) {
-            toast(errorMessage(e), 'error');
+            setLoginError(errorMessage(e));
         }
         finally {
             setBusy(false);
@@ -94,6 +97,6 @@ function AuthScreen() {
         }
     };
     if (!app.user)
-        return <div className="login-auth-shell"><LoginScreen onLogin={() => void login()} loading={busy} isDemo={app.isDemo} error={app.error}/><SiteFooter /></div>;
+        return <div className="login-auth-shell"><LoginScreen onLogin={() => void login()} onChangeAccount={() => void login(true)} loading={busy} isDemo={app.isDemo} error={loginError || app.error}/><SiteFooter /></div>;
     return <div className="auth-screen"><Link to="/"><Brand /></Link><div className="auth-card"><h1>{pending ? t("가입 승인 대기") : app.user ? t("가입 승인 거절") : t("로그인")}</h1>{app.user && <p>{pending ? t("가입 정보를 입력해 주세요.") : t("관리자에게 문의해 주세요.")}</p>}{!app.user ? <><Button className="google-button" variant="secondary" loading={busy} onClick={() => void login()}><svg width="19" height="19" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2.1H12v4h5.4a4.6 4.6 0 0 1-2 3v2.6h3.3c1.9-1.7 2.9-4.2 2.9-7.5Z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.7-2.4l-3.3-2.6c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3v2.7A10.1 10.1 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.4 13.9a6 6 0 0 1 0-3.8V7.4H3a10 10 0 0 0 0 9.2l3.4-2.7Z"/><path fill="#EA4335" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.8A9.6 9.6 0 0 0 12 2a10 10 0 0 0-9 5.4l3.4 2.7C7.2 7.8 9.4 6 12 6Z"/></svg>{app.isDemo ? t("데모 둘러보기") : t("Google로 시작하기")}</Button><div className="auth-note"><ShieldCheck size={15}/>{t("관리자 승인 후 이용 가능")}</div></> : <><Badge tone={pending ? 'orange' : 'red'}>{pending ? t("승인 대기") : t("승인 거절")}</Badge>{pending && <form className="stack auth-form" onSubmit={save}><Field label={t("이름")} required><input required value={name} onChange={e => setName(e.target.value)} maxLength={30}/></Field><Field label={t("전화번호")}><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} maxLength={20} placeholder="010-0000-0000"/></Field><Field label={t("거주 지역")}><input value={area} onChange={e => setArea(e.target.value)} maxLength={50} placeholder={t("서울 중랑구")}/></Field><Button type="submit" icon={Check} loading={busy}>{t("가입 정보 저장")}</Button></form>}<Button variant="ghost" icon={LogOut} onClick={() => void app.logout()}>{t("로그아웃")}</Button></>}{app.error && <p className="auth-error" role="alert">{t(app.error)}</p>}</div><SiteFooter /></div>;
 }

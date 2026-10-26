@@ -25,7 +25,7 @@ export interface MvpVote { id: string; eventId: string; memberId: string; candid
 export interface AppData { places: SavedPlace[]; mvpVotes: MvpVote[]; ballots: EventBallot[]; ballotResponses: BallotResponse[]; bylaws: Bylaws; ledger: LedgerEntry[]; settings: Settings; members: Member[]; profiles: Profile[]; posts: Post[]; comments: Comment[]; polls: Poll[]; votes: Vote[]; events: MoimEvent[]; rsvps: Rsvp[] }
 export interface AppContextValue extends AppData {
   user: Member | null; loading: boolean; isDemo: boolean; isAdmin: boolean; canParticipate: boolean; canCreatePoll: boolean; error: string | null;
-  login: () => Promise<void>; logout: () => Promise<void>;
+  login: (forceAccountPicker?: boolean) => Promise<void>; logout: () => Promise<void>;
   savePlace: (place: SavedPlace) => Promise<void>;
   deletePlace: (id: string) => Promise<void>;
   saveBylaws: (content: string) => Promise<void>;
@@ -38,7 +38,7 @@ export interface AppContextValue extends AppData {
   updateMember: (id: string, patch: Partial<Pick<Member, 'role' | 'status' | 'canCreatePoll' | 'position'>>) => Promise<void>;
   addRosterMember: (data: { name: string; phone: string; area: string; birthday?: string; position?: string }) => Promise<void>;
   linkRosterMember: (rosterId: string, userId: string) => Promise<void>;
-  savePost: (post: Post, newFiles?: File[]) => Promise<void>; getPostAttachment: (postId: string, attachmentId: string) => Promise<Blob>; deletePost: (id: string) => Promise<void>; toggleLike: (id: string) => Promise<void>;
+  savePost: (post: Post, newFiles?: File[], editing?: boolean) => Promise<void>; getPostAttachment: (postId: string, attachmentId: string) => Promise<Blob>; deletePost: (id: string) => Promise<void>; toggleLike: (id: string) => Promise<void>;
   addComment: (postId: string, body: string) => Promise<void>; deleteComment: (id: string) => Promise<void>;
   savePoll: (poll: Poll) => Promise<void>; deletePoll: (id: string) => Promise<void>; saveVote: (pollId: string, slotIds: string[]) => Promise<void>;
   confirmPoll: (pollId: string, slotId: string, location: string, endSlotId?: string) => Promise<void>;

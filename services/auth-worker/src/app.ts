@@ -3,6 +3,8 @@ import {authorizationUrl,providerEnabled} from './providers';
 import {ConflictError,HttpError} from './types';
 import {createSmsService,smsConfigured} from './sms';
 import {naverSearchConfigured,searchNaverPlaces,validatePlaceQuery} from './naver-places';
+import {createTelemetryService,telemetryRoute} from './telemetry';
+import {parseTelemetryRequest} from './telemetry-schema';
 import type {Dependencies,Env,Intent,Mutation,Provider,ProviderIdentity,StoredDocument} from './types';
 
 interface State {provider:Provider;intent:Intent;challenge:string;returnOrigin:string;uid?:string;expiresAt:number}
@@ -53,6 +55,8 @@ async function storeKakaoTokens(uid:string,identity:ProviderIdentity,env:Env,dep
 
 export function createApp(env:Env,deps:Dependencies){
  const sms=createSmsService(env,deps,request=>verified(request,deps));
+ const telemetry=createTelemetryService(env,deps,request=>verified(request,deps));
+ const queueTelemetry=(job:Promise<unknown>)=>{const safe=job.catch(()=>{});if(deps.waitUntil)deps.waitUntil(safe);else void safe;};
  const placeSearch=async(request:Request,url:URL)=>{
   const identity=await verified(request,deps);
   const member=await deps.store.get(`members/${identity.uid}`);
@@ -68,7 +72,7 @@ export function createApp(env:Env,deps:Dependencies){
   if(!ready(env) || !providerEnabled(provider,env))throw new HttpError(503,'provider_not_configured');const nonce=url.searchParams.get('state');if(!nonce || !/^[A-Za-z0-9_-]{43}$/.test(nonce))throw new HttpError(400,'invalid_state');const path=`authStates/${await keyedId(`state:${nonce}`,env.STATE_SECRET!)}`;const state=await deps.store.get<State>(path);if(!state || state.data.provider!==provider || state.data.expiresAt<=deps.now())throw new HttpError(400,'invalid_or_expired_state');allowedOrigin(state.data.returnOrigin,env);
   const destination=new URL('/auth/callback',state.data.returnOrigin);destination.searchParams.set('provider',provider);destination.searchParams.set('intent',state.data.intent);
   await consume(path,state,deps);
-  try{if(url.searchParams.has('error'))throw new HttpError(400,'oauth_cancelled');const providerCode=url.searchParams.get('code');if(!providerCode || providerCode.length>4096)throw new HttpError(400,'provider_code_missing');const identity=await deps.providerExchange(provider,providerCode,nonce,callbackUri(provider));const code=randomToken(),id=await keyedId(`exchange:${code}`,env.STATE_SECRET!);const encrypted=await encrypt(identity,env.TOKEN_ENCRYPTION_KEY!,`authExchanges/${id}`);await deps.store.commit([{path:`authExchanges/${id}`,createOnly:true,data:{...state.data,encrypted,expiresAt:deps.now()+60000}}]);destination.searchParams.set('code',code);}catch(error){destination.searchParams.set('error',error instanceof HttpError ? error.code:'oauth_failed');}
+  try{if(url.searchParams.has('error'))throw new HttpError(400,'oauth_cancelled');const providerCode=url.searchParams.get('code');if(!providerCode || providerCode.length>4096)throw new HttpError(400,'provider_code_missing');const identity=await deps.providerExchange(provider,providerCode,nonce,callbackUri(provider));const code=randomToken(),id=await keyedId(`exchange:${code}`,env.STATE_SECRET!);const encrypted=await encrypt(identity,env.TOKEN_ENCRYPTION_KEY!,`authExchanges/${id}`);await deps.store.commit([{path:`authExchanges/${id}`,createOnly:true,data:{...state.data,encrypted,expiresAt:deps.now()+60000}}]);destination.searchParams.set('code',code);}catch(error){const code=error instanceof HttpError ? error.code:'oauth_failed';destination.searchParams.set('error',code);queueTelemetry(telemetry.recordServer(code,'/oauth/callback'));}
   return new Response(null,{status:302,headers:{Location:destination.href,'Cache-Control':'no-store','Referrer-Policy':'no-referrer'}});
  };
  const exchange=async(request:Request)=>{
@@ -89,11 +93,14 @@ export function createApp(env:Env,deps:Dependencies){
   let externalId:string;try{externalId=await deps.calendarCall(token.accessToken,current?.data.kakaoEventId ?? null,payload);}catch(error){if(error instanceof HttpError && [400,401,403,422].includes(error.status)){const claim=await deps.store.get<CalendarLink>(linkPath);if(claim?.data.operation===operation)await deps.store.commit([current ? updated(linkPath,current.data,claim):{path:linkPath,remove:true,version:claim.version}]);}throw error;}const claimed=await deps.store.get<CalendarLink>(linkPath);if(!claimed || claimed.data.operation!==operation)throw new HttpError(409,'calendar_sync_conflict');await deps.store.commit([updated(linkPath,{uid:identity.uid,eventId,kakaoEventId:externalId,signature,status:'synced',updatedAt:new Date(deps.now()).toISOString()},claimed)]);return json({added:true,alreadySynced:false,eventId,kakaoEventId:externalId});
  };
  return {async fetch(request:Request):Promise<Response>{
-  let response:Response;const origin=request.headers.get('Origin');
+  let response:Response;const origin=request.headers.get('Origin');let failureCode:unknown;let route=telemetryRoute('');
   try{
-   if(origin && !origins(env).includes(origin))throw new HttpError(403,'origin_not_allowed');const url=new URL(request.url),path=url.pathname;
+   const url=new URL(request.url),path=url.pathname;route=telemetryRoute(path);
+   if(origin && !origins(env).includes(origin))throw new HttpError(403,'origin_not_allowed');
    if(request.method==='OPTIONS'){if(!origin)throw new HttpError(403,'origin_required');response=new Response(null,{status:204,headers:{'Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'Authorization,Content-Type','Access-Control-Max-Age':'600'}});}
    else if(request.method==='GET' && path==='/config')response=json({providers:{kakao:ready(env)&&providerEnabled('kakao',env),naver:ready(env)&&providerEnabled('naver',env)},calendar:{kakao:ready(env)&&providerEnabled('kakao',env)&&env.KAKAO_CALENDAR_ENABLED==='true'},notifications:{sms:smsConfigured(env)},places:{naver:naverSearchConfigured(env)}});
+   else if(request.method==='POST' && path==='/telemetry/errors'){if(!origin)throw new HttpError(403,'origin_required');telemetry.ingestRate(request);const report=await parseTelemetryRequest(request);queueTelemetry(telemetry.recordClient(report));response=json({accepted:true},202);}
+   else if(request.method==='GET' && path==='/telemetry/errors'){throttle(request,'telemetry-admin',deps.now());const value=url.searchParams.get('limit');if(value!==null && !/^(?:[1-9]|[1-4][0-9]|50)$/.test(value))throw new HttpError(400,'telemetry_invalid_limit');response=json(await telemetry.list(request,value===null?50:Number(value)));}
    else if(request.method==='GET' && path==='/places/search'){throttle(request,'places',deps.now());response=await placeSearch(request,url);}
    else if(request.method==='POST' && /^\/notifications\/sms\/events\/[^/]+\/(preview|send)$/.test(path)){if(!origin)throw new HttpError(403,'origin_required');throttle(request,'sms',deps.now());const eventId=decodeURIComponent(path.split('/')[4]);response=json(path.endsWith('/preview')?await sms.preview(request,eventId):await sms.send(request,eventId,await body(request)));}
    else if(request.method==='GET' && /^\/oauth\/[^/]+\/start$/.test(path)){throttle(request,'start',deps.now());const provider=providerFrom(path.split('/')[2]);if(url.searchParams.get('intent') && url.searchParams.get('intent')!=='signin')throw new HttpError(400,'use_authenticated_link_start');const location=await start(provider,'signin',url.searchParams.get('challenge'),url.searchParams.get('returnOrigin'));response=new Response(null,{status:302,headers:{Location:location,'Cache-Control':'no-store','Referrer-Policy':'no-referrer'}});}
@@ -103,7 +110,8 @@ export function createApp(env:Env,deps:Dependencies){
    else if(request.method==='GET' && path==='/account/providers')response=await accountProviders(request);
    else if(request.method==='POST' && /^\/calendar\/kakao\/events\/[^/]+\/add$/.test(path)){if(!origin)throw new HttpError(403,'origin_required');response=await calendarAdd(request,decodeURIComponent(path.split('/')[4]));}
    else throw new HttpError(404,'not_found');
-  }catch(error){response=json({error:error instanceof HttpError ? error.code:error instanceof ConflictError ? 'concurrent_update':'internal_error'},error instanceof HttpError ? error.status:error instanceof ConflictError ? 409:500);}
+  }catch(error){failureCode=error instanceof HttpError ? error.code:error instanceof ConflictError ? 'concurrent_update':'internal_error';response=json({error:failureCode},error instanceof HttpError ? error.status:error instanceof ConflictError ? 409:500);}
+  if(response.status>=400 && route!=='unknown')queueTelemetry(telemetry.recordServer(failureCode,route,response.status));
   const headers=new Headers(response.headers);headers.set('Cache-Control','no-store');headers.set('Referrer-Policy','no-referrer');headers.set('X-Content-Type-Options','nosniff');if(origin && origins(env).includes(origin)){headers.set('Access-Control-Allow-Origin',origin);headers.set('Vary','Origin');}return new Response(response.body,{status:response.status,headers});
  }};
 }

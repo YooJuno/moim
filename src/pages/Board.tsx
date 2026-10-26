@@ -118,6 +118,7 @@ function PostEditor({ post, initialCategory, onClose, onSaved }: {
     }
     async function save(e: React.FormEvent) {
         e.preventDefault();
+        if (saving || uploading) return;
         if (!app.user || !app.canParticipate)
             return;
         if (!title.trim() || !body.trim()) {
@@ -132,7 +133,7 @@ function PostEditor({ post, initialCategory, onClose, onSaved }: {
         const now = new Date().toISOString();
         const id = post?.id ?? uid();
         try {
-            await app.savePost({ id, category, title: title.trim(), body: body.trim(), images, attachments, pinned: app.isAdmin ? pinned : post?.pinned ?? false, authorId: post?.authorId ?? app.user.id, createdAt: post?.createdAt ?? now, updatedAt: post?.updatedAt ?? now, likedBy: post?.likedBy ?? [] }, newFiles.map(item => item.file));
+            await app.savePost({ id, category, title: title.trim(), body: body.trim(), images, attachments, pinned: app.isAdmin ? pinned : post?.pinned ?? false, authorId: post?.authorId ?? app.user.id, createdAt: post?.createdAt ?? now, updatedAt: post?.updatedAt ?? now, likedBy: post?.likedBy ?? [] }, newFiles.map(item => item.file), !!post);
             toast(post ? '게시글을 수정했어요.' : '게시글을 올렸어요.');
             onSaved(id);
         }
