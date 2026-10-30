@@ -38,6 +38,8 @@ export function AppProvider({children}: {children: ReactNode}) {
   const [error,setError] = useState<string | null>(configurationError);
   const [authUid,setAuthUid] = useState<string | null>(null);
   const [authRetry,setAuthRetry] = useState(0);
+  const [settingsOwner,setSettingsOwner] = useState<string|null>(null);
+  const [bylawsOwner,setBylawsOwner] = useState<string|null>(null);
   const [self,setSelf] = useState<Member | null>(null);
   const [demoSignedIn,setDemoSignedIn] = useState(true);
   const [imageUrls,setImageUrls] = useState<Record<string,string>>({});
@@ -48,6 +50,8 @@ export function AppProvider({children}: {children: ReactNode}) {
   const user = isDemo ? (demoSignedIn ? data.members.find(m=>m.id===DEMO_USER_ID) ?? null : null) : self;
   const canParticipate=user?.status==='active';
   const isAdmin = user?.status === 'active' && user.role === 'leader';
+  const settingsReady = isDemo || (!!authUid && settingsOwner===authUid && !!self && ['active','pending'].includes(self.status));
+  const bylawsReady = isDemo || (!!authUid && bylawsOwner===authUid && !!self && ['active','pending'].includes(self.status));
   const canCreatePoll = user?.status === 'active' && (isAdmin || user.canCreatePoll);
   const fileSession = useRef('');
   fileSession.current = `${isDemo ? demoSignedIn : authUid}:${user?.id ?? ''}:${user?.status ?? ''}`;
@@ -88,7 +92,7 @@ export function AppProvider({children}: {children: ReactNode}) {
     if(isDemo || !auth || !db) return;
     let previousUid:string|null=null;
     return observeAuthSession(auth,db,state=>{
-      if(state.uid!==previousUid){setData(emptyData());previousUid=state.uid;}
+      if(state.uid!==previousUid){setData(emptyData());setSettingsOwner(null);setBylawsOwner(null);previousUid=state.uid;}
       setAuthUid(state.uid);setSelf(state.member);setLoading(state.loading);
       setError(state.error ? errorMessage(state.error):null);
     });
@@ -104,6 +108,7 @@ export function AppProvider({children}: {children: ReactNode}) {
   useEffect(()=>{
     if(isDemo || !db || !self || !['active','pending'].includes(self.status)) return;
     const database=db;
+    let listening=true;
     const unsubscribers: (()=>void)[]=[];
     const listen = (key: keyof Omit<AppData,'settings' | 'bylaws'>, target: ReturnType<typeof collection> | ReturnType<typeof query>) => {
       unsubscribers.push(onSnapshot(target,snapshot=>{
@@ -117,10 +122,12 @@ export function AppProvider({children}: {children: ReactNode}) {
     else unsubscribers.push(onSnapshot(doc(database,'profiles',self.id),snapshot=>setData(previous=>({...previous,profiles:snapshot.exists() ? [{...snapshot.data(),id:snapshot.id} as AppData['profiles'][number]] : []})),problem=>{reportError(problem,{kind:'data',context:'subscription-profiles'});displayError(problem);}));
     for(const key of ['posts','comments','polls','votes','events','rsvps','ledger','ballots','ballotResponses','mvpVotes','places'] as const) listen(key,collection(database,key));
     unsubscribers.push(onSnapshot(doc(database,'settings','club'),snapshot=>{
+      if(!listening)return;
+      setSettingsOwner(self.id);
       if(snapshot.exists()) setData(previous=>({...previous,settings:{...snapshot.data(),smsEnabled:snapshot.data().smsEnabled===true,smsAutoOnConfirm:snapshot.data().smsAutoOnConfirm===true} as AppData['settings']}));
     },problem=>{reportError(problem,{kind:'data',context:'subscription-settings'});displayError(problem);}));
-    unsubscribers.push(onSnapshot(doc(database,'settings','bylaws'),snapshot=>{ if(snapshot.exists()) setData(previous=>({...previous,bylaws:snapshot.data() as AppData['bylaws']})); },problem=>{reportError(problem,{kind:'data',context:'subscription-bylaws'});displayError(problem);}));
-    return ()=>unsubscribers.forEach(unsubscribe=>unsubscribe());
+    unsubscribers.push(onSnapshot(doc(database,'settings','bylaws'),snapshot=>{ if(!listening)return;setBylawsOwner(self.id);if(snapshot.exists()) setData(previous=>({...previous,bylaws:snapshot.data() as AppData['bylaws']})); },problem=>{reportError(problem,{kind:'data',context:'subscription-bylaws'});displayError(problem);}));
+    return ()=>{listening=false;unsubscribers.forEach(unsubscribe=>unsubscribe());};
   },[self?.id,self?.status,self?.role]);
 
   useEffect(()=>{
@@ -178,7 +185,7 @@ export function AppProvider({children}: {children: ReactNode}) {
     posts:data.posts.map(post=>({...post,images:post.images.map(displayImage)})),
     members:isAdmin ? data.members:data.members.filter(member=>member.status==='active'),
     profiles:isAdmin ? data.profiles : data.profiles.filter(profile=>profile.id===user?.id),
-    user,loading,isDemo,isAdmin,canParticipate,canCreatePoll,error,
+    user,loading,isDemo,isAdmin,settingsReady,bylawsReady,canParticipate,canCreatePoll,error,
     async login(forceAccountPicker=false) {
       if(isDemo) { setDemoSignedIn(true); return; }
       if(!auth) throw new Error(configurationError ?? 'Firebase 설정을 확인해 주세요.');
@@ -187,7 +194,7 @@ export function AppProvider({children}: {children: ReactNode}) {
     },
     async logout() { if(isDemo) { setDemoSignedIn(false); return; } if(auth) await signOut(auth); },
     async saveSettings(settings) {
-      admin();const base={name:settings.name.trim(),description:settings.description.trim(),...(settings.photoURL ? {photoURL:settings.photoURL}:{})};
+      admin();if(!settingsReady)throw new Error('모임 정보를 불러오는 중이에요. 잠시 후 다시 시도해 주세요.');const base={name:settings.name.trim(),description:settings.description.trim(),...(settings.photoURL ? {photoURL:settings.photoURL}:{})};
       if(!base.name || base.name.length>40 || base.description.length>140)throw new Error('모임 이름은 1–40자, 소개는 140자 이내로 입력해 주세요.');
       if(base.photoURL && (base.photoURL.length>180000 || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(base.photoURL)))throw new Error('모임 사진은 JPG, PNG, WebP 형식의 작은 이미지로 올려주세요.');
       if((settings.smsEnabled!==undefined && typeof settings.smsEnabled!=='boolean') || (settings.smsAutoOnConfirm!==undefined && typeof settings.smsAutoOnConfirm!=='boolean'))throw new Error('문자 알림 설정을 확인해 주세요.');
@@ -205,19 +212,23 @@ export function AppProvider({children}: {children: ReactNode}) {
       admin();if(isDemo)applyDemo({...dataRef.current,places:dataRef.current.places.filter(place=>place.id!==id)});else await deleteDoc(doc(database(),'places',id));
     },
     async saveBylaws(content) {
-      const actor=admin(); if(content.length>50000) throw new Error('회칙은 50,000자 이내로 작성해 주세요.');
+      const actor=admin();if(!bylawsReady)throw new Error('회칙을 불러오는 중이에요. 잠시 후 다시 시도해 주세요.'); if(content.length>50000) throw new Error('회칙은 50,000자 이내로 작성해 주세요.');
       const bylaws={content:content.trim(),updatedAt:new Date().toISOString(),editorId:actor.id};
       if(isDemo) applyDemo({...dataRef.current,bylaws}); else await setDoc(doc(database(),'settings','bylaws'),bylaws);
     },
-    async saveLedgerEntry(entry) {
+    async saveLedgerEntry(entry,editing=false) {
       const actor=active(); if(!['leader','treasurer'].includes(actor.role)) throw new Error('관리자와 회계 담당만 회계를 관리할 수 있어요.');
       const old=dataRef.current.ledger.find(item=>item.id===entry.id);
+      const mustExist=editing || !!old;
+      if(isDemo && editing && !old)throw new Error('이미 삭제된 회계 내역이에요. 목록에서 다시 확인해 주세요.');
+      if(isDemo && old && old.updatedAt!==entry.updatedAt)throw new Error('다른 변경이 있어요. 회계 내역을 다시 확인해 주세요.');
       if(!['income','expense'].includes(entry.type) || !Number.isSafeInteger(entry.amount) || entry.amount<=0 || entry.amount>1e10 || !entry.category.trim() || entry.category.length>40 || !entry.description.trim() || entry.description.length>1000 || !/^\d{4}-\d{2}-\d{2}$/.test(entry.date)) throw new Error('거래 날짜, 금액과 내용을 확인해 주세요.');
       if(entry.memo!==undefined && (typeof entry.memo!=='string' || entry.memo.length>2000))throw new Error('비고는 2,000자 이내로 입력해 주세요.');
       const now=new Date().toISOString();
       const build=(current?: typeof entry)=>{const {hasReceipt:_incomingReceipt,memo:_incomingMemo,...fields}=entry;const memo=entry.memo ?? current?.memo;return clean({...fields,...(memo ? {memo}:{}),category:entry.category.trim(),description:entry.description.trim(),creatorId:current?.creatorId ?? actor.id,createdAt:current?.createdAt ?? now,updatedAt:now,...(current?.hasReceipt ? {hasReceipt:true}:{})});};
       if(isDemo) applyDemo({...dataRef.current,ledger:replace(dataRef.current.ledger,build(old))});
-      else await runTransaction(database(),async transaction=>{const entryRef=doc(database(),'ledger',entry.id);const snapshot=await transaction.get(entryRef);transaction.set(entryRef,build(snapshot.exists() ? snapshot.data() as typeof entry:undefined));});
+      else await runTransaction(database(),async transaction=>{const entryRef=doc(database(),'ledger',entry.id);const snapshot=await transaction.get(entryRef);if(mustExist && !snapshot.exists())throw new Error('이미 삭제된 회계 내역이에요. 목록에서 다시 확인해 주세요.');if(snapshot.exists() && (!mustExist || snapshot.data().updatedAt!==entry.updatedAt))throw new Error('다른 변경이 있어요. 회계 내역을 다시 확인해 주세요.');transaction.set(entryRef,build(snapshot.exists() ? snapshot.data() as typeof entry:undefined));});
+      return now;
     },
     async deleteLedgerEntry(id) {
       const actor=active(); if(!['leader','treasurer'].includes(actor.role)) throw new Error('관리자와 회계 담당만 회계를 관리할 수 있어요.');
@@ -383,8 +394,10 @@ export function AppProvider({children}: {children: ReactNode}) {
       const actor=active(); const comment=dataRef.current.comments.find(item=>item.id===id); if(!comment || (!isAdmin && comment.authorId!==actor.id)) throw new Error('댓글을 삭제할 권한이 없어요.');
       if(isDemo) applyDemo({...dataRef.current,comments:dataRef.current.comments.filter(item=>item.id!==id)}); else await deleteDoc(doc(database(),'comments',id));
     },
-    async savePoll(poll) {
+    async savePoll(poll,editing=false) {
       const actor=active(); const old=dataRef.current.polls.find(item=>item.id===poll.id);
+      const mustExist=editing || !!old;
+      if(editing && !old)throw new Error('이미 삭제된 투표예요. 목록에서 다시 확인해 주세요.');
       if(old && old.updatedAt!==poll.updatedAt) throw new Error('다른 변경이 있어요. 새로 확인한 뒤 수정해 주세요.');
       if(old) managePoll(old); else if(!canCreatePoll) throw new Error('투표 생성 권한이 필요해요.');
       if(poll.status==='confirmed') throw new Error('결과에서 일정을 확정해 주세요.');
@@ -395,7 +408,7 @@ export function AppProvider({children}: {children: ReactNode}) {
       const now=new Date().toISOString();
       const next=clean({...poll,title:poll.title.trim(),slotIds:poll.slots.map(slot=>slot.id),creatorId:old?.creatorId ?? actor.id,createdAt:old?.createdAt ?? now,updatedAt:now});
       if(isDemo) applyDemo({...dataRef.current,polls:replace(dataRef.current.polls,next)});
-      else await runTransaction(database(),async transaction=>{ const pollRef=doc(database(),'polls',poll.id); const snapshot=await transaction.get(pollRef); if(snapshot.exists()) { const current=snapshot.data() as Poll; managePoll(current); if(old && current.updatedAt!==poll.updatedAt) throw new Error('다른 변경이 있어요. 새로 확인한 뒤 수정해 주세요.'); } transaction.set(pollRef,{...next,deadlineAt:next.deadline===null ? null : Timestamp.fromDate(new Date(next.deadline))}); });
+      else await runTransaction(database(),async transaction=>{ const pollRef=doc(database(),'polls',poll.id); const snapshot=await transaction.get(pollRef); if(mustExist && !snapshot.exists())throw new Error('이미 삭제된 투표예요. 목록에서 다시 확인해 주세요.'); if(snapshot.exists()) { const current=snapshot.data() as Poll; managePoll(current); if(!mustExist || current.updatedAt!==poll.updatedAt) throw new Error('다른 변경이 있어요. 새로 확인한 뒤 수정해 주세요.'); } transaction.set(pollRef,{...next,deadlineAt:next.deadline===null ? null : Timestamp.fromDate(new Date(next.deadline))}); });
     },
     async deletePoll(id) {
       const poll=dataRef.current.polls.find(item=>item.id===id); if(!poll) throw new Error('투표를 찾을 수 없어요.'); managePoll(poll);
@@ -410,13 +423,15 @@ export function AppProvider({children}: {children: ReactNode}) {
       else await runTransaction(database(),async transaction=>{ const pollSnapshot=await transaction.get(doc(database(),'polls',pollId)); if(!pollSnapshot.exists()) throw new Error('투표를 찾을 수 없어요.'); validate(pollSnapshot.data() as Poll); transaction.set(doc(database(),'votes',id),vote); });
     },
     async confirmPoll(pollId,slotId,location,endSlotId) {
-      const actor=admin();
-      const build=(poll: Poll) => { if(poll.status==='confirmed') return null; const slot=poll.slots.find(item=>item.id===slotId); if(!slot) throw new Error('후보 시간이 변경됐어요. 다시 확인해 주세요.'); if(!location.trim()) throw new Error('모임 장소를 입력해 주세요.'); const endSlot=poll.slots.find(item=>item.id===(endSlotId ?? slotId)); if(!endSlot || endSlot.date!==slot.date)throw new Error('같은 날짜의 연속된 시간을 선택해 주세요.'); const candidates=poll.slots.filter(item=>item.date===slot.date).sort((a,b)=>a.start.localeCompare(b.start)); const from=candidates.findIndex(item=>item.id===slot.id),to=candidates.findIndex(item=>item.id===endSlot.id); if(to<from || candidates.slice(from,to).some((item,index)=>item.end!==candidates[from+index+1].start))throw new Error('같은 날짜의 연속된 시간을 선택해 주세요.'); const event: MoimEvent={id:`poll-${pollId}`,title:poll.title,description:poll.description,date:slot.date,start:slot.start,end:endSlot.end,location:location.trim(),creatorId:actor.id,createdAt:new Date().toISOString(),pollId}; return event; };
-      if(isDemo) { const poll=dataRef.current.polls.find(item=>item.id===pollId); if(!poll) throw new Error('투표를 찾을 수 없어요.'); const event=build(poll); if(!event) return; applyDemo({...dataRef.current,events:replace(dataRef.current.events,event),polls:replace(dataRef.current.polls,{...poll,status:'confirmed',eventId:event.id,updatedAt:new Date().toISOString()})}); }
-      else await runTransaction(database(),async transaction=>{const pollRef=doc(database(),'polls',pollId);const snapshot=await transaction.get(pollRef);if(!snapshot.exists())throw new Error('투표를 찾을 수 없어요.');const event=build(snapshot.data() as Poll);if(!event)return;transaction.set(doc(database(),'events',event.id),{...event,endAt:Timestamp.fromDate(eventEnd(event))});transaction.update(pollRef,{status:'confirmed',eventId:event.id,updatedAt:new Date().toISOString()});});
+      const actor=admin(),eventId=`poll-${uid()}`;
+      const build=(poll: Poll) => { if(poll.status==='confirmed') return null; const slot=poll.slots.find(item=>item.id===slotId); if(!slot) throw new Error('후보 시간이 변경됐어요. 다시 확인해 주세요.'); if(!location.trim()) throw new Error('모임 장소를 입력해 주세요.'); const endSlot=poll.slots.find(item=>item.id===(endSlotId ?? slotId)); if(!endSlot || endSlot.date!==slot.date)throw new Error('같은 날짜의 연속된 시간을 선택해 주세요.'); const candidates=poll.slots.filter(item=>item.date===slot.date).sort((a,b)=>a.start.localeCompare(b.start)); const from=candidates.findIndex(item=>item.id===slot.id),to=candidates.findIndex(item=>item.id===endSlot.id); if(to<from || candidates.slice(from,to).some((item,index)=>item.end!==candidates[from+index+1].start))throw new Error('같은 날짜의 연속된 시간을 선택해 주세요.'); const event: MoimEvent={id:eventId,title:poll.title,description:poll.description,date:slot.date,start:slot.start,end:endSlot.end,location:location.trim(),creatorId:actor.id,createdAt:new Date().toISOString(),pollId}; return event; };
+      if(isDemo) { const poll=dataRef.current.polls.find(item=>item.id===pollId); if(!poll) throw new Error('투표를 찾을 수 없어요.'); const event=build(poll); if(!event) {if(!poll.eventId)throw new Error('일정을 찾을 수 없어요.');return poll.eventId;} applyDemo({...dataRef.current,events:replace(dataRef.current.events,event),polls:replace(dataRef.current.polls,{...poll,status:'confirmed',eventId:event.id,updatedAt:new Date().toISOString()})});return event.id; }
+      else return await runTransaction(database(),async transaction=>{const pollRef=doc(database(),'polls',pollId);const snapshot=await transaction.get(pollRef);if(!snapshot.exists())throw new Error('투표를 찾을 수 없어요.');const current=snapshot.data() as Poll;const event=build(current);if(!event){if(!current.eventId)throw new Error('일정을 찾을 수 없어요.');return current.eventId;}transaction.set(doc(database(),'events',event.id),{...event,endAt:Timestamp.fromDate(eventEnd(event))});transaction.update(pollRef,{status:'confirmed',eventId:event.id,updatedAt:new Date().toISOString()});return event.id;});
     },
-    async saveBallot(ballot) {
+    async saveBallot(ballot,editing=false) {
       const actor=active();const old=dataRef.current.ballots.find(item=>item.id===ballot.id);
+      const mustExist=editing || !!old;
+      if(editing && !old)throw new Error('이미 삭제된 장소 투표예요. 일정에서 다시 확인해 주세요.');
       const allowed=(record:EventBallot)=>{if(record.kind==='mvp'){admin();return;}if(!isAdmin && !(actor.canCreatePoll && record.creatorId===actor.id))throw new Error('투표를 관리할 권한이 없어요.');};
       if(old){allowed(old);if(old.status==='confirmed')throw new Error('확정한 장소 투표는 변경할 수 없어요.');if(old.updatedAt!==ballot.updatedAt)throw new Error('다른 변경이 있어요. 투표를 다시 확인해 주세요.');}
       else if(ballot.kind==='mvp')admin();else if(!canCreatePoll)throw new Error('투표 생성 권한이 필요해요.');
@@ -424,7 +439,7 @@ export function AppProvider({children}: {children: ReactNode}) {
       if(ballot.kind==='mvp' && (new Set(ballot.options.map(option=>option.memberId)).size!==ballot.options.length || ballot.options.some(option=>!option.memberId || !dataRef.current.members.some(member=>member.id===option.memberId && member.status==='active'))))throw new Error('MVP 후보는 승인된 멤버 중에서 선택해 주세요.');
       const {selectedOptionId:_selected,...fields}=ballot;const now=new Date().toISOString();const next=clean({...fields,title:ballot.title.trim(),optionIds:ballot.options.map(option=>option.id),creatorId:old?.creatorId ?? actor.id,createdAt:old?.createdAt ?? now,updatedAt:now});
       if(isDemo){if(!dataRef.current.events.some(event=>event.id===ballot.eventId))throw new Error('일정을 찾을 수 없어요.');applyDemo({...dataRef.current,ballots:replace(dataRef.current.ballots,next)});}
-      else await runTransaction(database(),async transaction=>{const ballotRef=doc(database(),'ballots',ballot.id);const snapshot=await transaction.get(ballotRef);const event=await transaction.get(doc(database(),'events',ballot.eventId));if(!event.exists())throw new Error('일정을 찾을 수 없어요.');if(snapshot.exists()){const current=snapshot.data() as EventBallot;allowed(current);if(current.status==='confirmed' || current.updatedAt!==ballot.updatedAt)throw new Error('다른 변경이 있어요. 투표를 다시 확인해 주세요.');}transaction.set(ballotRef,next);});
+      else await runTransaction(database(),async transaction=>{const ballotRef=doc(database(),'ballots',ballot.id);const snapshot=await transaction.get(ballotRef);const event=await transaction.get(doc(database(),'events',ballot.eventId));if(!event.exists())throw new Error('일정을 찾을 수 없어요.');if(mustExist && !snapshot.exists())throw new Error('이미 삭제된 장소 투표예요. 일정에서 다시 확인해 주세요.');if(snapshot.exists()){const current=snapshot.data() as EventBallot;allowed(current);if(!mustExist || current.status==='confirmed' || current.updatedAt!==ballot.updatedAt)throw new Error('다른 변경이 있어요. 투표를 다시 확인해 주세요.');}transaction.set(ballotRef,next);});
     },
     async deleteBallot(id) {
       const actor=active();const validate=(ballot:EventBallot)=>{if(ballot.status==='confirmed')throw new Error('확정한 장소 투표는 삭제할 수 없어요.');if(ballot.kind==='mvp')admin();else if(!isAdmin && !(actor.canCreatePoll && ballot.creatorId===actor.id))throw new Error('투표를 삭제할 권한이 없어요.');};
@@ -448,14 +463,16 @@ export function AppProvider({children}: {children: ReactNode}) {
       if(isDemo){const ballot=dataRef.current.ballots.find(item=>item.id===ballotId);if(!ballot)throw new Error('투표를 찾을 수 없어요.');const location=prepare(ballot);if(location===null)return;const event=dataRef.current.events.find(item=>item.id===ballot.eventId);if(!event)throw new Error('일정을 찾을 수 없어요.');applyDemo({...dataRef.current,ballots:replace(dataRef.current.ballots,{...ballot,status:'confirmed',selectedOptionId:optionId,updatedAt:new Date().toISOString()}),events:replace(dataRef.current.events,{...event,location})});}
       else await runTransaction(database(),async transaction=>{const ballotRef=doc(database(),'ballots',ballotId);const snapshot=await transaction.get(ballotRef);if(!snapshot.exists())throw new Error('투표를 찾을 수 없어요.');const ballot=snapshot.data() as EventBallot;const location=prepare(ballot);if(location===null)return;const eventRef=doc(database(),'events',ballot.eventId);const event=await transaction.get(eventRef);if(!event.exists())throw new Error('일정을 찾을 수 없어요.');transaction.update(ballotRef,{status:'confirmed',selectedOptionId:optionId,updatedAt:new Date().toISOString()});transaction.update(eventRef,{location});});
     },
-    async saveEvent(event) {
+    async saveEvent(event,editing=false) {
       const actor=admin(); const old=dataRef.current.events.find(item=>item.id===event.id);
+      const mustExist=editing || !!old;
+      if(editing && !old)throw new Error('이미 삭제된 일정이에요. 캘린더에서 다시 확인해 주세요.');
       if(!event.title.trim() || event.title.length>120 || event.description.length>10000 || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(event.start) || !/^(?:(?:[01]\d|2[0-3]):[0-5]\d|24:00)$/.test(event.end) || !event.location.trim() || event.location.length>500 || !/^\d{4}-\d{2}-\d{2}$/.test(event.date) || event.start>=event.end) throw new Error('일정 제목, 날짜, 시간과 장소를 확인해 주세요.');
       if(event.calendarLink && !old?.calendarLink) throw new Error('Google 캘린더 초대에서 일정을 연결해 주세요.');
       const {calendarLink:_incomingCalendarLink,...eventFields}=event;
       const build=(current?: MoimEvent) => clean({...eventFields,title:event.title.trim(),location:event.location.trim(),creatorId:current?.creatorId ?? actor.id,createdAt:current?.createdAt ?? new Date().toISOString(),...(current?.pollId ? {pollId:current.pollId}:{}),...(current?.calendarLink ? {calendarLink:current.calendarLink}:{})});
       if(isDemo) applyDemo({...dataRef.current,events:replace(dataRef.current.events,build(old))});
-      else await runTransaction(database(),async transaction=>{const eventRef=doc(database(),'events',event.id);const snapshot=await transaction.get(eventRef);const next=build(snapshot.exists() ? snapshot.data() as MoimEvent : undefined);transaction.set(eventRef,{...next,endAt:Timestamp.fromDate(eventEnd(next))});});
+      else await runTransaction(database(),async transaction=>{const eventRef=doc(database(),'events',event.id);const snapshot=await transaction.get(eventRef);if(mustExist && !snapshot.exists())throw new Error('이미 삭제된 일정이에요. 캘린더에서 다시 확인해 주세요.');if(!mustExist && snapshot.exists())throw new Error('다른 변경이 있어요. 새로 확인한 뒤 수정해 주세요.');const next=build(snapshot.exists() ? snapshot.data() as MoimEvent : undefined);transaction.set(eventRef,{...next,endAt:Timestamp.fromDate(eventEnd(next))});});
     },
     async saveCalendarLink(eventId,link) {
       const actor=admin();
@@ -502,7 +519,7 @@ export function AppProvider({children}: {children: ReactNode}) {
       }));
     },
     resetDemo() { if(!isDemo) return; const next=createDemoData();applyDemo(next);void clearDemoAttachments().catch(()=>{});setDemoSignedIn(true);setError(null); },
-  }),[data,user,loading,isAdmin,canParticipate,canCreatePoll,error,imageUrls,self]);
+  }),[data,user,loading,isAdmin,canParticipate,canCreatePoll,error,imageUrls,self,settingsReady,bylawsReady]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

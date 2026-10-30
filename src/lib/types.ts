@@ -24,12 +24,12 @@ export interface BallotResponse { id: string; ballotId: string; eventId: string;
 export interface MvpVote { id: string; eventId: string; memberId: string; candidateId: string; updatedAt: string }
 export interface AppData { places: SavedPlace[]; mvpVotes: MvpVote[]; ballots: EventBallot[]; ballotResponses: BallotResponse[]; bylaws: Bylaws; ledger: LedgerEntry[]; settings: Settings; members: Member[]; profiles: Profile[]; posts: Post[]; comments: Comment[]; polls: Poll[]; votes: Vote[]; events: MoimEvent[]; rsvps: Rsvp[] }
 export interface AppContextValue extends AppData {
-  user: Member | null; loading: boolean; isDemo: boolean; isAdmin: boolean; canParticipate: boolean; canCreatePoll: boolean; error: string | null;
+  user: Member | null; loading: boolean; settingsReady: boolean; bylawsReady: boolean; isDemo: boolean; isAdmin: boolean; canParticipate: boolean; canCreatePoll: boolean; error: string | null;
   login: (forceAccountPicker?: boolean) => Promise<void>; logout: () => Promise<void>;
   savePlace: (place: SavedPlace) => Promise<void>;
   deletePlace: (id: string) => Promise<void>;
   saveBylaws: (content: string) => Promise<void>;
-  saveLedgerEntry: (entry: LedgerEntry) => Promise<void>; deleteLedgerEntry: (id: string) => Promise<void>;
+  saveLedgerEntry: (entry: LedgerEntry, editing?: boolean) => Promise<string>; deleteLedgerEntry: (id: string) => Promise<void>;
   getReceipt: (entryId: string) => Promise<Receipt | null>;
   saveReceipt: (entryId: string, file: File | null) => Promise<void>;
   saveSettings: (settings: Settings) => Promise<void>;
@@ -40,12 +40,12 @@ export interface AppContextValue extends AppData {
   linkRosterMember: (rosterId: string, userId: string) => Promise<void>;
   savePost: (post: Post, newFiles?: File[], editing?: boolean) => Promise<void>; getPostAttachment: (postId: string, attachmentId: string) => Promise<Blob>; deletePost: (id: string) => Promise<void>; toggleLike: (id: string) => Promise<void>;
   addComment: (postId: string, body: string) => Promise<void>; deleteComment: (id: string) => Promise<void>;
-  savePoll: (poll: Poll) => Promise<void>; deletePoll: (id: string) => Promise<void>; saveVote: (pollId: string, slotIds: string[]) => Promise<void>;
-  confirmPoll: (pollId: string, slotId: string, location: string, endSlotId?: string) => Promise<void>;
+  savePoll: (poll: Poll, editing?: boolean) => Promise<void>; deletePoll: (id: string) => Promise<void>; saveVote: (pollId: string, slotIds: string[]) => Promise<void>;
+  confirmPoll: (pollId: string, slotId: string, location: string, endSlotId?: string) => Promise<string>;
   saveMvpVote: (eventId: string, candidateId: string) => Promise<void>;
-  saveBallot: (ballot: EventBallot) => Promise<void>; deleteBallot: (id: string) => Promise<void>;
+  saveBallot: (ballot: EventBallot, editing?: boolean) => Promise<void>; deleteBallot: (id: string) => Promise<void>;
   saveBallotResponse: (ballotId: string, optionId: string) => Promise<void>; confirmVenue: (ballotId: string, optionId: string) => Promise<void>;
   saveCalendarLink: (eventId: string, link: CalendarLink) => Promise<void>;
-  saveEvent: (event: MoimEvent) => Promise<void>; deleteEvent: (id: string) => Promise<void>; saveRsvp: (eventId: string, status: Rsvp['status']) => Promise<void>;
+  saveEvent: (event: MoimEvent, editing?: boolean) => Promise<void>; deleteEvent: (id: string) => Promise<void>; saveRsvp: (eventId: string, status: Rsvp['status']) => Promise<void>;
   uploadImages: (files: File[]) => Promise<string[]>; resetDemo: () => void;
 }

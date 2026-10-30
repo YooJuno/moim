@@ -44,7 +44,7 @@ export function VenueBallot({ event }: {
     } }
     async function changeStatus() { if (!ballot || busy)
         return; setBusy('status'); try {
-        await app.saveBallot({ ...ballot, status: ballot.status === 'open' ? 'closed' : 'open' });
+        await app.saveBallot({ ...ballot, status: ballot.status === 'open' ? 'closed' : 'open' }, true);
         toast(ballot.status === 'open' ? '장소 투표를 마감했어요.' : '장소 투표를 다시 열었어요.');
     }
     catch (error) {
@@ -108,7 +108,7 @@ function VenueEditor({ event, ballot, onClose }: {
         toast('이름과 주소가 같은 후보가 있어요.', 'error');
         return;
     } setSaving(true); const now = new Date().toISOString(); const cleanOptions = options.map(option => ({ id: option.id, label: option.label.trim(), ...(option.detail?.trim() ? { detail: option.detail.trim() } : {}), ...(option.menu?.trim() ? { menu: option.menu.trim() } : {}) })); const next: EventBallot = { id: ballot?.id ?? `${event.id}-venue`, eventId: event.id, kind: 'venue', title: '장소 투표', options: cleanOptions, optionIds: cleanOptions.map(option => option.id), status: ballot?.status ?? 'open', creatorId: ballot?.creatorId ?? app.user.id, createdAt: ballot?.createdAt ?? now, updatedAt: ballot?.updatedAt ?? now }; try {
-        await app.saveBallot(next);
+        await app.saveBallot(next, !!ballot);
         toast(ballot ? '장소 후보를 수정했어요.' : '장소 투표를 만들었어요.');
         onClose();
     }

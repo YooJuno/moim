@@ -39,6 +39,19 @@ describe('current-attendee calendar operations',()=>{
 });
 it('verifies Firebase JWT signature, issuer and audience rather than trusting its decoded payload',async()=>{const pair=await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']);const pub=await crypto.subtle.exportKey('jwk',pair.publicKey);const head=base64url(bytes(JSON.stringify({alg:'RS256',kid:'test-key'})));const time=Math.floor(Date.now()/1000);const claims={aud:'demo-moim',iss:'https://securetoken.google.com/demo-moim',sub:'verified-user',iat:time,auth_time:time,exp:time+3600};const payload=base64url(bytes(JSON.stringify(claims)));const text=`${head}.${payload}`;const signature=base64url(await crypto.subtle.sign('RSASSA-PKCS1-v1_5',pair.privateKey,bytes(text)));const mock=vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response(JSON.stringify({keys:[{...pub,kid:'test-key'}]})));try{expect((await verifyFirebaseToken(`${text}.${signature}`,env)).uid).toBe('verified-user');const bad=base64url(bytes(JSON.stringify({...claims,aud:'another-project'})));await expect(verifyFirebaseToken(`${head}.${bad}.${signature}`,env)).rejects.toThrow('invalid_firebase_token');await expect(verifyFirebaseToken(`${text}.`+'A'.repeat(342),env)).rejects.toThrow('invalid_firebase_token');}finally{mock.mockRestore();}});
 
+it('rejects malformed JWT objects, claim types and signature encoding as authentication errors before key lookup',async()=>{
+ const time=Math.floor(Date.now()/1000),header={alg:'RS256',kid:'malformed-claims-key'};
+ const claims={aud:env.FIREBASE_PROJECT_ID,iss:`https://securetoken.google.com/${env.FIREBASE_PROJECT_ID}`,sub:'valid-user',iat:time,auth_time:time,exp:time+3600};
+ const encode=(value:unknown)=>base64url(bytes(JSON.stringify(value)));
+ const fetch=vi.spyOn(globalThis,'fetch').mockRejectedValue(new Error('Must reject before network access'));
+ try {
+  const tokens=[`${encode(null)}.${encode(claims)}.AA`,`${encode([])}.${encode(claims)}.AA`,`${encode(header)}.${encode(null)}.AA`,`${encode(header)}.${encode([])}.AA`,`${encode(header)}.${encode({...claims,sub:123})}.AA`,`${encode({...header,kid:{}})}.${encode(claims)}.AA`,`${encode(header)}.${encode(claims)}.$`];
+  const infinite=JSON.stringify(claims).replace(`"exp":${claims.exp}`,'"exp":1e999');tokens.push(`${encode(header)}.${base64url(bytes(infinite))}.AA`);
+  for(const token of tokens)await expect(verifyFirebaseToken(token,env)).rejects.toMatchObject({status:401,code:'invalid_firebase_token'});
+  expect(fetch).not.toHaveBeenCalled();
+ }finally{fetch.mockRestore();}
+});
+
 it('does not run concurrent calendar updates even when an external event ID is known',async()=>{
  const value=await code('link');await app.fetch(post('/oauth/exchange',{code:value,verifier},'valid'));await store.seed('events/e1',{title:'처음',date:'2026-11-01',start:'14:00',end:'16:00',location:'서울'});await store.seed('rsvps/e1_google-user',{status:'going'});await app.fetch(post('/calendar/kakao/events/e1/add',{},'valid'));await store.seed('events/e1',{title:'수정',date:'2026-11-01',start:'14:00',end:'16:00',location:'서울'});
  let finish:(value:string)=>void=()=>{};deps.calendarCall=vi.fn(()=>new Promise<string>(resolve=>{finish=resolve;}));const pending=app.fetch(post('/calendar/kakao/events/e1/add',{},'valid'));for(let i=0;i<30&&!([...store.values].some(([key,value])=>key.startsWith('authCalendarLinks/')&&value.data.status==='processing'));i++)await new Promise(resolve=>setTimeout(resolve,0));const second=await app.fetch(post('/calendar/kakao/events/e1/add',{},'valid'));expect(second.status).toBe(409);expect(await second.json()).toEqual({error:'calendar_sync_in_progress'});finish('external-1');expect((await pending).status).toBe(200);

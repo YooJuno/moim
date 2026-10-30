@@ -74,7 +74,8 @@ test('shared times, day override, voting, editing, confirmation and RSVP retain 
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button', { name: /^지난 투표/ }).click();
   await expect(page.locator('.poll-card').filter({ hasText: '함께하는 11월 주말 · 장소 확정' })).toContainText('일정 확정');
-  await page.goto(`/calendar?event=${encodeURIComponent(`poll-${original.poll.id}`)}`);
+  const firstEventId=await page.evaluate(id=>JSON.parse(localStorage.getItem('moim-demo-v1')!).polls.find((poll:{id:string})=>poll.id===id).eventId,original.poll.id);
+  await page.goto(`/calendar?event=${encodeURIComponent(firstEventId)}`);
   dialog = page.getByRole('dialog');
   await expect(dialog).toHaveAccessibleName('함께하는 11월 주말 · 장소 확정');
   await expect(dialog.getByText('서울숲 방문자센터')).toBeVisible();
@@ -98,6 +99,16 @@ test('shared times, day override, voting, editing, confirmation and RSVP retain 
   expect(afterDelete.poll.eventId).toBeUndefined();
   expect(afterDelete.events).toHaveLength(0);
   expect(afterDelete.votes).toHaveLength(1);
+  // Production preserves these orphaned records when the event is deleted.
+  await page.evaluate(eventId=>{const data=JSON.parse(localStorage.getItem('moim-demo-v1')!);data.rsvps.push({id:`${eventId}_m-min`,eventId,memberId:'m-min',status:'going',updatedAt:new Date().toISOString()});data.mvpVotes.push({id:`${eventId}_m-min`,eventId,memberId:'m-min',candidateId:'m-jun',updatedAt:new Date().toISOString()});localStorage.setItem('moim-demo-v1',JSON.stringify(data));},firstEventId);
+  await page.reload();dialog=page.getByRole('dialog');
+  await dialog.getByRole('button',{name:'일정 확정',exact:true}).click();
+  await page.getByRole('textbox',{name:/^장소/}).fill('다시 확정한 장소');
+  await page.getByRole('button',{name:'확정하기',exact:true}).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const replacement=await page.evaluate(id=>{const data=JSON.parse(localStorage.getItem('moim-demo-v1')!);const eventId=data.polls.find((poll:{id:string})=>poll.id===id).eventId;return {eventId,rsvps:data.rsvps.filter((rsvp:{eventId:string})=>rsvp.eventId===eventId),mvpVotes:data.mvpVotes.filter((vote:{eventId:string})=>vote.eventId===eventId)};},original.poll.id);
+  expect(replacement.eventId).not.toBe(firstEventId);
+  expect(replacement.rsvps).toEqual([]);expect(replacement.mvpVotes).toEqual([]);
 });
 
 test('desktop drag selects all three hourly cells and reverse drag erases them', async ({ page }) => {

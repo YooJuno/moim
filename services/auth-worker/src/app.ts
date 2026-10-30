@@ -5,6 +5,7 @@ import {createSmsService,smsConfigured} from './sms';
 import {naverSearchConfigured,searchNaverPlaces,validatePlaceQuery} from './naver-places';
 import {createTelemetryService,telemetryRoute} from './telemetry';
 import {parseTelemetryRequest} from './telemetry-schema';
+import {parseJsonBody as body} from './json-body';
 import type {Dependencies,Env,Intent,Mutation,Provider,ProviderIdentity,StoredDocument} from './types';
 
 interface State {provider:Provider;intent:Intent;challenge:string;returnOrigin:string;uid?:string;expiresAt:number}
@@ -23,7 +24,6 @@ function ready(env:Env){if(!env.FIREBASE_PROJECT_ID || !env.FIREBASE_CLIENT_EMAI
 function allowedWorkerOrigin(value:string){const url=new URL(value);if(value!==url.origin || (url.protocol!=='https:' && !(url.protocol==='http:' && ['localhost','127.0.0.1'].includes(url.hostname))))throw new HttpError(503,'invalid_worker_origin');return url.origin;}
 function providerFrom(value:string):Provider {if(value!=='kakao' && value!=='naver')throw new HttpError(404,'unknown_provider');return value;}
 function challengeFrom(value:unknown){if(typeof value!=='string' || !/^[A-Za-z0-9_-]{43}$/.test(value))throw new HttpError(400,'invalid_challenge');return value;}
-async function body(request:Request):Promise<Record<string,unknown>> {if(!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json'))throw new HttpError(415,'json_required');if(Number(request.headers.get('Content-Length') ?? 0)>16384)throw new HttpError(413,'body_too_large');const text=await request.text();if(text.length>16384)throw new HttpError(413,'body_too_large');try{const result=JSON.parse(text);if(!result || Array.isArray(result) || typeof result!=='object')throw Error();return result;}catch{throw new HttpError(400,'invalid_json');}}
 function authToken(request:Request){const value=request.headers.get('Authorization');if(!value?.startsWith('Bearer ') || value.length>16400)throw new HttpError(401,'firebase_auth_required');return value.slice(7);}
 function uidPath(uid:string){if(!/^[A-Za-z0-9:_-]{1,128}$/.test(uid))throw new HttpError(401,'invalid_firebase_uid');return uid;}
 function updated<T extends object>(path:string,data:T,current:StoredDocument<unknown>|null):Mutation {return {path,data:data as Record<string,unknown>,...(current ? {version:current.version}:{createOnly:true})};}

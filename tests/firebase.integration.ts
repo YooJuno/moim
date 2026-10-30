@@ -14,6 +14,67 @@ let environment: RulesTestEnvironment;
 let leaderId:string;
 let pendingId:string;
 
+test('open poll, event, venue and ledger editors cannot recreate records deleted in another session', async ({ page }) => {
+  const now = new Date().toISOString();
+  const day = new Date(); day.setDate(day.getDate() + 4);
+  const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+  const pollId = 'deleted-editor-poll'; const eventId = 'deleted-editor-event'; const venueEventId = 'deleted-editor-venue-event'; const ballotId = `${venueEventId}-venue`; const entryId = 'deleted-editor-ledger';
+  await environment.withSecurityRulesDisabled(async context => {
+    const { setDoc, Timestamp } = await import('firebase/firestore'); const db = context.firestore();
+    const slots = [{ id: 'editor-slot', date, start: '18:00', end: '19:00' }];
+    await setDoc(doc(db, 'polls', pollId), { id: pollId, title: '삭제 중 투표 편집', description: '', slots, slotIds: slots.map(slot => slot.id), deadline: null, deadlineAt: null, status: 'open', creatorId: leaderId, createdAt: now, updatedAt: now, slotMinutes: 60 });
+    for (const [id, title] of [[eventId, '삭제 중 일정 편집'], [venueEventId, '장소 투표 편집 일정']]) await setDoc(doc(db, 'events', id), { id, title, description: '', date, start: '18:00', end: '19:00', endAt: Timestamp.fromDate(new Date(`${date}T19:00:00+09:00`)), location: '서울 중랑구', creatorId: leaderId, createdAt: now });
+    const options = [{ id: 'venue-one', label: '식당 하나' }, { id: 'venue-two', label: '식당 둘' }];
+    await setDoc(doc(db, 'ballots', ballotId), { id: ballotId, eventId: venueEventId, kind: 'venue', title: '장소 투표', options, optionIds: options.map(option => option.id), status: 'open', creatorId: leaderId, createdAt: now, updatedAt: now });
+    await setDoc(doc(db, 'ledger', entryId), { id: entryId, type: 'income', category: '회비', amount: 20000, date, description: '삭제 중 회계 편집', creatorId: leaderId, createdAt: now, updatedAt: now });
+  });
+  const remove = async (collection: string, id: string) => environment.withSecurityRulesDisabled(async context => { const { deleteDoc } = await import('firebase/firestore'); await deleteDoc(doc(context.firestore(), collection, id)); });
+  await login(page, leaderEmail);
+  await page.goto(`/polls?poll=${pollId}`);
+  await page.getByRole('dialog').getByRole('button', { name: '투표 수정', exact: true }).click();
+  await remove('polls', pollId);
+  await expect(page.locator('.poll-card').filter({ hasText: '삭제 중 투표 편집' })).toHaveCount(0);
+  await page.getByRole('dialog').getByRole('button', { name: '수정하고 열기', exact: true }).click();
+  await expect(page.getByText('이미 삭제된 투표예요. 목록에서 다시 확인해 주세요.', { exact: true })).toBeVisible();
+
+  await page.goto(`/calendar?event=${eventId}`);
+  await page.getByRole('dialog').getByRole('button', { name: '일정 수정', exact: true }).click();
+  await remove('events', eventId);
+  await expect(page.locator('.event-agenda-card').filter({ hasText: '삭제 중 일정 편집' })).toHaveCount(0);
+  await page.getByRole('dialog').getByRole('button', { name: '수정하기', exact: true }).click();
+  await expect(page.getByText('이미 삭제된 일정이에요. 캘린더에서 다시 확인해 주세요.', { exact: true })).toBeVisible();
+
+  await page.goto(`/calendar?event=${venueEventId}`);
+  await page.locator('.venue-ballot').getByRole('button', { name: '후보 수정', exact: true }).click();
+  await remove('ballots', ballotId);
+  await expect(page.locator('.venue-ballot').getByRole('radio')).toHaveCount(0);
+  await page.getByRole('dialog').last().getByRole('button', { name: '저장', exact: true }).click();
+  await expect(page.getByText('이미 삭제된 장소 투표예요. 일정에서 다시 확인해 주세요.', { exact: true })).toBeVisible();
+
+  await page.goto('/ledger');
+  await page.getByRole('button', { name: '전체 보기', exact: true }).click();
+  await page.getByRole('button', { name: '삭제 중 회계 편집 수정', exact: true }).click();
+  await remove('ledger', entryId);
+  await expect(page.locator('.ledger-row').filter({ hasText: '삭제 중 회계 편집' })).toHaveCount(0);
+  await page.getByRole('dialog').getByRole('button', { name: '저장', exact: true }).click();
+  await expect(page.getByText('이미 삭제된 회계 내역이에요. 목록에서 다시 확인해 주세요.', { exact: true })).toBeVisible();
+  await environment.withSecurityRulesDisabled(async context => { for (const [collection, id] of [['polls', pollId], ['events', eventId], ['ballots', ballotId], ['ledger', entryId]]) expect((await getDoc(doc(context.firestore(), collection, id))).exists()).toBe(false); });
+});
+
+test('ledger editing preserves a newer change from another session', async ({ page }) => {
+  const id = 'concurrent-ledger-edit'; const now = new Date().toISOString();
+  await environment.withSecurityRulesDisabled(async context => { const { setDoc } = await import('firebase/firestore'); await setDoc(doc(context.firestore(), 'ledger', id), { id, type: 'income', category: '회비', amount: 20000, date: now.slice(0, 10), description: '동시 수정 회계 내역', creatorId: leaderId, createdAt: now, updatedAt: now }); });
+  await login(page, leaderEmail); await page.goto('/ledger');
+  await page.getByRole('button', { name: '전체 보기', exact: true }).click();
+  await page.getByRole('button', { name: '동시 수정 회계 내역 수정', exact: true }).click();
+  await page.getByRole('dialog').getByLabel('금액').fill('30000');
+  await environment.withSecurityRulesDisabled(async context => { await updateDoc(doc(context.firestore(), 'ledger', id), { amount: 25000, description: '다른 세션에서 수정한 내역', updatedAt: new Date(Date.now() + 1000).toISOString() }); });
+  await expect(page.locator('.ledger-row').filter({ hasText: '다른 세션에서 수정한 내역' })).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: '저장', exact: true }).click();
+  await expect(page.getByText('다른 변경이 있어요. 회계 내역을 다시 확인해 주세요.', { exact: true })).toBeVisible();
+  await environment.withSecurityRulesDisabled(async context => { expect((await getDoc(doc(context.firestore(), 'ledger', id))).data()).toMatchObject({ amount: 25000, description: '다른 세션에서 수정한 내역' }); });
+});
+
 test('an editor cannot recreate a post deleted by another session', async ({ page }) => {
   await environment.withSecurityRulesDisabled(async context => {
     const { setDoc } = await import('firebase/firestore');
@@ -239,17 +300,39 @@ test('real Firebase provider saves and edits posts and polls, closes, reopens an
     expect(poll.deadline).toBeNull();expect(poll.deadlineAt).toBeNull();
   });
   // Seed only emulator metadata: no Google API request or real invitation is made.
+  let confirmedEventId='';
+  await environment.withSecurityRulesDisabled(async context=>{confirmedEventId=(await getDoc(doc(context.firestore(),'polls',pollId))).data()!.eventId;});
   const calendarLink={ownerId:leaderId,googleEventId:'local-fake-google-event',htmlLink:'https://calendar.google.com/calendar/event?eid=local-test',syncedAt:new Date().toISOString(),attendeeIds:[],signature:'original-calendar-signature'};
-  await environment.withSecurityRulesDisabled(async context=>{await updateDoc(doc(context.firestore(),'events',`poll-${pollId}`),{calendarLink});});
-  await page.goto(`/calendar?event=poll-${pollId}`);
+  await environment.withSecurityRulesDisabled(async context=>{await updateDoc(doc(context.firestore(),'events',confirmedEventId),{calendarLink});});
+  await page.goto(`/calendar?event=${confirmedEventId}`);
   dialog=page.getByRole('dialog');
   await dialog.getByRole('button',{name:'일정 수정',exact:true}).click();
   await page.getByRole('dialog').getByLabel('일정 제목').fill('Firebase 일정 · 캘린더 연결 유지');
   await page.getByRole('button',{name:'수정하기',exact:true}).click();
   await expect(page.getByRole('dialog')).toHaveAccessibleName('Firebase 일정 · 캘린더 연결 유지');
   await environment.withSecurityRulesDisabled(async context=>{
-    const saved=(await getDoc(doc(context.firestore(),'events',`poll-${pollId}`))).data()!;
+    const saved=(await getDoc(doc(context.firestore(),'events',confirmedEventId))).data()!;
     expect(saved.calendarLink).toEqual(calendarLink);expect(saved.pollId).toBe(pollId);
+  });
+  // A second confirmation must not reuse the old attendance, MVP or calendar connection.
+  await dialog.getByRole('button',{name:'참여해요',exact:true}).click();
+  await expect(dialog.getByText('참여 예정으로 등록했어요.',{exact:false})).toBeVisible();
+  await environment.withSecurityRulesDisabled(async context=>{const {setDoc}=await import('firebase/firestore');await setDoc(doc(context.firestore(),'mvpVotes',`${confirmedEventId}_${leaderId}`),{id:`${confirmedEventId}_${leaderId}`,eventId:confirmedEventId,memberId:leaderId,candidateId:leaderId,updatedAt:new Date().toISOString()});});
+  await dialog.getByRole('button',{name:'일정 삭제',exact:true}).click();
+  await page.getByRole('button',{name:'삭제하기',exact:true}).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.goto(`/polls?poll=${pollId}`);dialog=page.getByRole('dialog');
+  await dialog.getByRole('button',{name:'일정 확정',exact:true}).click();
+  await page.getByRole('textbox',{name:/^장소/}).fill('새 확정 장소');
+  await page.getByRole('button',{name:'확정하기',exact:true}).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await environment.withSecurityRulesDisabled(async context=>{
+    const db=context.firestore();const replacementId=(await getDoc(doc(db,'polls',pollId))).data()!.eventId;
+    expect(replacementId).not.toBe(confirmedEventId);
+    expect((await getDoc(doc(db,'events',replacementId))).data()!.calendarLink).toBeUndefined();
+    expect((await getDoc(doc(db,'rsvps',`${confirmedEventId}_${leaderId}`))).exists()).toBe(true);
+    expect((await getDoc(doc(db,'rsvps',`${replacementId}_${leaderId}`))).exists()).toBe(false);
+    expect((await getDoc(doc(db,'mvpVotes',`${replacementId}_${leaderId}`))).exists()).toBe(false);
   });
 });
 

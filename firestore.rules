@@ -253,7 +253,8 @@ service cloud.firestore {
         && request.resource.data.creatorId == resource.data.creatorId && request.resource.data.createdAt == resource.data.createdAt
         && ((resource.data.status != 'confirmed' && managesPoll(resource.data)
           && ((request.resource.data.status in ['open','closed'] && !('eventId' in request.resource.data))
-            || (admin() && request.resource.data.status == 'confirmed' && request.resource.data.eventId == 'poll-' + pollId
+            || (admin() && request.resource.data.status == 'confirmed'
+              && !exists(/databases/$(database)/documents/events/$(request.resource.data.eventId))
               && getAfter(/databases/$(database)/documents/events/$(request.resource.data.eventId)).data.pollId == pollId)))
           || (resource.data.status == 'confirmed' && admin() && request.resource.data.status == 'closed'
             && !('eventId' in request.resource.data)

@@ -124,13 +124,21 @@ describe.skipIf(!enabled)('Firebase access boundaries',()=>{
   });
   it('confirms a poll with one linked event atomically, for leaders only',async()=>{
     const creatorDb=client('creator');
-    await assertFails(updateDoc(doc(creatorDb,'polls','open'),{status:'confirmed',eventId:'poll-open'}));
+    await assertFails(updateDoc(doc(creatorDb,'polls','open'),{status:'confirmed',eventId:'poll-fresh-instance'}));
     const db=client('leader');
-    await assertFails(updateDoc(doc(db,'polls','open'),{status:'confirmed',eventId:'poll-open'}));
+    await assertFails(updateDoc(doc(db,'polls','open'),{status:'confirmed',eventId:'poll-fresh-instance'}));
     const batch=writeBatch(db);
-    batch.set(doc(db,'events','poll-open'),{...event('poll-open'),pollId:'open'});
-    batch.update(doc(db,'polls','open'),{status:'confirmed',eventId:'poll-open'});
+    batch.set(doc(db,'events','poll-fresh-instance'),{...event('poll-fresh-instance'),pollId:'open'});
+    batch.update(doc(db,'polls','open'),{status:'confirmed',eventId:'poll-fresh-instance'});
     await assertSucceeds(batch.commit());
+  });
+  it('cannot confirm a poll by reusing an existing event and its old responses',async()=>{
+    await environment.withSecurityRulesDisabled(async context=>{await updateDoc(doc(context.firestore(),'events','e1'),{pollId:'open'});});
+    const db=client('leader'),batch=writeBatch(db);
+    batch.set(doc(db,'events','e1'),{...event('e1'),pollId:'open'});
+    batch.update(doc(db,'polls','open'),{status:'confirmed',eventId:'e1'});
+    await assertFails(batch.commit());
+    expect((await getDoc(doc(db,'polls','open'))).data()!.status).toBe('open');
   });
   it('returns a confirmed poll to closed only when its linked event is deleted in the same batch',async()=>{
     const db=client('leader');

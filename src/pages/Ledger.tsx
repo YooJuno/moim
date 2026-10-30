@@ -68,6 +68,7 @@ function LedgerEditor({ entry, onClose }: {
         entryId.current = entry?.id ?? uid();
     const createdAt = useRef(entry?.createdAt ?? new Date().toISOString());
     const entrySaved = useRef(!!entry);
+    const entryRevision = useRef(entry?.updatedAt);
     const receiptInput = useRef<HTMLInputElement>(null);
     const [receipt, setReceipt] = useState<Receipt | null>(null);
     const [receiptLoading, setReceiptLoading] = useState(!!entry?.hasReceipt);
@@ -113,7 +114,7 @@ function LedgerEditor({ entry, onClose }: {
         toast('비고는 2,000자 이내로 입력해 주세요.', 'error');
         return;
     } setSaving(true); setReceiptSaveError(false); let saved = false; try {
-        await app.saveLedgerEntry({ id: entryId.current!, type, date, category, amount: parsed, description: description.trim(), memo, ...(memberId ? { memberId } : {}), creatorId: entry?.creatorId ?? app.user.id, createdAt: createdAt.current, updatedAt: new Date().toISOString() });
+        entryRevision.current = await app.saveLedgerEntry({ id: entryId.current!, type, date, category, amount: parsed, description: description.trim(), memo, ...(memberId ? { memberId } : {}), creatorId: entry?.creatorId ?? app.user.id, createdAt: createdAt.current, updatedAt: entryRevision.current ?? new Date().toISOString() }, entrySaved.current);
         entrySaved.current = true;
         saved = true;
         if (receiptFile || receiptRemoved)

@@ -42,7 +42,7 @@ export function Calendar() {
         const date = new Date(`${selected.date}T12:00:00`);
         setMonth(new Date(date.getFullYear(), date.getMonth(), 1));
         setSelectedDate(selected.date);
-    } }, [selected?.id]);
+    } }, [selected?.id, selected?.date]);
     useEffect(() => { const dateParam = params.get('date'); if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) && !Number.isNaN(new Date(`${dateParam}T12:00:00`).getTime())) {
         const d = new Date(`${dateParam}T12:00:00`);
         setMonth(new Date(d.getFullYear(), d.getMonth(), 1));
@@ -151,7 +151,7 @@ function EventEditor({ event, initialDate, onClose, onSaved }: {
         toast('제목과 날짜, 시작·종료 시간을 확인해 주세요.', 'error');
         return;
     } setBusy(true); const next: MoimEvent = { id: event?.id ?? uid(), title: title.trim(), description: description.trim(), date, start, end, location: location.trim(), creatorId: event?.creatorId ?? app.user.id, createdAt: event?.createdAt ?? new Date().toISOString(), ...(event?.pollId ? { pollId: event.pollId } : {}), ...(event?.calendarLink ? { calendarLink: event.calendarLink } : {}) }; try {
-        await app.saveEvent(next);
+        await app.saveEvent(next, !!event);
         toast(event ? '일정을 수정했어요.' : '새 일정을 만들었어요.');
         onSaved(next);
     }

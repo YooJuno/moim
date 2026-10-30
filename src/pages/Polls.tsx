@@ -59,7 +59,7 @@ export function Polls() {
                 toast('마감일을 변경하면 투표를 다시 열 수 있어요.');
                 return;
             }
-            await app.savePoll({ ...poll, status: isOpen(poll) ? 'closed' : 'open' });
+            await app.savePoll({ ...poll, status: isOpen(poll) ? 'closed' : 'open' }, true);
             toast(isOpen(poll) ? '투표를 마감했어요.' : '투표를 다시 열었어요.');
         }
         catch (error) {
@@ -391,7 +391,7 @@ function PollEditor({ poll, onClose, onSaved }: {
         const next: Poll = { id: poll?.id ?? uid(), title: title.trim(), description: description.trim(), slots: nextSlots, slotIds: nextSlots.map(slot => slot.id), timeWindows: windows, slotMinutes, deadline: noDeadline ? null : new Date(deadline).toISOString(), status: 'open', creatorId: poll?.creatorId ?? app.user.id, createdAt: poll?.createdAt ?? now, updatedAt: poll?.updatedAt ?? now };
         setBusy(true);
         try {
-            await app.savePoll(next);
+            await app.savePoll(next, !!poll);
             toast(poll ? '투표를 수정했어요.' : '새 투표를 만들었어요.');
             onSaved(next);
         }
@@ -446,11 +446,11 @@ function ConfirmPoll({ poll, range, onClose }: {
     const [busy, setBusy] = useState(false);
     return <Modal title={t("모임 일정 확정")} onClose={() => !busy && onClose()} footer={<><Button variant="secondary" disabled={busy} onClick={onClose}>{t("취소")}</Button><Button type="submit" form="poll-confirm" icon={CalendarCheck} loading={busy}>{t("확정하기")}</Button></>}><form id="poll-confirm" className="stack" onSubmit={async (event) => { event.preventDefault(); if (!slotId || !location.trim())
         return; setBusy(true); try {
-        await app.confirmPoll(poll.id, slotId, location.trim(), endSlotId);
+        const eventId = await app.confirmPoll(poll.id, slotId, location.trim(), endSlotId);
         toast('일정을 확정하고 캘린더에 추가했어요.');
         if (!app.isDemo && app.isAdmin && app.settings.smsEnabled && app.settings.smsAutoOnConfirm) {
             try {
-                await notifyEventConfirmed(poll.eventId ?? `poll-${poll.id}`);
+                await notifyEventConfirmed(eventId);
             }
             catch {
                 toast('일정은 확정됐어요. 문자 알림에서 발송 결과를 확인해 주세요.', 'error');
