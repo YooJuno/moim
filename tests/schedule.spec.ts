@@ -287,7 +287,7 @@ test('mobile calendar selection and shared-time form fit a 390px screen', async 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   const day = page.locator('.calendar-main .schedule-day[aria-label^="2026년 10월 27일"]');
   await day.tap();
-  await expect(page.locator('.calendar-agenda')).toContainText('커피 한 잔, 함께해요');
+  await expect(page.getByRole('dialog').locator('.calendar-agenda')).toContainText('커피 한 잔, 함께해요');
 });
 
 test('touch scrolling cancels the hold timer without selecting any slots',async({page})=>{

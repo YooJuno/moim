@@ -2,13 +2,14 @@ import { useI18n } from "../lib/preferences";
 import { useEffect, useRef, useState } from 'react';
 import { CalendarDays, Check, Clock3, Copy, Link2, MapPin, MessageCircle, Share2, UsersRound } from 'lucide-react';
 import { useApp } from '../lib/store';
-import type { MoimEvent } from '../lib/types';
+import type { MoimEvent, Poll } from '../lib/types';
 import { errorMessage, formatDate } from '../lib/utils';
 import { kakaoShareConfigured, prepareKakaoShare, shareWithKakao } from '../lib/kakao-share';
 import { Button, Modal, useToast } from './ui';
 import './invite-share.css';
-export function InviteShare({ event, onClose }: {
+export function InviteShare({ event, poll, onClose }: {
     event?: MoimEvent;
+    poll?: Poll;
     onClose: () => void;
 }) {
     const { t } = useI18n();
@@ -20,9 +21,11 @@ export function InviteShare({ event, onClose }: {
     const [kakaoFailed, setKakaoFailed] = useState(false);
     const input = useRef<HTMLInputElement>(null);
     const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-    const url = new URL(event ? `/calendar?event=${encodeURIComponent(event.id)}` : '/', window.location.origin).href;
-    const title = event ? `${settings.name} · ${event.title}` : settings.name;
-    const text = event ? `${formatDate(event.date)} ${event.start}–${event.end}${event.location ? `\n${event.location}` : ''}` : '모임 초대';
+    const url = new URL(poll ? `/polls?poll=${encodeURIComponent(poll.id)}` : event ? `/calendar?event=${encodeURIComponent(event.id)}` : '/', window.location.origin).href;
+    const title = poll ? `${settings.name} · ${poll.title}` : event ? `${settings.name} · ${event.title}` : settings.name;
+    const dates = poll ? [...new Set(poll.slots.map(slot => slot.date))].sort() : [];
+    const dateRange = dates.length ? `${formatDate(dates[0])}${dates.length > 1 ? `–${formatDate(dates.at(-1)!)}` : ''}` : '';
+    const text = poll ? [t('가능한 시간을 선택해 주세요.'), dateRange].filter(Boolean).join('\n') : event ? `${formatDate(event.date)} ${event.start}–${event.end}${event.location ? `\n${event.location}` : ''}` : '모임 초대';
     useEffect(() => {
         let alive = true;
         if (kakaoShareConfigured)
@@ -94,7 +97,7 @@ export function InviteShare({ event, onClose }: {
             return;
         setBusy('kakao');
         try {
-            await shareWithKakao({ title, text, url, event: !!event });
+            await shareWithKakao({ title, text, url, event: !!event, poll: !!poll });
         }
         catch (error) {
             toast(errorMessage(error), 'error');
@@ -103,12 +106,13 @@ export function InviteShare({ event, onClose }: {
             setBusy(null);
         }
     };
-    return <Modal title={event ? t("일정 공유") : t("모임 초대")} onClose={onClose} footer={<Button variant="secondary" onClick={onClose}>{t("닫기")}</Button>}>
-    <div className="invite-summary"><div className="invite-symbol">{event ? <CalendarDays size={25}/> : <UsersRound size={25}/>}</div><div><span>{event ? settings.name : t("우리 모임")}</span><strong>{event?.title ?? settings.name}</strong>{event && <><p><Clock3 size={13}/>{formatDate(event.date)} · {event.start}–{event.end}</p>{event.location && <p><MapPin size={13}/>{event.location}</p>}</>}</div></div>
+    return <Modal title={poll ? t("투표 공유") : event ? t("일정 공유") : t("모임 초대")} onClose={onClose} footer={<Button variant="secondary" onClick={onClose}>{t("닫기")}</Button>}>
+    <div className="invite-summary"><div className="invite-symbol">{event || poll ? <CalendarDays size={25}/> : <UsersRound size={25}/>}</div><div><span>{event || poll ? settings.name : t("우리 모임")}</span><strong>{poll?.title ?? event?.title ?? settings.name}</strong>{poll && <><p><CalendarDays size={13}/>{dateRange}</p><p>{t('가능한 시간을 선택해 주세요.')}</p></>}{event && <><p><Clock3 size={13}/>{formatDate(event.date)} · {event.start}–{event.end}</p>{event.location && <p><MapPin size={13}/>{event.location}</p>}</>}</div></div>
     <div className="invite-url"><Link2 size={17}/><input ref={input} aria-label={t("공유 링크")} value={url} readOnly onFocus={e => e.currentTarget.select()}/></div>
     <div className="invite-actions"><Button variant="secondary" icon={copied ? Check : Copy} onClick={() => void copy()} disabled={busy !== null}>{copied ? t("복사됨") : t("링크 복사")}</Button><Button icon={Share2} loading={busy === 'native'} disabled={busy === 'kakao'} onClick={() => void nativeShare()}>{t("공유하기")}</Button></div>
     {kakaoShareConfigured && <Button className="invite-kakao" variant="secondary" icon={MessageCircle} loading={!kakaoReady && !kakaoFailed || busy === 'kakao'} disabled={!kakaoReady || busy === 'native'} onClick={() => void kakaoShare()}>{t("카카오톡 공유")}</Button>}
     {kakaoFailed && <p className="invite-share-error">{t("카카오톡 공유를 불러오지 못했어요. 링크를 복사해 주세요.")}</p>}
+    {(poll || event) && <p className="invite-caption">{t('카카오톡에서 보낼 채팅방을 선택해 주세요.')}</p>}
     <p className="invite-caption">{t("로그인 후 관리자 승인이 필요해요.")}</p>
   </Modal>;
 }

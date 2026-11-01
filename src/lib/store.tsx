@@ -16,6 +16,9 @@ import { errorMessage, uid } from './utils';
 import { observeAuthSession, signInWithGoogle } from './google-auth';
 import { reportError } from './telemetry';
 import { kickKakaoCalendarSync } from './social-auth';
+import { needsMemberName } from '../../shared/member-name';
+import { registrationComplete } from './registration';
+import { classifyBankTransactions, MAX_BANK_IMPORT_ROWS } from './bank-import';
 import type { TelemetryContext } from '../../shared/error-telemetry';
 
 function queueCalendarSync(batch: {set:(reference:DocumentReference<DocumentData>,data:DocumentData)=>unknown}, eventId: string, memberId: string) {
@@ -226,6 +229,24 @@ export function AppProvider({children}: {children: ReactNode}) {
       const bylaws={content:content.trim(),updatedAt:new Date().toISOString(),editorId:actor.id};
       if(isDemo) applyDemo({...dataRef.current,bylaws}); else await setDoc(doc(database(),'settings','bylaws'),bylaws);
     },
+    async importBankTransactions(transactions) {
+      const actor=active();if(!['leader','treasurer'].includes(actor.role))throw new Error('관리자와 회계 담당만 회계를 관리할 수 있어요.');
+      if(!transactions.length||transactions.length>MAX_BANK_IMPORT_ROWS||new Set(transactions.map(row=>row.id)).size!==transactions.length)throw new Error('가져올 거래내역을 다시 확인해 주세요.');
+      for(const row of transactions)if(!/^banktx-[a-f0-9]{64}$/.test(row.id)||!Number.isSafeInteger(row.amount)||row.amount<=0||row.amount>1e10||!['income','expense'].includes(row.type)||!/^\d{4}-\d{2}-\d{2}$/.test(row.date)||!row.description||row.description.length>1000||row.memo.length>2000)throw new Error('가져올 거래내역을 다시 확인해 주세요.');
+      const now=new Date().toISOString();
+      const build=(row:typeof transactions[number])=>({id:row.id,type:row.type,category:row.category,amount:row.amount,date:row.date,description:row.description,...(row.memo?{memo:row.memo}:{}),creatorId:actor.id,createdAt:row.createdAt,updatedAt:now});
+      if(isDemo){const current=dataRef.current;const rows=classifyBankTransactions(transactions,current.ledger),fresh=rows.filter(row=>!row.duplicateId);applyDemo({...current,ledger:[...current.ledger,...fresh.map(row=>build(row.transaction))]});return {added:fresh.length,skipped:rows.length-fresh.length};}
+      const snapshot=await getDocs(collection(database(),'ledger'));
+      const ledger=snapshot.docs.map(document=>({...document.data(),id:document.id} as AppData['ledger'][number]));
+      const rows=classifyBankTransactions(transactions,ledger);
+      return runTransaction(database(),async transaction=>{
+        const refs=[...new Set(rows.flatMap(row=>[row.transaction.id,...(row.duplicateId?[row.duplicateId]:[])]))];
+        const current=await Promise.all(refs.map(id=>transaction.get(doc(database(),'ledger',id))));
+        const exists=new Set(current.filter(document=>document.exists()).map(document=>document.id));let added=0;
+        for(const row of rows){if(exists.has(row.transaction.id)||(row.duplicateId&&exists.has(row.duplicateId)))continue;transaction.set(doc(database(),'ledger',row.transaction.id),build(row.transaction));added++;}
+        return {added,skipped:rows.length-added};
+      });
+    },
     async saveLedgerEntry(entry,editing=false) {
       const actor=active(); if(!['leader','treasurer'].includes(actor.role)) throw new Error('관리자와 회계 담당만 회계를 관리할 수 있어요.');
       const old=dataRef.current.ledger.find(item=>item.id===entry.id);
@@ -270,7 +291,8 @@ export function AppProvider({children}: {children: ReactNode}) {
     async saveProfile(id,profile) {
       if(!user || (id!==user.id && !isAdmin))throw new Error('프로필을 변경할 권한이 없어요.');
       const name=profile.name.trim(),phone=profile.phone.trim(),area=profile.area.trim(),birthday=profile.birthday?.trim();
-      if(!name || name.length>30 || phone.length>30 || area.length>100 || (birthday!==undefined && !validBirthday(birthday)))throw new Error('프로필 입력 내용을 확인해 주세요.');
+      if(id===user.id && user.status==='pending' && !registrationComplete(name,{phone,area,birthday:birthday ?? user.birthday}))throw new Error('이름·전화번호·거주 지역·생일을 모두 입력해 주세요.');
+      if(needsMemberName(name) || name.length>30 || phone.length>30 || area.length>100 || (birthday!==undefined && !validBirthday(birthday)))throw new Error('프로필 입력 내용을 확인해 주세요.');
       const build=(current?:AppData['profiles'][number],member?:Member)=>{const value=birthday===undefined ? member?.birthday ?? current?.birthday:birthday;return {id,phone,area,...(value ? {birthday:value}:{}),...(current?.language ? {language:current.language}:{}),...(current?.theme ? {theme:current.theme}:{})};};
       if(isDemo){const current=dataRef.current;const next=build(current.profiles.find(item=>item.id===id),current.members.find(member=>member.id===id));applyDemo({...current,members:current.members.map(member=>{if(member.id!==id)return member;const {birthday:_oldBirthday,...fields}=member;return {...fields,name,...(next.birthday ? {birthday:next.birthday}:{})};}),profiles:replace(current.profiles,next)});}
       else await runTransaction(database(),async transaction=>{const profileRef=doc(database(),'profiles',id),memberRef=doc(database(),'members',id);const [snapshot,member]=await Promise.all([transaction.get(profileRef),transaction.get(memberRef)]);const next=build(snapshot.exists() ? snapshot.data() as AppData['profiles'][number]:undefined,member.exists() ? member.data() as Member:undefined);transaction.update(memberRef,{name,birthday:next.birthday ?? deleteField()});transaction.set(profileRef,next);});

@@ -29,9 +29,9 @@ export function prepareKakaoShare(): Promise<KakaoShareSdk> {
   return loading;
 }
 
-export async function shareWithKakao({ title, text, url, event = false }: { title: string; text: string; url: string; event?: boolean }): Promise<void> {
+export async function shareWithKakao({ title, text, url, event = false, poll = false }: { title: string; text: string; url: string; event?: boolean; poll?: boolean }): Promise<void> {
   const sdk = await prepareKakaoShare();
   const link = new URL(url);
   if (!['https:', 'http:'].includes(link.protocol) || link.origin !== window.location.origin) throw new Error('공유할 링크를 확인해 주세요.');
-  await sdk.Share.sendDefault({ objectType: 'text', text: [title, text].filter(Boolean).join('\n').slice(0, 200), link: { webUrl: link.href, mobileWebUrl: link.href }, buttonTitle: event ? '일정 보기' : '모임 열기' });
+  await sdk.Share.sendDefault({ objectType: 'text', text: [title, text].filter(Boolean).join('\n').slice(0, 200), link: { webUrl: link.href, mobileWebUrl: link.href }, buttonTitle: poll ? '투표하기' : event ? '일정 보기' : '모임 열기' });
 }

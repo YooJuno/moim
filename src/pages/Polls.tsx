@@ -2,11 +2,12 @@ import { translate } from "../lib/i18n";
 import { useI18n } from "../lib/preferences";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowRight, BarChart3, CalendarCheck, Check, CheckCheck, ChevronRight, Clock3, ListChecks, Pencil, Plus, Trash2, Trophy, Users, X } from 'lucide-react';
+import { ArrowRight, BarChart3, CalendarCheck, Check, CheckCheck, ChevronRight, Clock3, ListChecks, Pencil, Plus, Share2, Trash2, Trophy, Users, X } from 'lucide-react';
 import { useApp } from '../lib/store';
 import type { Poll, PollSlot, Vote } from '../lib/types';
 import { errorMessage, formatDate, formatTime, memberName, shortDate, slotLabel, today, uid } from '../lib/utils';
 import { PlacePicker } from '../components/PlacePicker';
+import { InviteShare } from '../components/InviteShare';
 import { AddressField } from '../components/AddressField';
 import { TimeInput } from '../components/TimeInput';
 import { notifyEventConfirmed } from '../lib/sms';
@@ -126,7 +127,9 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
     const [unavailable, setUnavailable] = useState(!!ownVote && ownVote.slotIds.length === 0);
     const [saving, setSaving] = useState(false);
     const [showParticipants, setShowParticipants] = useState(false);
+    const [shareOpen, setShareOpen] = useState(false);
     const grid = useRef<HTMLDivElement>(null);
+    const dragScroll = useRef<{ frame: number; x: number; y: number; last: number } | null>(null);
     const touchPress = useRef<{pointerId:number;owner:HTMLButtonElement;id:string;row:number;column:number;x:number;y:number;timer:ReturnType<typeof setTimeout>}|null>(null);
     const dragState = useRef<{
         pointerId: number;
@@ -146,6 +149,8 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
     const interactive = open && app.canParticipate;
     const manageable = canManage(poll, app.user?.id, app.isAdmin, app.canCreatePoll) && poll.status !== 'confirmed';
     const finishDrag = (cancel = false) => {
+        if(dragScroll.current)cancelAnimationFrame(dragScroll.current.frame);
+        dragScroll.current=null;
         if(touchPress.current)clearTimeout(touchPress.current.timer);
         touchPress.current=null;
         const state = dragState.current;
@@ -157,11 +162,11 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
         if (state && owner?.hasPointerCapture(state.pointerId))
             owner.releasePointerCapture(state.pointerId);
     };
-    useEffect(() => () => finishDrag(true), []);
-    useEffect(() => { if (!interactive || saving || busy)
-        finishDrag(true); }, [interactive, saving, busy]);
+    useEffect(() => () => finishDrag(true), [poll.id,poll.slots]);
+    useEffect(() => { if (!interactive || saving || busy || shareOpen)
+        finishDrag(true); }, [interactive, saving, busy, shareOpen]);
     const toggleSlot = (id: string) => { setUnavailable(false); setSelected(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]); };
-    const activateDrag = (owner:HTMLButtonElement,pointerId:number,id:string,row:number,column:number) => {
+    const activateDrag = (owner:HTMLButtonElement,pointerId:number,id:string,row:number,column:number,x:number,y:number) => {
         const selecting = !selected.includes(id);
         dragState.current = { pointerId, selecting, row, column, visited: new Set([id]) };
         dragOwner.current = owner;
@@ -170,6 +175,7 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
         catch { /* Synthetic pointer events have no active capture target. */ }
         setUnavailable(false);
         setSelected(current => selecting ? [...new Set([...current, id])] : current.filter(value => value !== id));
+        trackDrag(x,y);
     };
     const beginDrag = (event: React.PointerEvent<HTMLButtonElement>, id: string, row: number, column: number) => {
         if (!interactive || saving || busy || (event.pointerType === 'mouse' && event.button !== 0))return;
@@ -178,12 +184,12 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
             const press={pointerId:event.pointerId,owner:event.currentTarget,id,row,column,x:event.clientX,y:event.clientY,timer:setTimeout(()=>{
                 if(touchPress.current!==press)return;
                 touchPress.current=null;
-                activateDrag(press.owner,press.pointerId,press.id,press.row,press.column);
+                activateDrag(press.owner,press.pointerId,press.id,press.row,press.column,press.x,press.y);
             },350)};
             touchPress.current=press;
             return;
         }
-        event.preventDefault();activateDrag(event.currentTarget,event.pointerId,id,row,column);
+        event.preventDefault();activateDrag(event.currentTarget,event.pointerId,id,row,column,event.clientX,event.clientY);
     };
     const paintAt = (x:number,y:number) => {
         const state=dragState.current;if(!state)return;
@@ -200,14 +206,41 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
         }
         if(nextIds.length)setSelected(current=>state.selecting?[...new Set([...current,...nextIds])]:current.filter(id=>!nextIds.includes(id)));
     };
+    const trackDrag = (x:number,y:number) => {
+        if(!dragState.current)return;
+        if(dragScroll.current){dragScroll.current.x=x;dragScroll.current.y=y;return;}
+        const scroll={frame:0,x,y,last:0};dragScroll.current=scroll;
+        const step=(time:number)=>{
+            const element=grid.current;
+            if(dragScroll.current!==scroll||!dragState.current||!element)return;
+            const rect=element.getBoundingClientRect(),body=element.closest('.modal-body')?.getBoundingClientRect();
+            const left=Math.max(rect.left,0),right=Math.min(rect.right,window.innerWidth);
+            const top=Math.max(rect.top,body?.top??0,0),bottom=Math.min(rect.bottom,body?.bottom??window.innerHeight,window.innerHeight);
+            if(right>left&&bottom>top){
+                const speed=(point:number,min:number,max:number)=>point<min+32?-Math.min(1,(min+32-point)/32)*10:point>max-32?Math.min(1,(point-max+32)/32)*10:0;
+                const elapsed=scroll.last?Math.min(32,time-scroll.last)/16.67:1;scroll.last=time;
+                const beforeX=element.scrollLeft,beforeY=element.scrollTop;
+                element.scrollLeft+=speed(scroll.x,left,right)*elapsed;
+                element.scrollTop+=speed(scroll.y,top,bottom)*elapsed;
+                if(element.scrollLeft!==beforeX||element.scrollTop!==beforeY){
+                    const labelWidth=element.querySelector('tbody th')?.getBoundingClientRect().width??0;
+                    const headerHeight=element.querySelector('thead')?.getBoundingClientRect().height??0;
+                    // Hit-test a visible data cell, beyond the sticky time and date headers.
+                    paintAt(Math.min(right-3,Math.max(left+labelWidth+3,scroll.x)),Math.min(bottom-3,Math.max(top+headerHeight+3,scroll.y)));
+                }
+            }
+            scroll.frame=requestAnimationFrame(step);
+        };
+        scroll.frame=requestAnimationFrame(step);
+    };
     const moveDrag = (event:React.PointerEvent<HTMLButtonElement>) => {
         const press=touchPress.current;
         if(press&&Math.hypot(event.clientX-press.x,event.clientY-press.y)>10)finishDrag(true);
         if(!dragState.current||dragState.current.pointerId!==event.pointerId||!interactive||saving||busy)return;
-        event.preventDefault();paintAt(event.clientX,event.clientY);
+        event.preventDefault();paintAt(event.clientX,event.clientY);trackDrag(event.clientX,event.clientY);
     };
     useEffect(()=>{
-        const element=grid.current;if(!element||!interactive||saving||busy)return;
+        const element=grid.current;if(!element||!interactive||saving||busy||shareOpen)return;
         // A non-passive listener keeps native scrolling available until the hold activates.
         const move=(event:TouchEvent)=>{
             if(event.touches.length!==1){finishDrag(true);return;}
@@ -215,7 +248,7 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
             if(press&&Math.hypot(touch.clientX-press.x,touch.clientY-press.y)>10)finishDrag(true);
             if(!dragState.current)return;
             if(event.cancelable)event.preventDefault();
-            paintAt(touch.clientX,touch.clientY);
+            paintAt(touch.clientX,touch.clientY);trackDrag(touch.clientX,touch.clientY);
         };
         const start=(event:TouchEvent)=>{if(event.touches.length!==1)finishDrag(true);};
         const cancel=()=>finishDrag(true);
@@ -223,7 +256,7 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
         element.addEventListener('touchmove',move,{passive:false});
         element.addEventListener('touchcancel',cancel);
         return()=>{element.removeEventListener('touchstart',start);element.removeEventListener('touchmove',move);element.removeEventListener('touchcancel',cancel);};
-    },[interactive,saving,busy,poll.id,poll.slots]);
+    },[interactive,saving,busy,poll.id,poll.slots,shareOpen]);
     const participantIds = new Set(votes.map(v => v.memberId));
     const waiting = app.members.filter(m => m.status === 'active' && !participantIds.has(m.id));
     const save = async () => { setSaving(true); try {
@@ -236,7 +269,8 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
     finally {
         setSaving(false);
     } };
-    return <Modal title={poll.title} onClose={onClose} wide className="poll-detail-modal" footer={<div className="poll-detail-footer"><div className="poll-detail-tools">{manageable && <><IconButton label={t("투표 수정")} icon={Pencil} onClick={onEdit} disabled={busy || saving}/><IconButton label={t("투표 삭제")} icon={Trash2} onClick={onDelete} disabled={busy || saving}/><Button variant="ghost" size="sm" onClick={onStatus} loading={busy}>{open ? t("투표 마감") : t("다시 열기")}</Button></>}</div><div className="poll-detail-actions">{app.isAdmin && poll.status !== 'confirmed' && <Button variant="secondary" icon={CalendarCheck} onClick={() => onConfirm()} disabled={busy || saving}>{t("일정 확정")}</Button>}{interactive ? <Button icon={Check} loading={saving} disabled={(!selected.length && !unavailable) || busy} onClick={save}>{ownVote ? t("선택 수정하기") : t("선택 저장하기")}</Button> : <Button variant="secondary" onClick={onClose}>{t("닫기")}</Button>}</div></div>}>
+    if (shareOpen) return <InviteShare poll={poll} onClose={() => setShareOpen(false)}/>;
+    return <Modal title={poll.title} onClose={onClose} wide className="poll-detail-modal" footer={<div className="poll-detail-footer"><div className="poll-detail-tools"><Button variant="ghost" size="sm" icon={Share2} aria-label={t("투표 공유")} onClick={() => setShareOpen(true)}>{t("공유")}</Button>{manageable && <><IconButton label={t("투표 수정")} icon={Pencil} onClick={onEdit} disabled={busy || saving}/><IconButton label={t("투표 삭제")} icon={Trash2} onClick={onDelete} disabled={busy || saving}/><Button variant="ghost" size="sm" onClick={onStatus} loading={busy}>{open ? t("투표 마감") : t("다시 열기")}</Button></>}</div><div className="poll-detail-actions">{app.isAdmin && poll.status !== 'confirmed' && <Button variant="secondary" icon={CalendarCheck} onClick={() => onConfirm()} disabled={busy || saving}>{t("일정 확정")}</Button>}{interactive ? <Button icon={Check} loading={saving} disabled={(!selected.length && !unavailable) || busy} onClick={save}>{ownVote ? t("선택 수정하기") : t("선택 저장하기")}</Button> : <Button variant="secondary" onClick={onClose}>{t("닫기")}</Button>}</div></div>}>
     <div className="poll-detail-meta"><Badge tone={poll.status === 'confirmed' ? 'green' : open ? 'blue' : 'gray'}>{poll.status === 'confirmed' ? t("일정 확정") : open ? t("투표 중") : t("마감")}</Badge><span><Clock3 size={14}/>{poll.deadline ? <>{formatDate(poll.deadline)} {t("{0} 마감", {"0":formatTime(poll.deadline)})}</> : t("마감 없음")}</span></div>
     {poll.description && <p className="poll-detail-description">{poll.description}</p>}
     {interactive && ownVote?.slotIds.some(id => !poll.slotIds.includes(id)) && <p className="poll-vote-changed">{t("후보 시간이 변경됐어요. 선택을 확인하고 다시 저장해 주세요.")}</p>}

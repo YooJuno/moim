@@ -3,14 +3,15 @@ import { GoogleAuthProvider, linkWithPopup, signInWithCustomToken, signOut } fro
 import { auth } from './firebase';
 import { getAuthAPIURL } from './api-url';
 import { reportError } from './telemetry';
+import { sharedDestination, validSharedDestination } from './share-target';
 export { getAuthAPIURL } from './api-url';
 
 export type SocialProvider='kakao'|'naver';
 export type SocialIntent='signin'|'link';
 export interface AuthProviderConfig {providers:{kakao:boolean;naver:boolean};calendar:{kakao:boolean}}
 export interface AccountProviders {google:boolean;kakao:boolean;naver:boolean;calendar:{kakao:boolean;available?:boolean;automatic?:boolean}}
-export interface SocialAuthResult {uid:string;provider:SocialProvider;intent:SocialIntent;calendarEventId?:string}
-interface Attempt {version:1;provider:SocialProvider;intent:SocialIntent;verifier:string;createdAt:number;origin:string;apiURL:string;uid?:string;calendarEventId?:string;automatic?:boolean}
+export interface SocialAuthResult {uid:string;provider:SocialProvider;intent:SocialIntent;calendarEventId?:string;returnTo?:string}
+interface Attempt {version:1;provider:SocialProvider;intent:SocialIntent;verifier:string;createdAt:number;origin:string;apiURL:string;uid?:string;calendarEventId?:string;automatic?:boolean;returnTo?:string}
 export const SOCIAL_ATTEMPT_KEY='moim-social-auth:v1';
 const ATTEMPT_MAX_AGE=10*60*1000;
 const emptyConfig=():AuthProviderConfig=>({providers:{kakao:false,naver:false},calendar:{kakao:false}});
@@ -51,7 +52,8 @@ export async function startSocialAuth(provider:SocialProvider,intent:SocialInten
   const apiURL=getAuthAPIURL();const config=await fetchAuthProviderConfig();if(!apiURL||!config?.providers[provider]||!auth)throw new Error('지금은 이 로그인 방식을 사용할 수 없어요.');
   if(options.calendar&&!config.calendar.kakao)throw new Error('지금은 카카오 캘린더를 사용할 수 없어요.');
   if(intent==='link')await auth.authStateReady();const user=auth.currentUser;if(intent==='link'&&!user)throw new Error('먼저 기존 계정으로 로그인해 주세요.');
-  const proof=await createSocialProof();const attempt:Attempt={version:1,provider,intent,verifier:proof.verifier,createdAt:Date.now(),origin:window.location.origin,apiURL,...(intent==='link'&&user?{uid:user.uid}:{}),...(options.calendar&&options.eventId?{calendarEventId:options.eventId}:{}),...(options.automatic?{automatic:true}:{})};
+  const returnTo=intent==='signin'?sharedDestination(window.location.pathname,window.location.search):undefined;
+  const proof=await createSocialProof();const attempt:Attempt={version:1,provider,intent,verifier:proof.verifier,createdAt:Date.now(),origin:window.location.origin,apiURL,...(returnTo?{returnTo}:{}),...(intent==='link'&&user?{uid:user.uid}:{}),...(options.calendar&&options.eventId?{calendarEventId:options.eventId}:{}),...(options.automatic?{automatic:true}:{})};
   try{window.sessionStorage.setItem(SOCIAL_ATTEMPT_KEY,JSON.stringify(attempt));}catch{throw new Error('이 브라우저에서 로그인 요청을 저장하지 못했어요. 브라우저 설정을 확인해 주세요.');}
   try{
     if(intent==='signin'){const url=new URL(`oauth/${provider}/start`,apiURL);url.searchParams.set('challenge',proof.challenge);url.searchParams.set('returnOrigin',attempt.origin);url.searchParams.set('intent','signin');window.location.assign(url.href);return;}
@@ -66,7 +68,7 @@ function takeAttempt(params:URLSearchParams):Attempt{
   if(!raw)throw new Error('이 브라우저에서 시작한 로그인 요청이 없어요. 다시 시작해 주세요.');
   let attempt:unknown;try{attempt=JSON.parse(raw);}catch{throw new Error('로그인 요청을 확인하지 못했어요. 다시 시작해 주세요.');}
   const provider=params.get('provider'),intent=params.get('intent');
-  if(!object(attempt)||attempt.version!==1||!isProvider(attempt.provider)||!isIntent(attempt.intent)||typeof attempt.verifier!=='string'||!/^[A-Za-z0-9_-]{43,128}$/.test(attempt.verifier)||typeof attempt.createdAt!=='number'||attempt.origin!==window.location.origin||attempt.apiURL!==getAuthAPIURL()||provider!==attempt.provider||intent!==attempt.intent||params.getAll('provider').length!==1||params.getAll('intent').length!==1||(attempt.intent==='link'&&!validUID(attempt.uid))||(attempt.automatic!==undefined&&(attempt.automatic!==true||attempt.provider!=='kakao'||attempt.intent!=='link'))||(attempt.calendarEventId!==undefined&&(attempt.provider!=='kakao'||attempt.intent!=='link'||typeof attempt.calendarEventId!=='string'||!/^[A-Za-z0-9:_-]{1,128}$/.test(attempt.calendarEventId))))throw new Error('로그인 요청이 일치하지 않아요. 다시 시작해 주세요.');
+  if(!object(attempt)||attempt.version!==1||!isProvider(attempt.provider)||!isIntent(attempt.intent)||typeof attempt.verifier!=='string'||!/^[A-Za-z0-9_-]{43,128}$/.test(attempt.verifier)||typeof attempt.createdAt!=='number'||attempt.origin!==window.location.origin||attempt.apiURL!==getAuthAPIURL()||(attempt.returnTo!==undefined&&(attempt.intent!=='signin'||!validSharedDestination(attempt.returnTo)))||provider!==attempt.provider||intent!==attempt.intent||params.getAll('provider').length!==1||params.getAll('intent').length!==1||(attempt.intent==='link'&&!validUID(attempt.uid))||(attempt.automatic!==undefined&&(attempt.automatic!==true||attempt.provider!=='kakao'||attempt.intent!=='link'))||(attempt.calendarEventId!==undefined&&(attempt.provider!=='kakao'||attempt.intent!=='link'||typeof attempt.calendarEventId!=='string'||!/^[A-Za-z0-9:_-]{1,128}$/.test(attempt.calendarEventId))))throw new Error('로그인 요청이 일치하지 않아요. 다시 시작해 주세요.');
   if(Date.now()-attempt.createdAt>ATTEMPT_MAX_AGE||attempt.createdAt>Date.now()+60000)throw new Error('로그인 요청이 만료됐어요. 다시 시작해 주세요.');
   return attempt as unknown as Attempt;
 }
@@ -82,7 +84,7 @@ export async function exchangeSocialCallback(params:URLSearchParams):Promise<Soc
   if(attempt.intent==='link'){if(data.linked!==true||data.uid!==attempt.uid||auth.currentUser?.uid!==attempt.uid)throw new Error('연결할 계정이 일치하지 않아요. 기존 계정으로 다시 로그인해 주세요.');if(attempt.automatic&&attempt.calendarEventId)kickKakaoCalendarSync(attempt.calendarEventId);return {uid:data.uid,provider:attempt.provider,intent:'link',...(attempt.calendarEventId?{calendarEventId:attempt.calendarEventId}:{})};}
   if(typeof data.firebaseCustomToken!=='string'||!data.firebaseCustomToken||data.firebaseCustomToken.length>16384)throw new Error('로그인 응답을 확인하지 못했어요. 다시 시작해 주세요.');
   const credential=await signInWithCustomToken(auth,data.firebaseCustomToken);if(credential.user.uid!==data.uid){await signOut(auth);throw new Error('로그인 계정이 일치하지 않아요. 다시 시작해 주세요.');}
-  return {uid:data.uid,provider:attempt.provider,intent:'signin'};
+  return {uid:data.uid,provider:attempt.provider,intent:'signin',...(attempt.returnTo?{returnTo:attempt.returnTo}:{})};
 }
 
 export async function getAccountProviders():Promise<AccountProviders>{

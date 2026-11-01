@@ -459,6 +459,17 @@ describe.skipIf(!enabled)('Firebase access boundaries',()=>{
     await assertFails(updateDoc(doc(db,'members','pending'),{status:'active'}));
   });
 
+  it('imports a large receipt-free bank batch atomically while blocking unauthorized or inconsistent receipts',async()=>{
+    const db=client('treasurer'),batch=writeBatch(db);
+    for(let i=0;i<110;i++){const id=`banktx-${i.toString(16).padStart(64,'0')}`;batch.set(doc(db,'ledger',id),ledger(id));}
+    await assertSucceeds(batch.commit());
+    const id=`banktx-${'f'.repeat(64)}`,invalid=writeBatch(db);
+    invalid.set(doc(db,'ledger',id),ledger(id));
+    invalid.set(doc(db,'receipts',id),{entryId:id,fileName:'receipt.jpg',imageURL:'data:image/jpeg;base64,aGVsbG8=',uploadedBy:'treasurer',updatedAt:now});
+    await assertFails(invalid.commit());
+    await assertFails(setDoc(doc(client('member'),'ledger',id),ledger(id,'member')));
+  });
+
   it('supports optional bounded ledger notes with unchanged author and receipt protections',async()=>{
     const db=client('treasurer');const entry=doc(db,'ledger','l1');
     await assertSucceeds(setDoc(doc(db,'ledger','notes'),{...ledger('notes'),memo:'대관료, "현장 결제"\n다음 달 정산'}));

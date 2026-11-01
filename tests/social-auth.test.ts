@@ -28,6 +28,23 @@ describe('social login configuration and proof',()=>{
   it('uses a fresh 256-bit verifier and SHA256 base64url challenge',async()=>{const proof=await createSocialProof();expect(proof.verifier).toMatch(/^[A-Za-z0-9_-]{43}$/);const digest=await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(proof.verifier));expect(proof.challenge).toBe(Buffer.from(digest).toString('base64url'));expect((await createSocialProof()).verifier).not.toBe(proof.verifier);});
 });
 
+describe('shared link after social login',()=>{
+  it('stores a clean poll destination with the one-use login attempt',async()=>{
+    Object.assign(window.location,{pathname:'/polls',search:'?poll=poll-weekend&token=private'});
+    fetcher.mockResolvedValueOnce(json(config));await startSocialAuth('kakao');
+    expect(JSON.parse(storage.getItem(SOCIAL_ATTEMPT_KEY)!).returnTo).toBe('/polls?poll=poll-weekend');
+  });
+  it('returns the selected poll after successful authentication',async()=>{
+    attempt('signin',{returnTo:'/polls?poll=poll-weekend'});
+    fetcher.mockResolvedValueOnce(json({uid:'new-uid',provider:'kakao',intent:'signin',firebaseCustomToken:'test-token'}));
+    sdk.signin.mockResolvedValueOnce({user:{uid:'new-uid'}});
+    const result=await exchangeSocialCallback(callback());expect(result.returnTo).toBe('/polls?poll=poll-weekend');
+  });
+  it.each(['https://evil.test/','//evil.test/','/profile','/polls?poll=x&token=secret'])('rejects unsafe saved destination %s',async returnTo=>{
+    attempt('signin',{returnTo});await expect(exchangeSocialCallback(callback())).rejects.toThrow('로그인 요청이 일치하지');expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
 describe('starting authorization',()=>{
   it('persists proof before signin navigation without exposing the verifier in the URL',async()=>{fetcher.mockResolvedValueOnce(json(config));assign.mockImplementation(()=>{expect(storage.getItem(SOCIAL_ATTEMPT_KEY)).not.toBeNull();});await startSocialAuth('kakao');const destination=new URL(assign.mock.calls[0][0]);const stored=JSON.parse(storage.getItem(SOCIAL_ATTEMPT_KEY)!);expect(destination.origin).toBe('https://auth.example.test');expect(destination.pathname).toBe('/oauth/kakao/start');expect(destination.searchParams.get('challenge')).toMatch(/^[A-Za-z0-9_-]{43}$/);expect(destination.searchParams.get('returnOrigin')).toBe(origin);expect(destination.searchParams.has('verifier')).toBe(false);expect(stored).toMatchObject({provider:'kakao',intent:'signin',origin});expect(stored.uid).toBeUndefined();});
   it('authenticates link start and binds it to the current Firebase UID',async()=>{signedIn();fetcher.mockResolvedValueOnce(json(config)).mockResolvedValueOnce(json({authorizationUrl:'https://kauth.kakao.com/oauth/authorize?state=opaque'}));await startSocialAuth('kakao','link');const [url,request]=fetcher.mock.calls[1];expect(String(url)).toBe(`${base}oauth/kakao/link/start`);expect(request.headers.Authorization).toBe('Bearer firebase-id-token');expect(JSON.parse(request.body)).toMatchObject({returnOrigin:origin});expect(JSON.parse(request.body).verifier).toBeUndefined();expect(JSON.parse(storage.getItem(SOCIAL_ATTEMPT_KEY)!)).toMatchObject({intent:'link',uid:'existing-uid'});expect(assign).toHaveBeenCalledWith('https://kauth.kakao.com/oauth/authorize?state=opaque');});

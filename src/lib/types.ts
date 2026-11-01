@@ -1,3 +1,4 @@
+import type { BankTransaction } from './bank-import';
 export type Role = 'leader' | 'treasurer' | 'member';
 export type MemberStatus = 'active' | 'pending' | 'rejected';
 export interface Member { removedAt?: string; removedBy?: string; id: string; name: string; email: string; photoURL?: string; isRoster?: boolean; position?: string; birthday?: string; role: Role; status: MemberStatus; canCreatePoll: boolean; joinedAt: string }
@@ -35,6 +36,7 @@ export interface AppContextValue extends AppData {
   saveSettings: (settings: Settings) => Promise<void>;
   savePreferences: (preferences: UserPreferences) => Promise<void>;
   saveProfile: (id: string, data: { name: string; phone: string; area: string; birthday?: string }) => Promise<void>;
+  importBankTransactions: (transactions: BankTransaction[]) => Promise<{ added: number; skipped: number }>;
   removeMember: (id: string) => Promise<void>;
   updateMember: (id: string, patch: Partial<Pick<Member, 'role' | 'status' | 'canCreatePoll' | 'position'>>) => Promise<void>;
   addRosterMember: (data: { name: string; phone: string; area: string; birthday?: string; position?: string }) => Promise<void>;

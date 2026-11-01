@@ -92,6 +92,6 @@ test('a failed app bootstrap displays recovery and reloads the working app after
   await expect(recovery.getByRole('heading', { name: '화면을 불러오지 못했어요.', exact: true })).toBeVisible();
   await page.unroute(bootstrap);
   await recovery.getByRole('button', { name: '다시 불러오기', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '모임 홈', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '오후의 모임', exact: true })).toBeVisible();
   await expect(recovery).toHaveCount(0);
 });

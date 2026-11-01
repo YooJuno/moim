@@ -1,8 +1,9 @@
 import { getLocale } from "../lib/i18n";
 import { useI18n } from "../lib/preferences";
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Download, ImagePlus, LoaderCircle, Plus, ReceiptText, Trash2, Wallet, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Download, ImagePlus, LoaderCircle, Plus, ReceiptText, Trash2, Upload, Wallet, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { useApp } from '../lib/store';
+import { BankImport } from '../components/BankImport';
 import type { LedgerEntry, Receipt } from '../lib/types';
 import { errorMessage, formatDate, memberName, today, uid } from '../lib/utils';
 import { Badge, Button, EmptyState, Field, IconButton, Modal, PageHeader, useToast } from '../components/ui';
@@ -21,6 +22,7 @@ export function Ledger() {
     const [allMonths, setAllMonths] = useState(false);
     const [type, setType] = useState<'all' | 'income' | 'expense'>('all');
     const [editor, setEditor] = useState<LedgerEntry | 'new' | null>(null);
+    const [importOpen, setImportOpen] = useState(false);
     const [receiptEntry, setReceiptEntry] = useState<LedgerEntry | null>(null);
     const balance = app.ledger.reduce((total, item) => total + (item.type === 'income' ? item.amount : -item.amount), 0);
     const monthly = useMemo(() => app.ledger.filter(item => allMonths || item.date.startsWith(month)), [app.ledger, allMonths, month]);
@@ -32,7 +34,7 @@ export function Ledger() {
         toast('내보낼 내역이 없어요.', 'error');
         return;
     } const rows = [['날짜', '구분', '분류', '내용', '비고', '금액(원)', '관련 멤버'].map(label=>t(label)), ...entries.map(item => [item.date, item.type === 'income' ? t('수입') : t('지출'), ledgerCategories.includes(item.category) ? t(item.category) : item.category, item.description, item.memo ?? '', item.amount, item.memberId ? memberName(app.members, item.memberId) : ''])]; const blob = new Blob(['\ufeff' + rows.map(row => row.map(csvCell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = t("모임_회계장부_{0}.csv", {"0":allMonths ? t("전체") : month}); link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
-    return <div className="page ledger-page"><PageHeader title={t("회계 장부")} action={<div className="ledger-header-actions"><Button variant="secondary" icon={Download} onClick={download}>{t("내보내기")}</Button>{canManage && <Button icon={Plus} onClick={() => setEditor('new')}>{t("내역 추가")}</Button>}</div>}/>
+    return <div className="page ledger-page"><PageHeader title={t("회계 장부")} action={<div className="ledger-header-actions"><Button variant="secondary" icon={Download} onClick={download}>{t("내보내기")}</Button>{canManage && <Button className="ledger-import-trigger" variant="secondary" icon={Upload} onClick={() => setImportOpen(true)}>{t("엑셀 가져오기")}</Button>}{canManage && <Button icon={Plus} onClick={() => setEditor('new')}>{t("내역 추가")}</Button>}</div>}/>
     <div className="ledger-summary-grid"><div className="card ledger-summary ledger-balance"><div><span className="ledger-summary-icon"><Wallet size={22}/></span><span>{t("현재 잔액")}</span></div><strong>{money(balance)}<small>{t("원")}</small></strong><span>{t("전체 수입 \u2212 전체 지출")}</span></div><div className="card ledger-summary"><div><span className="ledger-summary-icon income"><ArrowDownLeft size={21}/></span><span>{allMonths ? t("전체 수입") : t("선택 기간 수입")}</span></div><strong className="ledger-income">{money(income)}<small>{t("원")}</small></strong><span>{allMonths ? t("전체 기간") : monthLabel(month)}</span></div><div className="card ledger-summary"><div><span className="ledger-summary-icon expense"><ArrowUpRight size={21}/></span><span>{allMonths ? t("전체 지출") : t("선택 기간 지출")}</span></div><strong className="ledger-expense">{money(expense)}<small>{t("원")}</small></strong><span>{allMonths ? t("전체 기간") : monthLabel(month)}</span></div></div>
     <div className="ledger-toolbar"><div className="ledger-month-selector"><IconButton label={t("이전 달")} icon={ChevronLeft} onClick={() => moveMonth(-1)}/><strong>{allMonths ? t("전체 내역") : monthLabel(month)}</strong><IconButton label={t("다음 달")} icon={ChevronRight} onClick={() => moveMonth(1)}/><button className={`ledger-all-months ${allMonths ? 'active' : ''}`} onClick={() => setAllMonths(!allMonths)}>{allMonths ? t("월별 보기") : t("전체 보기")}</button></div><div className="tabs" aria-label={t("수입과 지출 필터")}>{(['all', 'income', 'expense'] as const).map(key => <button key={key} className={`tab ${type === key ? 'active' : ''}`} onClick={() => setType(key)}>{key === 'all' ? t("전체") : key === 'income' ? t("수입") : t("지출")}</button>)}</div></div>
     <div className="card ledger-list"><div className="ledger-list-head"><span>{t("날짜")}</span><span>{t("내역")}</span><span>{t("멤버")}</span><span>{t("금액")}</span>{canManage && <span />}</div>
@@ -40,6 +42,7 @@ export function Ledger() {
       {entries.length === 0 && <EmptyState icon={ReceiptText} title={t("아직 등록된 내역이 없어요")} description={allMonths ? t("첫 수입이나 지출을 기록해 보세요.") : t("{0}의 {1} 내역이 없어요.", { "0": monthLabel(month), "1": type === 'all' ? t("수입과 지출") : type === 'income' ? t("수입") : t("지출") })} action={canManage ? <Button icon={Plus} onClick={() => setEditor('new')}>{t("내역 추가")}</Button> : undefined}/>}
       {entries.length > 0 && <div className="ledger-list-footer"><span>{t("총 {0}건", {"0":entries.length})}</span><span>{t("선택 기간 수입")}<strong>{money(income)}{t("원")}</strong><i>·</i>{t("지출")}<strong>{money(expense)}{t("원")}</strong></span></div>}
     </div>
+    {importOpen && <BankImport onClose={() => setImportOpen(false)} onSaved={() => { setImportOpen(false); setAllMonths(true); setType('all'); }}/>}
     {editor && <LedgerEditor entry={editor === 'new' ? undefined : editor} onClose={() => setEditor(null)}/>}
     {receiptEntry && <ViewReceiptModal entry={receiptEntry} onClose={() => setReceiptEntry(null)}/>}
   </div>;

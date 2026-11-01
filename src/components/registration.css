@@ -1,0 +1,7 @@
+.registration-screen { padding: 28px 20px; }
+.registration-screen .auth-card { text-align: left; width: 100%; max-width: 440px; }
+.registration-screen .auth-card > svg { color: #246bfd; }
+.registration-screen .auth-card h1 { margin: 14px 0 22px; font-size: 24px; }
+.registration-screen fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.registration-screen .auth-form { margin-top: 0; }
+.registration-screen .auth-card > .button { width: 100%; margin-top: 8px; }

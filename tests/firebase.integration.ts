@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { chooseBirthday } from './helpers/birthday';
+import { bankPlan } from './helpers/bank-plan';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import type { RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
@@ -61,6 +62,21 @@ test('open poll, event, venue and ledger editors cannot recreate records deleted
   await environment.withSecurityRulesDisabled(async context => { for (const [collection, id] of [['polls', pollId], ['events', eventId], ['ballots', ballotId], ['ledger', entryId]]) expect((await getDoc(doc(context.firestore(), collection, id))).exists()).toBe(false); });
 });
 
+test('bank import uses the real Firestore transaction and preserves concurrent duplicate records',async({page})=>{
+  const plan=await bankPlan();
+  await page.route('**/src/lib/read-bank-file.ts*',route=>route.fulfill({contentType:'text/javascript',body:`export async function readBankFile(){return ${JSON.stringify(plan)};}`}));
+  await login(page,leaderEmail);await page.goto('/ledger');
+  await page.getByRole('button',{name:'엑셀 가져오기',exact:true}).click();let dialog=page.getByRole('dialog');
+  await dialog.getByLabel('거래내역 엑셀',{exact:true}).setInputFiles({name:'bank.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from('fixture')});await dialog.getByRole('button',{name:'내역 확인',exact:true}).click();await expect(dialog.getByRole('button',{name:'2건 반영',exact:true})).toBeEnabled();
+  await dialog.getByRole('button',{name:'2건 반영',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
+  await environment.withSecurityRulesDisabled(async context=>{
+    for(const row of plan.transactions)expect((await getDoc(doc(context.firestore(),'ledger',row.id))).data()).toMatchObject({amount:row.amount,description:row.description,memo:row.memo,creatorId:leaderId});
+    await updateDoc(doc(context.firestore(),'ledger',plan.transactions[0].id),{memo:'수정 보존'});
+  });
+  await page.getByRole('button',{name:'엑셀 가져오기',exact:true}).click();dialog=page.getByRole('dialog');await dialog.getByLabel('거래내역 엑셀',{exact:true}).setInputFiles({name:'new-export.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from('fixture')});await dialog.getByRole('button',{name:'내역 확인',exact:true}).click();await expect(dialog.getByRole('button',{name:'0건 반영',exact:true})).toBeDisabled();
+  await environment.withSecurityRulesDisabled(async context=>{expect((await getDoc(doc(context.firestore(),'ledger',plan.transactions[0].id))).data()!.memo).toBe('수정 보존');});
+});
+
 test('ledger editing preserves a newer change from another session', async ({ page }) => {
   const id = 'concurrent-ledger-edit'; const now = new Date().toISOString();
   await environment.withSecurityRulesDisabled(async context => { const { setDoc } = await import('firebase/firestore'); await setDoc(doc(context.firestore(), 'ledger', id), { id, type: 'income', category: '회비', amount: 20000, date: now.slice(0, 10), description: '동시 수정 회계 내역', creatorId: leaderId, createdAt: now, updatedAt: now }); });
@@ -94,27 +110,35 @@ test('an editor cannot recreate a post deleted by another session', async ({ pag
   await environment.withSecurityRulesDisabled(async context => { expect((await getDoc(doc(context.firestore(), 'posts', 'deleted-while-editing'))).exists()).toBe(false); });
 });
 
-test('restored Auth session recovers an interrupted member signup without another popup', async ({ page }) => {
+test('restored Auth session collects required signup details before returning to a shared poll', async ({ page }) => {
   const email = 'interrupted-signin@example.com';
   const id = await createAccount(email);
-  await login(page, email);
-  await expect(page.locator('.pending-access')).toBeVisible();
-  await expect(page.getByRole('heading', { name: '모임 홈', exact: true })).toBeVisible();
+  const pollId = 'signup-shared-poll', now = new Date().toISOString();
+  await environment.withSecurityRulesDisabled(async context => {
+    const { setDoc } = await import('firebase/firestore');
+    const slots = [{ id: 'signup-slot', date: now.slice(0,10), start: '18:00', end: '19:00' }];
+    await setDoc(doc(context.firestore(),'polls',pollId),{id:pollId,title:'가입 후 바로 참여할 투표',description:'',slots,slotIds:['signup-slot'],deadline:null,deadlineAt:null,status:'open',creatorId:leaderId,createdAt:now,updatedAt:now,slotMinutes:60});
+  });
+  await login(page, email);await page.goto(`/polls?poll=${pollId}`);
+  await expect(page.getByRole('heading', { name: '가입 정보', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await environment.withSecurityRulesDisabled(async context => {
     expect((await getDoc(doc(context.firestore(), 'members', id))).data()).toMatchObject({ id, email, role: 'member', status: 'pending', canCreatePoll: false });
     expect((await getDoc(doc(context.firestore(), 'profiles', id))).data()).toEqual({ id, phone: '', area: '' });
   });
-  await page.goto('/profile');
-  await page.getByLabel('거주 지역', { exact: false }).fill('서울 중랑구');
-  await page.getByRole('button', { name: '저장하기', exact: true }).click();
-  await expect(page.locator('.toast').filter({ hasText: '내 정보를 저장했어요.' })).toBeVisible();
-  await page.reload();
+  await page.getByLabel(/^이름/).fill('가입 확인');await page.getByLabel(/^전화번호/).fill('010-1234-5678');
+  await page.getByLabel(/^거주 지역/).fill('서울 중랑구');await chooseBirthday(page,'02-20');
+  await page.getByRole('button', { name: '저장하고 계속', exact: true }).click();
   await expect(page.locator('.pending-access')).toBeVisible();
-  await expect(page.getByLabel('거주 지역', { exact: false })).toHaveValue('서울 중랑구');
+  await expect(page.getByRole('dialog')).toHaveAccessibleName('가입 후 바로 참여할 투표');
+  await expect(page.locator('.poll-time-cell').first()).toBeDisabled();
+  await page.reload();await expect(page.getByRole('dialog')).toHaveAccessibleName('가입 후 바로 참여할 투표');
   await environment.withSecurityRulesDisabled(async context => {
-    expect((await getDoc(doc(context.firestore(), 'members', id))).data()).toMatchObject({ role: 'member', status: 'pending', canCreatePoll: false });
-    expect((await getDoc(doc(context.firestore(), 'profiles', id))).data()?.area).toBe('서울 중랑구');
+    expect((await getDoc(doc(context.firestore(), 'members', id))).data()).toMatchObject({ name:'가입 확인',birthday:'02-20',role:'member',status:'pending',canCreatePoll:false });
+    expect((await getDoc(doc(context.firestore(), 'profiles', id))).data()).toMatchObject({phone:'010-1234-5678',area:'서울 중랑구',birthday:'02-20'});
+    await updateDoc(doc(context.firestore(),'members',id),{status:'active'});
   });
+  await expect(page.locator('.poll-time-cell').first()).toBeEnabled();
 });
 
 test('real Firebase file attachments preserve maximum-size bytes, editing and pending downloads', async ({ page, browser }) => {
@@ -220,8 +244,8 @@ test.beforeAll(async()=>{
     const db=context.firestore();const batch=writeBatch(db);const now=new Date().toISOString();
     batch.set(doc(db,'members',leaderId),{id:leaderId,name:'테스트 관리자',email:leaderEmail,role:'leader',status:'active',canCreatePoll:true,joinedAt:now});
     batch.set(doc(db,'members',pendingId),{id:pendingId,name:'가입 신청자',email:pendingEmail,role:'member',status:'pending',canCreatePoll:false,joinedAt:now});
-    batch.set(doc(db,'profiles',leaderId),{id:leaderId,phone:'010-1111-1111',area:'서울 마포구'});
-    batch.set(doc(db,'profiles',pendingId),{id:pendingId,phone:'010-2222-2222',area:'서울 성동구'});
+    batch.set(doc(db,'profiles',leaderId),{id:leaderId,phone:'010-1111-1111',area:'서울 마포구',birthday:'03-15'});
+    batch.set(doc(db,'profiles',pendingId),{id:pendingId,phone:'010-2222-2222',area:'서울 성동구',birthday:'03-15'});
     batch.set(doc(db,'settings','club'),{name:'Firebase 연동 검증',description:'로컬 에뮬레이터'});
     batch.set(doc(db,'settings','bylaws'),{content:'검증용 회칙',updatedAt:now,editorId:leaderId});
     batch.set(doc(db,'posts','pending-readable-post'),{id:'pending-readable-post',category:'notice',title:'열람용 공지',body:'가입 대기 계정도 읽을 수 있어요.',authorId:leaderId,createdAt:now,updatedAt:now,images:[],pinned:false,likedBy:[]});
@@ -426,7 +450,7 @@ test('real Firebase account preferences preserve private contact and birthday fi
   await page.evaluate(async uid=>{const {exercisePreferences}=await import('/tests/fixtures/preferences-probe.tsx');await exercisePreferences(uid);},leaderId);
   await environment.withSecurityRulesDisabled(async testContext=>{
     const profile=(await getDoc(doc(testContext.firestore(),'profiles',leaderId))).data()!;const member=(await getDoc(doc(testContext.firestore(),'members',leaderId))).data()!;
-    expect(profile).toMatchObject({id:leaderId,phone:'010-1111-1111',area:'서울 마포구',birthday:'03-15',language:'en',theme:'dark'});
+    expect(profile).toMatchObject({id:leaderId,phone:'010-1111-1111',area:'서울 마포구',birthday:'03-15',birthday:'03-15',language:'en',theme:'dark'});
     expect(member).toMatchObject({role:'leader',canCreatePoll:true,birthday:'03-15'});expect(member.theme).toBeUndefined();expect(member.language).toBeUndefined();
   });
 });

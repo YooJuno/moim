@@ -1,3 +1,5 @@
+import { sharedDestination } from './share-target';
+
 /** UA detection only changes recovery controls; it never grants access or starts navigation. */
 export function isKakaoInAppBrowser(userAgent: string): boolean {
   return /\bKAKAOTALK\b/i.test(userAgent);
@@ -13,7 +15,7 @@ export function safeLoginURL(pageURL: string): string | null {
     const domain = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.?$/i;
     const ipv6 = /^\[[0-9a-f:.]+\]$/i;
     if (!domain.test(url.hostname) && !ipv6.test(url.hostname)) return null;
-    return `${url.origin}/`;
+    return `${url.origin}${sharedDestination(url.pathname, url.search) ?? '/'}`;
   } catch { return null; }
 }
 
@@ -24,5 +26,5 @@ export function externalBrowserURL(pageURL: string, userAgent: string): string |
   if (!loginURL) return null;
   const url = new URL(loginURL);
   // https://developer.chrome.com/docs/android/intents — no auto-launch, timer, or undocumented iOS scheme.
-  return `intent://${url.host}/#Intent;scheme=${url.protocol.slice(0, -1)};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(loginURL)};end`;
+  return `intent://${url.host}${url.pathname}${url.search}#Intent;scheme=${url.protocol.slice(0, -1)};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(loginURL)};end`;
 }

@@ -21,6 +21,7 @@ import { MvpVoting } from '../components/MvpVoting';
 import { calendarSignature } from '../lib/google-calendar';
 import { MonthGrid, MonthNavigation } from './ScheduleGrid';
 import './schedule.css';
+import './calendar-mobile.css';
 export function Calendar() {
     const { t } = useI18n();
     const app = useApp();
@@ -31,13 +32,14 @@ export function Calendar() {
     const [editing, setEditing] = useState<MoimEvent | 'new' | null>(null);
     const [deleting, setDeleting] = useState<MoimEvent | null>(null);
     const [busy, setBusy] = useState(false);
+    const [daySheet, setDaySheet] = useState(false);
     const selected = app.events.find(event => event.id === params.get('event'));
     const monthKey = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
     const monthEvents = app.events.filter(event => event.date.startsWith(monthKey)).sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
     const birthdayPeople = selectedDate ? birthdaysOnDate(app.members, selectedDate).map(member => ({ member, date: selectedDate })) : birthdaysInMonth(app.members, monthKey);
     const visibleEvents = selectedDate ? app.events.filter(event => event.date === selectedDate).sort((a, b) => a.start.localeCompare(b.start)) : monthEvents;
     const closeDetail = () => { const next = new URLSearchParams(params); next.delete('event'); setParams(next, { replace: true }); };
-    const openDetail = (event: MoimEvent) => { const next = new URLSearchParams(params); next.set('event', event.id); next.delete('date'); setParams(next); };
+    const openDetail = (event: MoimEvent) => { setDaySheet(false); const next = new URLSearchParams(params); next.set('event', event.id); next.delete('date'); setParams(next); };
     useEffect(() => { if (selected) {
         const date = new Date(`${selected.date}T12:00:00`);
         setMonth(new Date(date.getFullYear(), date.getMonth(), 1));
@@ -54,21 +56,30 @@ export function Calendar() {
         next.delete('create');
         setParams(next, { replace: true });
     } }, [params, setParams, app.isAdmin]);
-    const pickDate = (date: string) => { setSelectedDate(current => current === date ? null : date); if (!date.startsWith(monthKey)) {
+    const pickDate = (date: string) => { const mobile = window.matchMedia('(max-width: 700px)').matches; setDaySheet(mobile); setSelectedDate(current => mobile ? date : current === date ? null : date); if (!date.startsWith(monthKey)) {
         const d = new Date(`${date}T12:00:00`);
         setMonth(new Date(d.getFullYear(), d.getMonth(), 1));
     } };
-    const changeMonth = (value: Date) => { setMonth(value); setSelectedDate(null); const next = new URLSearchParams(params); next.delete('date'); setParams(next, { replace: true }); };
+    const changeMonth = (value: Date) => { setDaySheet(false); setMonth(value); setSelectedDate(null); const next = new URLSearchParams(params); next.delete('date'); setParams(next, { replace: true }); };
+    useEffect(() => {
+        const media = window.matchMedia('(max-width: 700px)');
+        const resize = () => { if (!media.matches) setDaySheet(false); };
+        media.addEventListener('change', resize);
+        return () => media.removeEventListener('change', resize);
+    }, []);
+    const agenda = <><div className="section-head"><h2>{selectedDate ? formatDate(selectedDate) : t("{0}의 일정", { "0": formatDate(localDate(month), {month:"long"}) })}<span className="calendar-agenda-count">{visibleEvents.length}</span></h2>{selectedDate && <Button variant="ghost" size="sm" onClick={() => setSelectedDate(null)}>{t("전체 보기")}</Button>}</div>{selectedDate && getHoliday(selectedDate) && <p className="calendar-selected-holiday">{t(getHoliday(selectedDate) || "")}</p>}
+        {visibleEvents.length ? <div className="calendar-agenda-list">{visibleEvents.map(event => { const going = app.rsvps.filter(rsvp => rsvp.eventId === event.id && rsvp.status === 'going'); const ownRsvp = app.rsvps.find(rsvp => rsvp.eventId === event.id && rsvp.memberId === app.user?.id); const past = `${event.date}T${event.end}` < `${today()}T${new Date().toTimeString().slice(0, 5)}`; return <button className="card event-agenda-card" key={event.id} onClick={() => openDetail(event)}><div className="event-agenda-date"><span>{formatDate(event.date, {month:"short"})}</span><strong>{new Date(`${event.date}T12:00:00`).getDate()}</strong><small>{formatDate(event.date, { weekday: 'short' })}</small></div><div className="event-agenda-info"><div className="event-agenda-tags">{past ? <Badge tone="gray">{t("지난 모임")}</Badge> : ownRsvp?.status === 'going' ? <Badge tone="green">{t("참여 예정")}</Badge> : event.pollId ? <Badge tone="blue">{t("투표로 확정")}</Badge> : <Badge tone="gray">{t("모임 일정")}</Badge>}</div><h3>{event.title}</h3><p><Clock3 size={13}/>{event.start}–{event.end}</p><p><MapPin size={13}/>{event.location || t("장소 추후 안내")}</p><div className="event-agenda-attendees"><Users size={13}/><span>{going.length}{t("명 참여")}</span><ChevronRight size={15}/></div></div></button>; })}</div> : birthdayPeople.length > 0 && selectedDate ? null : <div className="card calendar-agenda-empty"><EmptyState icon={CalendarDays} title={selectedDate ? t("등록된 일정이 없어요") : t("이번 달 일정이 없어요")} action={app.isAdmin ? <Button variant="secondary" size="sm" icon={Plus} onClick={() => setEditing('new')}>{t("일정 추가")}</Button> : undefined}/></div>}
+        {birthdayPeople.length > 0 && <section className="card calendar-birthdays" aria-label={t("생일 일정")}><h3><Cake size={17}/>{selectedDate ? t("생일") : t("{0} 생일", { "0": formatDate(localDate(month), {month:"long"}) })}</h3>{birthdayPeople.map(({ member, date }) => <button key={member.id} className="calendar-birthday-row" onClick={() => { setSelectedDate(date); const next = new URLSearchParams(params); next.set('date', date); next.delete('event'); setParams(next); }}><Avatar member={member} size={31}/><strong>{member.name}</strong><span>{formatDate(date, { month: 'long', day: 'numeric' })}</span></button>)}</section>}
+
+
+</>;
     return <div className="page calendar-page">
     <PageHeader title={t("모임 일정")} action={app.isAdmin ? <Button icon={Plus} onClick={() => setEditing('new')}>{t("일정 만들기")}</Button> : undefined}/>
     <div className="calendar-layout">
-      <section className="card calendar-main" aria-label={t("모임 캘린더")}><div className="calendar-toolbar"><MonthNavigation month={month} onChange={changeMonth}/><Button variant="secondary" size="sm" onClick={() => { const d = new Date(); setMonth(new Date(d.getFullYear(), d.getMonth(), 1)); setSelectedDate(today()); }}>{t("오늘")}</Button></div><MonthGrid month={month} selectedDates={selectedDate ? [selectedDate] : []} onSelect={pickDate} events={app.events} birthdayMembers={app.members}/><div className="calendar-legend"><span><i />{t("모임 일정")}</span><span className="calendar-holiday-legend">{t("공휴일")}</span><span>{t("날짜를 누르면 일정을 볼 수 있어요.")}</span></div></section>
-      <aside className="calendar-agenda"><div className="section-head"><h2>{selectedDate ? formatDate(selectedDate) : t("{0}의 일정", { "0": formatDate(localDate(month), {month:"long"}) })}<span className="calendar-agenda-count">{visibleEvents.length}</span></h2>{selectedDate && <Button variant="ghost" size="sm" onClick={() => setSelectedDate(null)}>{t("전체 보기")}</Button>}</div>{selectedDate && getHoliday(selectedDate) && <p className="calendar-selected-holiday">{t(getHoliday(selectedDate) || "")}</p>}
-        {birthdayPeople.length > 0 && <section className="card calendar-birthdays" aria-label={t("생일 일정")}><h3><Cake size={17}/>{selectedDate ? t("생일") : t("{0} 생일", { "0": formatDate(localDate(month), {month:"long"}) })}</h3>{birthdayPeople.map(({ member, date }) => <button key={member.id} className="calendar-birthday-row" onClick={() => { setSelectedDate(date); const next = new URLSearchParams(params); next.set('date', date); next.delete('event'); setParams(next); }}><Avatar member={member} size={31}/><strong>{member.name}</strong><span>{formatDate(date, { month: 'long', day: 'numeric' })}</span></button>)}</section>}
-        {visibleEvents.length ? <div className="calendar-agenda-list">{visibleEvents.map(event => { const going = app.rsvps.filter(rsvp => rsvp.eventId === event.id && rsvp.status === 'going'); const ownRsvp = app.rsvps.find(rsvp => rsvp.eventId === event.id && rsvp.memberId === app.user?.id); const past = `${event.date}T${event.end}` < `${today()}T${new Date().toTimeString().slice(0, 5)}`; return <button className="card event-agenda-card" key={event.id} onClick={() => openDetail(event)}><div className="event-agenda-date"><span>{formatDate(event.date, {month:"short"})}</span><strong>{new Date(`${event.date}T12:00:00`).getDate()}</strong><small>{formatDate(event.date, { weekday: 'short' })}</small></div><div className="event-agenda-info"><div className="event-agenda-tags">{past ? <Badge tone="gray">{t("지난 모임")}</Badge> : ownRsvp?.status === 'going' ? <Badge tone="green">{t("참여 예정")}</Badge> : event.pollId ? <Badge tone="blue">{t("투표로 확정")}</Badge> : <Badge tone="gray">{t("모임 일정")}</Badge>}</div><h3>{event.title}</h3><p><Clock3 size={13}/>{event.start}–{event.end}</p><p><MapPin size={13}/>{event.location || t("장소 추후 안내")}</p><div className="event-agenda-attendees"><Users size={13}/><span>{going.length}{t("명 참여")}</span><ChevronRight size={15}/></div></div></button>; })}</div> : <div className="card calendar-agenda-empty"><EmptyState icon={CalendarDays} title={selectedDate ? t("등록된 일정이 없어요") : t("이번 달 일정이 없어요")} action={app.isAdmin ? <Button variant="secondary" size="sm" icon={Plus} onClick={() => setEditing('new')}>{t("일정 추가")}</Button> : undefined}/></div>}
-
-      </aside>
+      <section className="card calendar-main" aria-label={t("모임 캘린더")}><div className="calendar-toolbar"><MonthNavigation month={month} onChange={changeMonth}/><Button variant="secondary" size="sm" onClick={() => { const d = new Date(); setMonth(new Date(d.getFullYear(), d.getMonth(), 1)); setSelectedDate(today()); setDaySheet(window.matchMedia('(max-width: 700px)').matches); }}>{t("오늘")}</Button></div><MonthGrid month={month} selectedDates={selectedDate ? [selectedDate] : []} onSelect={pickDate} events={app.events} birthdayMembers={app.members}/><div className="calendar-legend"><span><i />{t("모임 일정")}</span><span className="calendar-holiday-legend">{t("공휴일")}</span><span>{t("날짜를 누르면 일정을 볼 수 있어요.")}</span></div></section>
+      <aside className="calendar-agenda">{!daySheet && agenda}</aside>
     </div>
+    {daySheet && selectedDate && !selected && !editing && !deleting && <Modal className="calendar-day-sheet" title={formatDate(selectedDate, { month: 'long', day: 'numeric', weekday: 'short' })} onClose={() => setDaySheet(false)}><div className="calendar-agenda">{agenda}</div></Modal>}
     {selected && !editing && !deleting && <EventDetail event={selected} onClose={closeDetail} onEdit={() => { closeDetail(); setEditing(selected); }} onDelete={() => { closeDetail(); setDeleting(selected); }}/>}
     {editing && <EventEditor event={editing === 'new' ? undefined : editing} initialDate={selectedDate ?? today()} onClose={() => setEditing(null)} onSaved={event => { setEditing(null); openDetail(event); }}/>}
     {deleting && <Modal title={t("일정을 삭제할까요?")} onClose={() => !busy && setDeleting(null)} footer={<><Button variant="secondary" disabled={busy} onClick={() => setDeleting(null)}>{t("취소")}</Button><Button variant="danger" loading={busy} onClick={async () => { setBusy(true); try {

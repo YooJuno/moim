@@ -19,7 +19,7 @@ vi.mock('../src/lib/telemetry', () => ({ reportError: mocks.report }));
 import { AUTH_RECOVERY_TIMEOUT_MS, ensureMemberProfile, observeAuthSession, signInWithGoogle } from '../src/lib/google-auth';
 import type { AuthSessionState } from '../src/lib/google-auth';
 
-const actor = { uid: 'test-google-user', displayName: '가입 테스트', email: 'auth-test@example.com', photoURL: 'https://example.com/avatar.png' } as User;
+const actor = { uid: 'test-google-user', displayName: '가입 테스트', email: 'auth-test@example.com', photoURL: 'https://example.com/avatar.png', providerData: [] } as unknown as User;
 const database = {} as Firestore;
 const member = { id: actor.uid, name: '기존 이름', email: actor.email, role: 'leader', status: 'active', canCreatePoll: true, position: '회장', joinedAt: '2026-01-01T00:00:00Z' } as Member;
 let records: Map<string, unknown>;
@@ -60,6 +60,7 @@ beforeEach(() => {
     const staged: [string, unknown][] = [];
     await update({
       get: async (reference: { path: string; id: string }) => snapshot(reference.id, records.get(reference.path)),
+      update: (reference: { path: string }, value: Record<string, unknown>) => { const merged = { ...(records.get(reference.path) as object), ...value }; writes(reference.path, value); staged.push([reference.path, merged]); },
       set: (reference: { path: string }, value: unknown) => { writes(reference.path, value); staged.push([reference.path, value]); },
     });
     for (const [path, value] of staged) records.set(path, value);
@@ -109,6 +110,26 @@ describe('interrupted member bootstrap', () => {
     expect(writes).not.toHaveBeenCalled();
     expect(records.get(`members/${actor.uid}`)).toEqual(existing);
     expect(records.get(`profiles/${actor.uid}`)).toEqual(profile);
+  });
+
+  it('repairs only an OAuth placeholder name and preserves membership and profile data', async () => {
+    const { auth } = session();
+    records.set(`members/${actor.uid}`, { ...member, name: '새 멤버' });
+    const profile = { id: actor.uid, phone: '010-0000-0000', area: '서울 중랑구' };
+    records.set(`profiles/${actor.uid}`, profile);
+    await ensureMemberProfile(auth, database, actor);
+    expect(records.get(`members/${actor.uid}`)).toEqual({ ...member, name: actor.displayName });
+    expect(records.get(`profiles/${actor.uid}`)).toEqual(profile);
+  });
+
+  it('does not revive or rename a removed member', async () => {
+    const { auth } = session();
+    const removed = { ...member, name: '새 멤버', status: 'rejected', removedAt: '2026-11-01T00:00:00Z' };
+    records.set(`members/${actor.uid}`, removed);
+    records.set(`profiles/${actor.uid}`, { id: actor.uid, phone: '', area: '' });
+    await ensureMemberProfile(auth, database, actor);
+    expect(writes).not.toHaveBeenCalled();
+    expect(records.get(`members/${actor.uid}`)).toEqual(removed);
   });
 
   it('repairs a missing private profile without changing an approved role', async () => {

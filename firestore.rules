@@ -399,7 +399,11 @@ service cloud.firestore {
           : !existsAfter(/databases/$(database)/documents/receipts/$(entryId)));
       }
       allow read: if readable();
-      allow create: if accountant() && validEntry(request.resource.data) && validReceiptState(request.resource.data) && request.resource.data.creatorId == request.auth.uid;
+      // A new receipt can only be created when its ledger entry sets hasReceipt=true.
+      // New entries without receipts therefore need no per-row document lookup.
+      allow create: if accountant() && validEntry(request.resource.data)
+        && ((!('hasReceipt' in request.resource.data) || request.resource.data.hasReceipt == false) || validReceiptState(request.resource.data))
+        && request.resource.data.creatorId == request.auth.uid;
       allow update: if accountant() && validEntry(request.resource.data) && validReceiptState(request.resource.data)
         && request.resource.data.creatorId == resource.data.creatorId && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if accountant() && !existsAfter(/databases/$(database)/documents/receipts/$(entryId));

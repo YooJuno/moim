@@ -1,0 +1,29 @@
+.schedule-day-markers { display: none; }
+.calendar-main .schedule-day.has-events { background: var(--surface-e2edff); }
+.calendar-main .schedule-day.has-events:hover { background: var(--surface-dae7ff); }
+.calendar-main .schedule-day.has-events .schedule-day-number { font-weight: 750; }
+.calendar-main .schedule-day.has-events:not(.is-holiday):not(.is-saturday):not(.is-selected) .schedule-day-number { color: #246bfd; }
+.calendar-main .schedule-day.has-events .schedule-event-label { background: none; color: #246bfd; padding-left: 2px; font-weight: 650; }
+.calendar-main .schedule-day.is-selected { box-shadow: inset 0 0 0 1.5px #246bfd; }
+.calendar-main .schedule-day.is-selected.is-holiday { box-shadow: inset 0 0 0 1.5px #f0636c; }
+
+@media (max-width: 700px) {
+  .calendar-page .calendar-layout { gap: 20px; }
+  .calendar-main .schedule-day { min-height: 44px; padding: 2px; align-items: center; }
+  .calendar-main .schedule-day-number { margin: 0; }
+  .calendar-main .schedule-day-markers { display: flex; align-items: center; justify-content: center; gap: 4px; height: 12px; color: var(--text-6b89bd); }
+  .calendar-main .schedule-day-markers i { width: 4px; height: 4px; border-radius: 50%; background: #246bfd; }
+  .calendar-main .schedule-day.has-events .schedule-day-markers i { display: none; }
+  .calendar-main .schedule-day-markers svg { color: #c078ad; }
+  .calendar-main :is(.schedule-event-label,.schedule-event-more,.schedule-birthday-label,.schedule-birthday-more,.schedule-holiday-label) { display: none; }
+  .calendar-main .schedule-weekdays { padding: 10px 0 8px; }
+  .calendar-main .calendar-legend { padding: 10px 12px; }
+  .calendar-day-sheet { align-self: flex-end; margin: 0 -12px -12px; width: calc(100% + 24px); max-width: none; max-height: 78dvh; border-radius: 22px 22px 0 0; }
+  .calendar-day-sheet .modal-header { padding: 20px 20px 12px; }
+  .calendar-day-sheet .modal-header h2 { font-size: 17px; }
+  .calendar-day-sheet .modal-body { padding: 4px 20px max(24px, env(safe-area-inset-bottom)); }
+  .calendar-day-sheet .calendar-agenda > .section-head { display: none; }
+  .calendar-day-sheet .calendar-selected-holiday { margin: 0 0 12px; }
+  .calendar-day-sheet .event-agenda-card { box-shadow: none; }
+  .calendar-day-sheet .calendar-agenda-list { display: flex; }
+}

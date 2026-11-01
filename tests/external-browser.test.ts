@@ -14,13 +14,20 @@ describe('Kakao external browser recovery', () => {
 
   it.each([
     'https://moim-juno.web.app/auth/callback?code=private-code&state=private-state#access_token=private-token',
-    'https://moim-juno.web.app/calendar?event=event-private&invite=private-invite',
     'https://moim-juno.web.app/?redirect=https%3A%2F%2Fevil.example%2F&token=private-token',
   ])('copies only the site root and discards every path, query and fragment from %s', source => {
     expect(safeLoginURL(source)).toBe('https://moim-juno.web.app/');
     const intent = externalBrowserURL(source, androidKakao)!;
     expect(intent).toBe('intent://moim-juno.web.app/#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=https%3A%2F%2Fmoim-juno.web.app%2F;end');
     expect(intent).not.toMatch(/private|callback|event|invite|redirect|token|state/);
+  });
+
+  it('retains only the shared poll or event when opening an external browser', () => {
+    const source = 'https://moim-juno.web.app/polls?poll=poll-weekend&token=private#fragment';
+    expect(safeLoginURL(source)).toBe('https://moim-juno.web.app/polls?poll=poll-weekend');
+    expect(externalBrowserURL(source, androidKakao)).toContain('intent://moim-juno.web.app/polls?poll=poll-weekend#Intent;');
+    expect(externalBrowserURL(source, androidKakao)).not.toMatch(/private|token|fragment/);
+    expect(safeLoginURL('https://moim-juno.web.app/calendar?event=event-coffee&invite=private')).toBe('https://moim-juno.web.app/calendar?event=event-coffee');
   });
 
   it('preserves the current deployment origin and a local development port', () => {

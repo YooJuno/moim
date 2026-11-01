@@ -77,9 +77,12 @@
   .poll-detail-modal .modal-footer { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
   .poll-detail-modal .poll-detail-description { font-size: 12px; line-height: 1.5; }
   .poll-detail-modal .poll-time-scroll { max-height: 58dvh; }
-  .poll-detail-modal .poll-time-table th:first-child { min-width: 54px; width: 54px; }
-  .poll-detail-modal .poll-time-table thead th { min-width: 76px; }
-  .poll-detail-modal .poll-time-table td { min-width: 76px; width: 76px; }
+  .poll-detail-modal .poll-time-table th:first-child { min-width: 48px; width: 48px; }
+  .poll-detail-modal .poll-time-table thead th { min-width: 64px; height: 44px; }
+  .poll-detail-modal .poll-time-table td { min-width: 64px; width: 64px; }
+  .poll-detail-modal .poll-time-cell { min-height: 40px; height: 40px; }
+  .poll-detail-modal .poll-slot-missing { height: 40px; }
+  .poll-detail-modal .poll-time-cell > strong { font-size: 13px; }
   .poll-detail-modal .poll-time-table thead th strong { font-size: 12px; }
   .poll-detail-modal .poll-time-table thead th span { font-size: 10px; }
 }

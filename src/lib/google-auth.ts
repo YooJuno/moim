@@ -4,6 +4,7 @@ import { doc, onSnapshot, runTransaction } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 import type { Member } from './types';
 import { reportError } from './telemetry';
+import { memberDisplayName, needsMemberName } from '../../shared/member-name';
 
 export const AUTH_RECOVERY_TIMEOUT_MS = 20_000;
 const popupRequests = new WeakMap<Auth, Promise<UserCredential>>();
@@ -43,13 +44,16 @@ export async function ensureMemberProfile(auth: Auth, database: Firestore, actor
     const profileRef = doc(database, 'profiles', actor.uid);
     const [member, profile] = await Promise.all([transaction.get(memberRef), transaction.get(profileRef)]);
     assertSession();
+    const name = memberDisplayName(actor.displayName, ...actor.providerData.map(provider => provider.displayName));
     if (!member.exists()) {
       const next: Member = {
-        id: actor.uid, name: actor.displayName?.slice(0, 30) || '새 멤버', email: actor.email || '',
+        id: actor.uid, name, email: actor.email || '',
         ...(actor.photoURL ? { photoURL: actor.photoURL } : {}),
         role: 'member', status: 'pending', canCreatePoll: false, joinedAt: new Date().toISOString(),
       };
       transaction.set(memberRef, next);
+    } else if (!member.data().removedAt && needsMemberName(member.data().name) && !needsMemberName(name)) {
+      transaction.update(memberRef, { name });
     }
     if (!profile.exists()) transaction.set(profileRef, { id: actor.uid, phone: '', area: '' });
   });

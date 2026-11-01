@@ -9,6 +9,8 @@ import { AuthCallback } from './pages/AuthCallback';
 import { BoardIcon } from './components/BoardIcon';
 import { GuidedTour } from './components/GuidedTour';
 import { ProfileMenu } from './components/ProfileMenu';
+import { RegistrationSetup } from './components/RegistrationSetup';
+import { registrationComplete } from './lib/registration';
 import { DonateButton } from './components/DonateButton';
 import { MvpNotifications } from './components/MvpVoting';
 import { Avatar, Badge, Button, Field, IconButton, useToast } from './components/ui';
@@ -42,6 +44,9 @@ export default function App() {
         return <div className="app-loading"><Brand /><LoaderCircle className="spin" size={27}/><p>{t("모임을 불러오는 중")}</p></div>;
     if (!app.user || app.user.status === 'rejected')
         return <AuthScreen />;
+    const ownProfile = app.profiles.find(profile => profile.id === app.user?.id);
+    if ((!ownProfile && app.user.status === 'pending') || (ownProfile && !registrationComplete(app.user.name, { ...ownProfile, birthday: ownProfile.birthday ?? app.user.birthday })))
+        return <RegistrationSetup key={app.user.id}/>;
     const current = navItems.find(n => n.to === '/' ? location.pathname === '/' : location.pathname.startsWith(n.to));
     const pending = app.members.filter(m => m.status === 'pending').length;
     const activePolls = app.polls.filter(p => p.status === 'open' && (!p.deadline || new Date(p.deadline) > new Date()) && !app.votes.some(v => v.pollId === p.id && v.memberId === app.user?.id)).length;
