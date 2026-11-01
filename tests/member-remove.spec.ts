@@ -11,7 +11,7 @@ for(const width of [1440,390]){
   const result=await page.evaluate(()=>{const data=JSON.parse(localStorage.getItem('moim-demo-v1')!),removed=data.members.find((m:{removedAt?:string})=>m.removedAt);return {member:removed,profile:data.profiles.find((p:{id:string})=>p.id===removed.id),posts:data.posts.length,ledger:data.ledger.length};});
   expect(result.member).toMatchObject({role:'member',status:'rejected',canCreatePoll:false});expect(result.profile.phone).toBe('');expect(result.profile.area).toBe('');expect(result.posts).toBeGreaterThan(0);expect(result.ledger).toBeGreaterThan(0);
   await page.evaluate(id=>{const data=JSON.parse(localStorage.getItem('moim-demo-v1')!);const event={...data.events[0],date:'2040-01-01'},poll={...data.polls[0],status:'open',deadline:null};data.events=[event];data.polls=[poll];data.rsvps=[id,'demo-me'].map(memberId=>({id:`${event.id}_${memberId}`,eventId:event.id,memberId,status:'going',updatedAt:new Date().toISOString()}));data.votes=[id,'demo-me'].map(memberId=>({id:`${poll.id}_${memberId}`,pollId:poll.id,memberId,slotIds:[poll.slotIds[0]],updatedAt:new Date().toISOString()}));localStorage.setItem('moim-demo-v1',JSON.stringify(data));},result.member.id);
-  await page.goto('/');await expect(page.locator('.hero-attendees')).toContainText('1명 참여');await expect(page.locator('.home-poll-progress>span')).toHaveText(/^1 \/ /);
+  await page.goto('/');await expect(page.locator('.hero-attendees')).toContainText('1명 참여');await expect(page.locator('.home-poll-response')).toHaveText(/^1\//);
   expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('moim-demo-v1')!).votes.length)).toBe(2);
 
  });

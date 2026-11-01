@@ -1,59 +1,111 @@
-import { useI18n } from "../lib/preferences";
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowDownLeft, ArrowRight, Vote, CalendarDays, Cake, Check, ChevronLeft, ChevronRight, Clock3, Image, MapPin, Plus, Users } from 'lucide-react';
-import { BoardIcon } from '../components/BoardIcon';
+import { ArrowRight, Cake, Check, ChevronRight, Clock3, MapPin, Plus, Users, Vote } from 'lucide-react';
 import { MapLinks } from '../components/MapLinks';
+import { Avatar, Button, PageHeader } from '../components/ui';
 import { useApp } from '../lib/store';
-import { Avatar, Badge, Button, IconButton, PageHeader } from '../components/ui';
-import { formatDate, formatTime, localDate, memberName, relativeDate, today } from '../lib/utils';
+import { useI18n } from '../lib/preferences';
+import { formatDate, formatTime, relativeDate, today } from '../lib/utils';
 import { upcomingBirthdays } from '../lib/birthdays';
 import { addressForMap } from '../lib/map-links';
-import './home-meeting.css';
-import './home-polls.css';
-import { getHoliday, hasHolidayData } from '../lib/holidays';
+import './home.css';
+
 export function Home() {
-    const { t } = useI18n();
-    const app = useApp();
-    const active = app.members.filter(m => m.status === 'active');
-    const now = today();
-    const birthdays = upcomingBirthdays(active, now).slice(0, 4);
-    const events = app.events.filter(e => `${e.date}T${e.end}` >= `${now}T${new Date().toTimeString().slice(0, 5)}`).sort((a, b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`));
-    const next = events[0];
-    const nextAddress = next ? addressForMap(next.location) : '';
-    const nextPlace = next && nextAddress !== next.location.trim() ? next.location.trim().slice(0, -nextAddress.length).replace(/[\s·,]+$/, '') : '';
-    const openPolls = app.polls.filter(p => p.status === 'open' && (!p.deadline || new Date(p.deadline) > new Date()));
-    const unanswered = openPolls.filter(poll => !app.votes.some(vote => vote.pollId === poll.id && vote.memberId === app.user?.id)).sort((a,b) => (a.deadline ? new Date(a.deadline).getTime() : Infinity) - (b.deadline ? new Date(b.deadline).getTime() : Infinity) || b.createdAt.localeCompare(a.createdAt));
-    const notices = app.posts.filter(p => p.category === 'notice').sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.createdAt.localeCompare(a.createdAt)).slice(0, 3);
-    const photos = app.posts.filter(p => p.category === 'gallery' && p.images.length).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 3);
-    const days = next ? Math.round((new Date(`${next.date}T12:00:00`).getTime() - new Date(`${now}T12:00:00`).getTime()) / 86400000) : 0;
-    const attendees = next ? app.rsvps.filter(r => r.eventId === next.id && r.status === 'going') : [];
-    const [month, setMonth] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-    const year = month.getFullYear(), mon = month.getMonth();
-    const offset = new Date(year, mon, 1).getDay(), total = new Date(year, mon + 1, 0).getDate();
-    return <div className="page home-page">
-    <PageHeader tourId="home" title={app.settings.name} description={formatDate(new Date().toISOString(), { month: 'long', day: 'numeric', weekday: 'long' })} action={app.canCreatePoll ? <Link to="/polls?create=1"><Button icon={Plus}>{t("투표 만들기")}</Button></Link> : undefined}/>
-    {app.canParticipate && unanswered.length > 0 && <section className="card home-vote-alert" aria-label={t('응답할 투표')}>
-      <div className="home-vote-alert-heading"><Vote size={18}/><h2>{t('응답할 투표')}<span>{unanswered.length}</span></h2>{unanswered.length > 3 && <Link to="/polls">{t('전체 보기')}<ChevronRight size={14}/></Link>}</div>
-      {unanswered.slice(0,3).map(poll => {
-        const count = app.votes.filter(vote => vote.pollId === poll.id).length;
-        const urgent = !!poll.deadline && new Date(poll.deadline).getTime() - Date.now() <= 86400000;
-        return <Link key={poll.id} className="home-vote-alert-row" to={`/polls?poll=${encodeURIComponent(poll.id)}`}><div><strong>{poll.title}</strong><p>{urgent && <em>{t('마감 임박')}</em>}<span>{poll.deadline ? `${formatDate(poll.deadline)} ${formatTime(poll.deadline)} ${t('마감')}` : t('마감 없음')}</span><span>{t('{0}/{1} 응답',{'0':count,'1':active.length})}</span></p></div><span className="home-vote-alert-action">{t('시간 선택하기')}<ArrowRight size={16}/></span></Link>;
-      })}
-    </section>}
-      <section className="card home-section home-polls-section"><div className="section-head"><h2>{t("진행 중인 투표")}<span className="count-label">{openPolls.length}</span></h2><Link to="/polls" className="text-link">{t("전체 보기")}<ChevronRight size={15}/></Link></div>{openPolls.length ? openPolls.slice(0, 2).map(p => { const votes = app.votes.filter(v => v.pollId === p.id); const voted = votes.some(v => v.memberId === app.user?.id); const remaining = p.deadline ? Math.max(0, Math.ceil((new Date(p.deadline).getTime() - Date.now()) / 86400000)) : null; return <Link to={`/polls?poll=${p.id}`} className="home-poll" key={p.id}><div className="home-poll-top"><Badge tone="blue">{t("진행 중")}</Badge><span className="deadline-label">{remaining === null ? t("마감 없음") : remaining === 0 ? t("오늘 마감") : t("{0}일 후 마감", { "0": remaining })}</span></div><h3>{p.title}</h3><p>{[...new Set(p.slots.map(s => s.date))].length}{t("개 날짜 \u00B7")}{p.slots.length}{t("개 시간대")}</p><div className="home-poll-progress"><div className="progress-track"><span style={{ width: `${Math.min(100, votes.length / Math.max(active.length, 1) * 100)}%` }}/></div><span>{votes.length}<small> / {active.length}{t("명")}</small></span></div><div className="home-poll-footer"><div className="avatar-stack">{votes.slice(0, 4).map(v => <Avatar key={v.id} member={active.find(m => m.id === v.memberId)} size={26}/>)}</div><span className={voted ? 'voted-link' : 'blue-link'}>{voted ? <><Check size={15}/>{t("참여 완료")}</> : <>{t("가능한 시간 선택")}<ArrowRight size={15}/></>}</span></div></Link>; }) : <div className="small-empty"><Vote size={24}/><span>{t("진행 중인 투표가 없어요.")}</span></div>}</section>
-    <div className="home-overview">
-      <section className="next-meeting"><div className="next-meeting-copy"><div className="hero-eyebrow"><CalendarDays size={17}/><span>{t("다가오는 모임")}</span>{next && <span className="hero-dday">{days === 0 ? t("오늘") : `D-${days}`}</span>}</div><h2>{next?.title || t("예정된 일정이 없어요.")}</h2>{next ? <><div className="hero-meta"><span><Clock3 size={17}/><strong>{formatDate(next.date)} · {next.start}–{next.end}</strong></span><span className="hero-location"><MapPin size={17}/><span className="hero-location-copy"><strong>{nextPlace || next.location || t("장소 미정")}</strong>{nextPlace && <small>{nextAddress}</small>}</span></span></div>{next.location && <div className="hero-location-links"><MapLinks location={next.location} compact/></div>}<div className="hero-bottom"><Link to={`/calendar?event=${encodeURIComponent(next.id)}`} className="hero-link">{t("일정 확인")}<ArrowRight size={16}/></Link><div className="hero-attendees"><div className="avatar-stack">{attendees.slice(0, 3).map(r => <Avatar key={r.id} member={active.find(m => m.id === r.memberId)} size={27}/>)}</div><span>{attendees.length}{t("명 참여")}</span></div></div></> : <Link className="hero-link" to="/calendar">{t("캘린더 열기")}<ArrowRight size={16}/></Link>}</div></section>
-      <div className="home-stats"><Link className="card home-stat" to="/members"><span className="feature-icon feature-icon-blue"><Users size={21}/></span><div><span className="stat-label">{t("멤버")}</span><strong>{active.length}<small>{t("명")}</small></strong></div><ChevronRight size={18}/></Link><Link className="card home-stat" to="/polls"><span className="feature-icon feature-icon-purple"><Vote size={21}/></span><div><span className="stat-label">{t("진행 중인 투표")}</span><strong>{openPolls.length}<small>{t("개")}</small></strong></div><ChevronRight size={18}/></Link></div>
+  const { t } = useI18n();
+  const app = useApp();
+  const active = app.members.filter(member => member.status === 'active');
+  const activeIds = new Set(active.map(member => member.id));
+  const now = today();
+  const birthdays = upcomingBirthdays(active, now).slice(0, 4);
+  const events = app.events
+    .filter(event => `${event.date}T${event.end}` >= `${now}T${new Date().toTimeString().slice(0, 5)}`)
+    .sort((a, b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`));
+  const next = events[0];
+  const nextAddress = next ? addressForMap(next.location) : '';
+  const nextPlace = next && nextAddress !== next.location.trim()
+    ? next.location.trim().slice(0, -nextAddress.length).replace(/[\s·,]+$/, '') : '';
+  const days = next ? Math.round((new Date(`${next.date}T12:00:00`).getTime() - new Date(`${now}T12:00:00`).getTime()) / 86400000) : 0;
+  const attendees = next ? app.rsvps.filter(rsvp => rsvp.eventId === next.id && rsvp.status === 'going' && activeIds.has(rsvp.memberId)) : [];
+  const responded = new Set(app.votes.filter(vote => vote.memberId === app.user?.id).map(vote => vote.pollId));
+  const needsResponse = (id: string) => app.canParticipate && !responded.has(id);
+  const openPolls = app.polls
+    .filter(poll => poll.status === 'open' && (!poll.deadline || new Date(poll.deadline) > new Date()))
+    .sort((a, b) => Number(needsResponse(b.id)) - Number(needsResponse(a.id))
+      || (a.deadline ? new Date(a.deadline).getTime() : Infinity) - (b.deadline ? new Date(b.deadline).getTime() : Infinity)
+      || b.createdAt.localeCompare(a.createdAt));
+  const unansweredCount = openPolls.filter(poll => needsResponse(poll.id)).length;
+  const notices = app.posts.filter(post => post.category === 'notice')
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.createdAt.localeCompare(a.createdAt)).slice(0, 3);
+
+  return <div className="page home-page">
+    <PageHeader tourId="home" title={app.settings.name}
+      description={formatDate(new Date().toISOString(), { month: 'long', day: 'numeric', weekday: 'long' })}
+      action={app.canCreatePoll ? <Link to="/polls?create=1"><Button variant="secondary" icon={Plus}>{t('투표 만들기')}</Button></Link> : undefined}/>
+
+    <div className="home-dashboard">
+      <section className="home-panel home-polls-panel" aria-label={t('진행 중인 투표')}>
+        <div className="home-panel-heading">
+          <h2>{t('진행 중인 투표')}<span className="home-section-count">{openPolls.length}</span></h2>
+          <Link to="/polls" className="home-more">{t('전체 보기')}<ChevronRight size={14}/></Link>
+        </div>
+        {unansweredCount > 0 && <p className="home-poll-pending"><span aria-hidden="true"/>{t('응답할 투표')} {unansweredCount}</p>}
+        <div className="home-poll-list">
+          {openPolls.slice(0, 3).map(poll => {
+            const votes = app.votes.filter(vote => vote.pollId === poll.id && activeIds.has(vote.memberId));
+            const voted = responded.has(poll.id);
+            const pending = needsResponse(poll.id);
+            const urgent = !!poll.deadline && new Date(poll.deadline).getTime() - Date.now() <= 86400000;
+            return <Link key={poll.id} to={`/polls?poll=${encodeURIComponent(poll.id)}`}
+              className={`home-poll-row ${pending ? 'needs-response' : ''}`}>
+              <div className="home-poll-copy">
+                <h3>{poll.title}</h3>
+                <div className="home-poll-meta">
+                  <span className={urgent ? 'is-urgent' : undefined}>{poll.deadline
+                    ? `${formatDate(poll.deadline, { month: 'numeric', day: 'numeric' })} ${formatTime(poll.deadline)} ${t('마감')}`
+                    : t('마감 없음')}</span>
+                  <span className="home-poll-response">{t('{0}/{1} 응답', { '0': votes.length, '1': active.length })}</span>
+                </div>
+              </div>
+              <span className={`home-poll-action ${voted ? 'is-complete' : ''}`}>
+                {voted && <Check size={14}/>}
+                {pending ? t('시간 선택하기') : voted ? t('참여 완료') : t('결과 보기')}
+                {!voted && <ChevronRight size={15}/>}
+              </span>
+            </Link>;
+          })}
+          {!openPolls.length && <div className="home-panel-empty"><Vote size={22}/><p>{t('진행 중인 투표가 없어요.')}</p></div>}
+        </div>
+      </section>
+
+      <section className="home-panel home-next-event" aria-label={t('다가오는 모임')}>
+        <div className="home-panel-heading"><h2>{t('다가오는 모임')}</h2>{next && <span className="home-event-dday">{days === 0 ? t('오늘') : `D-${days}`}</span>}</div>
+        {next ? <>
+          <h3 className="home-event-title">{next.title}</h3>
+          <div className="home-event-details">
+            <div><Clock3 size={17}/><span>{formatDate(next.date)}<strong>{next.start}–{next.end}</strong></span></div>
+            <div><MapPin size={17}/><div className="hero-location-copy"><strong>{nextPlace || next.location || t('장소 미정')}</strong>{nextPlace && <small>{nextAddress}</small>}
+              {next.location && <div className="hero-location-links"><MapLinks location={next.location} compact/></div>}
+            </div></div>
+          </div>
+          <div className="home-event-footer"><div className="hero-attendees"><Users size={14}/><span>{attendees.length}{t('명 참여')}</span></div>
+            <Link to={`/calendar?event=${encodeURIComponent(next.id)}`} className="home-event-open">{t('일정 확인')}<ArrowRight size={15}/></Link>
+          </div>
+        </> : <div className="home-panel-empty"><p>{t('예정된 일정이 없어요.')}</p><Link className="home-more" to="/calendar">{t('캘린더 열기')}<ChevronRight size={14}/></Link></div>}
+      </section>
+
+      <section className="home-panel home-notices-panel" aria-label={t('공지사항')}>
+        <div className="home-panel-heading"><h2>{t('공지사항')}</h2><Link to="/board?category=notice" className="home-more">{t('전체 보기')}<ChevronRight size={14}/></Link></div>
+        {notices.length ? <div className="home-notice-list">{notices.map(post => <Link key={post.id} to={`/board?category=notice&post=${encodeURIComponent(post.id)}`} className="home-notice-row">
+          <strong>{post.title}</strong><time dateTime={post.createdAt}>{relativeDate(post.createdAt)}</time><ChevronRight size={15}/>
+        </Link>)}</div> : <p className="home-empty-line">{t('등록된 공지가 없어요.')}</p>}
+      </section>
+
+      <section className="home-panel home-birthdays-panel" aria-label={t('다가오는 생일')}>
+        <div className="home-panel-heading"><h2><Cake size={16}/>{t('다가오는 생일')}</h2></div>
+        {birthdays.length ? <div className="home-birthday-list">{birthdays.map(({ member, date, daysUntil }) => <Link to={`/calendar?date=${date}`} key={member.id} className="home-birthday-row">
+          <Avatar member={member} size={30}/><strong>{member.name}</strong><span>{formatDate(date, { month: 'numeric', day: 'numeric' })}</span>
+          <small className={daysUntil === 0 ? 'is-today' : undefined}>{daysUntil === 0 ? t('오늘') : `D-${daysUntil}`}</small>
+        </Link>)}</div> : <p className="home-empty-line">{t('등록된 생일이 없어요.')}</p>}
+      </section>
     </div>
-    <div className="quick-actions"><Link to="/polls"><span className="quick-icon blue"><Vote size={22}/></span><span>{t("일정 투표")}</span><ChevronRight size={17}/></Link><Link to="/calendar"><span className="quick-icon orange"><CalendarDays size={22}/></span><span>{t("모임 캘린더")}</span><ChevronRight size={17}/></Link><Link to="/board"><span className="quick-icon green"><BoardIcon size={22}/></span><span>{t("게시판")}</span><ChevronRight size={17}/></Link><Link to="/ledger"><span className="quick-icon purple"><ArrowDownLeft size={22}/></span><span>{t("회계 장부")}</span><ChevronRight size={17}/></Link></div>
-    <div className="home-columns"><div className="home-main-column">
-      <section className="card home-section"><div className="section-head"><h2>{t("공지사항")}</h2><Link className="text-link" to="/board?category=notice">{t("전체 보기")}<ChevronRight size={15}/></Link></div><div className="home-notices">{notices.length ? notices.map(p => <Link key={p.id} to={`/board?category=notice&post=${p.id}`}><span className={`notice-dot ${p.pinned ? 'pinned' : ''}`}/><div><strong>{p.title}</strong><span>{memberName(app.members, p.authorId)}<i>·</i>{relativeDate(p.createdAt)}</span></div><ChevronRight size={17}/></Link>) : <div className="small-empty">{t("등록된 공지가 없어요.")}</div>}</div></section>
-
-    </div><aside className="home-side-column"><section className="card home-section home-mini-calendar"><div className="section-head"><h2>{formatDate(localDate(month), {year:"numeric",month:"long"})}</h2><div className="row"><IconButton label={t("이전 달")} icon={ChevronLeft} onClick={() => setMonth(new Date(year, mon - 1, 1))}/><IconButton label={t("다음 달")} icon={ChevronRight} onClick={() => setMonth(new Date(year, mon + 1, 1))}/></div></div><div className="mini-calendar-grid">{[t("일"), t("월"), t("화"), t("수"), t("목"), t("금"), t("토")].map((day, i) => <span className={`mini-weekday ${i === 0 ? 'holiday' : i === 6 ? 'saturday' : ''}`} key={day}>{day}</span>)}{Array.from({ length: offset }, (_, i) => <span key={`blank-${i}`}/>)}{Array.from({ length: total }, (_, i) => { const date = localDate(new Date(year, mon, i + 1)), day = new Date(year, mon, i + 1).getDay(), holiday = getHoliday(date), hasEvent = app.events.some(e => e.date === date); return <Link to={`/calendar?date=${date}`} key={date} title={`${date}${holiday ? ' ' + t(holiday) : ''}`} aria-label={`${date}${holiday ? ' ' + t(holiday) : ''}${hasEvent ? t(" 모임 일정 있음") : ''}`} className={`mini-day ${date === now ? 'is-today' : ''} ${day === 0 || holiday ? 'holiday' : day === 6 ? 'saturday' : ''} ${hasEvent ? 'has-event' : ''}`}><span>{i + 1}</span>{hasEvent && <i />}</Link>; })}</div>{!hasHolidayData(year) && <p className="field-hint">{t("이 연도의 공휴일 정보가 아직 없어요.")}</p>}<div className="mini-upcoming">{events.slice(0, 2).map(e => <Link key={e.id} to={`/calendar?event=${e.id}`}><span className="mini-event-bar"/><div><strong>{e.title}</strong><span>{formatDate(e.date)} · {e.start}</span></div><ChevronRight size={15}/></Link>)}</div></section>
-    <section className="card home-section home-birthdays" aria-label={t("다가오는 생일")}><div className="section-head"><h2><Cake size={16}/>{t("다가오는 생일")}</h2></div>{birthdays.length ? <div className="birthday-list">{birthdays.map(({ member, date, daysUntil }) => <Link to={`/calendar?date=${date}`} key={member.id} className="birthday-row"><Avatar member={member} size={34}/><div><strong>{member.name}</strong><span>{formatDate(date, { month: 'long', day: 'numeric' })}</span></div><span className={`birthday-dday ${daysUntil === 0 ? 'is-today' : ''}`}>{daysUntil === 0 ? t("오늘") : `D-${daysUntil}`}</span></Link>)}</div> : <p className="birthday-empty">{t("등록된 생일이 없어요.")}</p>}</section>
-    <section className="card home-section"><div className="section-head"><h2>{t("사진첩")}</h2><Link className="text-link" to="/board?category=gallery"><ChevronRight size={18}/><span className="sr-only">{t("사진첩 전체 보기")}</span></Link></div><div className="home-photo-grid">{photos.length ? photos.map((p, i) => <Link key={p.id} className={i === 0 ? 'first-photo' : ''} to={`/board?category=gallery&post=${p.id}`}><img src={p.images[0]} alt={p.title} loading="lazy"/><span>{p.title}</span></Link>) : <div className="small-empty"><Image size={25}/><span>{t("등록된 사진이 없어요.")}</span></div>}</div></section>
-    </aside></div>
-
   </div>;
 }
