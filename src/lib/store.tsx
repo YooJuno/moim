@@ -186,8 +186,12 @@ export function AppProvider({children}: {children: ReactNode}) {
 
   useEffect(()=>()=>{ for(const url of imageCache.current.values()) URL.revokeObjectURL(url); },[]);
 
+  const activeMemberIds=new Set(data.members.filter(member=>member.status==='active').map(member=>member.id));
+  const ongoingPollIds=new Set(data.polls.filter(poll=>poll.status==='open'&&(poll.deadline===null||new Date(poll.deadline).getTime()>Date.now())).map(poll=>poll.id));
   const value: AppContextValue = useMemo(()=>({
     ...data,
+    votes:data.votes.filter(vote=>!ongoingPollIds.has(vote.pollId)||activeMemberIds.has(vote.memberId)),
+    rsvps:data.rsvps.filter(rsvp=>{const event=data.events.find(event=>event.id===rsvp.eventId);return !event||eventEnd(event).getTime()<=Date.now()||activeMemberIds.has(rsvp.memberId);}),
     posts:data.posts.map(post=>({...post,images:post.images.map(displayImage)})),
     members:isAdmin ? data.members:data.members.filter(member=>member.status==='active'),
     profiles:isAdmin ? data.profiles : data.profiles.filter(profile=>profile.id===user?.id),
