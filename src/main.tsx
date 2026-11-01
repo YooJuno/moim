@@ -2,6 +2,7 @@ import { installErrorReporting, reportError } from './lib/telemetry';
 import { translate } from './lib/i18n';
 import './styles.css';
 import './themes.css';
+import './layout.css';
 import './components/app-error-boundary.css';
 installErrorReporting();
 void import('./bootstrap').then(({ mountApp }) => mountApp()).catch(error => {

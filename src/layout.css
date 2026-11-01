@@ -1,0 +1,26 @@
+.app-shell .topbar { height: 60px; }
+.app-shell .topbar-actions { flex-shrink: 0; gap: 12px; }
+.app-shell .breadcrumb { min-width: 0; gap: 8px; }
+.app-shell .breadcrumb > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell .breadcrumb > strong { flex-shrink: 0; }
+.app-shell .profile-menu-trigger { width: 44px; height: 44px; align-items: center; justify-content: center; }
+.app-shell .notifications > summary { width: 44px; height: 44px; }
+.app-shell .page { padding-top: 24px; }
+.app-shell .settings-layout > * { min-width: 0; }
+.app-shell .page-header { gap: 14px; margin-bottom: 20px; }
+.app-shell .page-header > div:first-child { min-width: 0; }
+.app-shell .page-header h1 { font-size: 26px; line-height: 1.35; overflow-wrap: anywhere; }
+.app-shell .page-subtitle { margin-top: 4px; }
+.app-shell .page-header-action .button.button-icon-only { flex-basis: 44px; width: 44px; min-width: 44px; max-width: 44px; height: 44px; min-height: 44px; }
+
+@media (max-width: 760px) {
+  .app-shell .topbar { height: 52px; padding: 0 16px; }
+  .app-shell .topbar-actions { gap: 4px; }
+  .app-shell .mobile-brand { min-height: 44px; align-items: center; }
+  .app-shell .topbar .brand { font-size: 23px; gap: 7px; }
+  .app-shell .topbar .brand-mark { width: 24px; height: 24px; border-radius: 8px; }
+  .app-shell .page { padding: 16px 16px 24px; }
+  .app-shell .page-header { gap: 12px; margin-bottom: 14px; }
+  .app-shell .page-header h1 { font-size: 22px; }
+  .app-shell .notification-panel { right: -48px; }
+}
