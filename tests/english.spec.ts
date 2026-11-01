@@ -35,7 +35,6 @@ for(const viewport of [{name:'desktop',width:1440,height:1000},{name:'mobile',wi
     await detail.getByRole('button',{name:'Save selection',exact:true}).click();
     await expect(page.locator('.toast').last()).toHaveText('Your availability has been saved.');
     await expect(detail.locator('.poll-result-filters')).toHaveCount(0);
-    await expect(detail.locator('.poll-availability-duration').first()).toContainText('1h');
     await detail.getByRole('button',{name:'Close',exact:true}).first().click();
     await page.goto('/members');
     await page.locator('.member-person').first().click();

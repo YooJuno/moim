@@ -121,7 +121,6 @@
 .poll-availability-date { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; font-size: 12px; line-height: 1.4; color: var(--text-6b7684); }
 .poll-availability-date > strong { font-weight: 500; white-space: nowrap; }
 .poll-availability-range { font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--text-4e5968); font-variant-numeric: tabular-nums; }
-.poll-availability-duration { font-size: 11px; font-weight: 400; color: var(--text-8b95a1); white-space: nowrap; }
 .poll-availability-count { display: flex; align-items: center; gap: 4px; margin-left: auto; flex-shrink: 0; color: var(--blue); font-size: 13px; font-weight: 650; }
 .poll-availability-chevron { flex-shrink: 0; transition: transform .15s; }
 .poll-availability-members[open] .poll-availability-chevron { transform: rotate(90deg); }
@@ -130,7 +129,6 @@
 .poll-availability-empty { margin: 0; padding: 14px 12px; font-size: 12px; color: var(--text-8b95a1); }
 @media (max-width: 360px) {
   .poll-availability-date { font-size: 11px; }
-  .poll-availability-duration { font-size: 10px; }
 }
 
 @media (max-width: 400px) {

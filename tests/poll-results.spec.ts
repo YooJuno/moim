@@ -44,7 +44,6 @@ test('results appear above the grid with fixed people-first ordering and no filt
   await expect(results.getByRole('combobox')).toHaveCount(0);
   await expect(results.locator('h3')).toHaveText('가능한 시간대');
   await expect(rows.nth(0)).toContainText('19:00–20:00');
-  await expect(rows.nth(0)).toContainText('총 1시간');
   await expect(rows.nth(0)).toContainText('3명 가능');
   await expect(rows.nth(1)).toContainText('18:00–20:00');
   await expect(rows.nth(2)).toContainText('19:00–21:00');
@@ -60,7 +59,6 @@ test('choosing a four-hour result keeps its full start and end when confirming a
   const pollId = await prepareResults(page,'long');
   const row = page.getByRole('region',{name:'가능한 시간대',exact:true}).locator('.poll-availability-row').nth(1);
   await expect(row).toContainText('18:00–22:00');
-  await expect(row).toContainText('총 4시간');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await row.getByRole('button',{name:/일정 확정/}).click();
   const dialog = page.getByRole('dialog',{name:'모임 일정 확정',exact:true});

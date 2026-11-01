@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Cake, CalendarDays, Check, ChevronRight, Clock3, ListChecks, MapPin, Megaphone, Plus, Users, Vote } from 'lucide-react';
+import { ArrowRight, Cake, CalendarDays, Check, ChevronRight, Clock3, ListChecks, MapPin, Megaphone, Users, Vote } from 'lucide-react';
 import { MapLinks } from '../components/MapLinks';
 import { Avatar, PageHeader } from '../components/ui';
 import { useApp } from '../lib/store';
@@ -37,9 +37,7 @@ export function Home() {
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.createdAt.localeCompare(a.createdAt)).slice(0, 3);
 
   return <div className="page home-page">
-    <PageHeader tourId="home" title={app.settings.name}
-      description={formatDate(new Date().toISOString(), { month: 'long', day: 'numeric', weekday: 'long' })}
-      action={app.canCreatePoll ? <Link to="/polls?create=1" className="button button-primary button-md button-icon-only" aria-label={t('투표 만들기')} title={t('투표 만들기')}><Plus size={20} aria-hidden="true"/></Link> : undefined}/>
+    <PageHeader tourId="home" title={app.settings.name}/>
 
     <div className="home-dashboard">
       <section className="home-panel home-polls-panel" aria-label={t('진행 중인 투표')}>

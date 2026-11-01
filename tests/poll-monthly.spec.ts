@@ -90,7 +90,7 @@ test('editing a midnight poll keeps selected dates, windows and cell identities'
   expect(event.start).toBe('23:00'); expect(event.end).toBe('24:00');
 });
 
-test('poll card summarizes the full common time with the most people including its end and duration', async ({ page }) => {
+test('poll card summarizes the full common time with the most people including its start and end', async ({ page }) => {
   await page.goto('/polls?create=1');
   const editor = page.getByRole('dialog');
   await editor.getByRole('button', {name:'선택 초기화',exact:true}).click();
@@ -108,6 +108,5 @@ test('poll card summarizes the full common time with the most people including i
   await page.goto('/polls');
   const card = page.locator('.poll-card').filter({hasText:'공통 시간 전체 요약'});
   await expect(card.locator('.poll-best')).toContainText('18:00–22:00');
-  await expect(card.locator('.poll-best')).toContainText('총 4시간');
   await expect(card.locator('.poll-best')).toContainText('3명');
 });

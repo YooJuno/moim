@@ -17,7 +17,7 @@ import { MonthNavigation, ScrollingCalendar } from './ScheduleGrid';
 import { getHoliday, hasHolidayData } from '../lib/holidays';
 import { contiguousEndSlots, expandTimeWindows, pollTimeWindows, timeToMinutes } from '../lib/poll-times';
 import { monthlyPollDates, monthlyPollTitle, nextPollMonth } from '../lib/poll-presets';
-import { formatPollDuration, getPollAvailabilityWindows } from '../lib/poll-results';
+import { getPollAvailabilityWindows } from '../lib/poll-results';
 import type { PollAvailabilityWindow } from '../lib/poll-results';
 import './schedule.css';
 import './poll-time-grid.css';
@@ -88,7 +88,7 @@ export function Polls() {
                 return <button className="card poll-card" key={poll.id} onClick={() => openDetail(poll)}>
         <div className="poll-card-top"><Badge tone={poll.status === 'confirmed' ? 'green' : isOpen(poll) ? 'blue' : 'gray'}>{poll.status === 'confirmed' ? t("일정 확정") : isOpen(poll) ? t("투표 중") : t("마감")}</Badge><span className="poll-deadline">{isOpen(poll) && <Clock3 size={13}/>}{deadlineLabel(poll.deadline)}</span></div>
         <h2>{poll.title}</h2>{poll.description && <p className="poll-card-description">{poll.description}</p>}
-        {first ? <div className="poll-best"><Trophy size={16}/><div><span>{t("가장 많은 인원이 가능한 시간")}</span><strong>{shortDate(first.date)} · {first.start}–{first.end}<em>{first.memberIds.length}{t("명")}</em></strong><small>{t("총 {0}", {"0":formatPollDuration(first.durationMinutes)})}</small></div></div> : <div className="poll-best poll-best-empty"><BarChart3 size={18}/><span>{t("첫 번째 가능한 시간을 알려 주세요")}</span></div>}
+        {first ? <div className="poll-best"><Trophy size={16}/><div><span>{t("가장 많은 인원이 가능한 시간")}</span><strong>{shortDate(first.date)} · {first.start}–{first.end}<em>{first.memberIds.length}{t("명")}</em></strong></div></div> : <div className="poll-best poll-best-empty"><BarChart3 size={18}/><span>{t("첫 번째 가능한 시간을 알려 주세요")}</span></div>}
         <div className="poll-progress"><div style={{ width: `${total ? Math.min(votes.length / total * 100, 100) : 0}%` }}/></div>
         <div className="poll-card-bottom"><div className="poll-avatar-stack">{participating.slice(0, 4).map(member => <Avatar key={member.id} member={member} size={27}/>)}<span>{votes.length}<span className="muted"> / {total}{t("명 참여")}</span></span></div><span className={ownVote ? 'poll-voted' : 'poll-vote-cta'}>{ownVote ? staleVote && isOpen(poll) ? <>{t("선택 확인")}<ChevronRight size={15}/></> : <><Check size={14}/>{t("참여 완료")}</> : isOpen(poll) && app.canParticipate ? <>{t("참여하기")}<ArrowRight size={15}/></> : <>{t("결과 보기")}<ChevronRight size={15}/></>}</span></div>
       </button>;
@@ -331,7 +331,7 @@ function AvailabilityResults({ poll, votes, onConfirm, disabled }: {
         {(expanded ? windows : windows.slice(0, 3)).map((window, index) => <article className={`poll-availability-row ${canConfirm ? 'can-confirm' : ''}`} key={JSON.stringify([window.date, window.start, window.end, window.memberIds])} data-date={window.date} data-start={window.start} data-end={window.end} data-duration={window.durationMinutes} data-member-count={window.memberIds.length}>
           <details className="poll-availability-members"><summary className="poll-availability-main">
             <span className={`poll-rank ${index === 0 ? 'first' : ''}`}>{index + 1}</span>
-            <span className="poll-availability-time"><span className="poll-availability-date"><strong>{formatDate(window.date, {month:'long',day:'numeric',weekday:'short'})}</strong><small className="poll-availability-duration">{t("총 {0}", {"0":formatPollDuration(window.durationMinutes)})}</small></span><strong className="poll-availability-range">{window.start}–{window.end}</strong></span>
+            <span className="poll-availability-time"><span className="poll-availability-date"><strong>{formatDate(window.date, {month:'long',day:'numeric',weekday:'short'})}</strong></span><strong className="poll-availability-range">{window.start}–{window.end}</strong></span>
             <span className="poll-availability-count"><Users size={14}/>{window.memberIds.length}<span className="sr-only">{t("명 가능")}</span></span><ChevronRight className="poll-availability-chevron" size={14}/>
           </summary><div>{window.memberIds.map(id => <span key={id}><Avatar member={app.members.find(member => member.id === id)} name={memberName(app.members, id)} size={25}/>{memberName(app.members, id)}</span>)}</div></details>
           {canConfirm && <Button iconOnly variant="ghost" icon={CalendarCheck} disabled={disabled} onClick={() => onConfirm(window)} aria-label={t("{0} {1}\u2013{2} 일정 확정", { "0": formatDate(window.date), "1": window.start, "2": window.end })}>{t("일정 확정")}</Button>}
