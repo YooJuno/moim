@@ -21,8 +21,9 @@ for(const viewport of [{name:'desktop',width:1440,height:1000},{name:'mobile',wi
       await expect(page.locator('.member-row').filter({hasText:'신예린'})).toHaveCount(0);
       await expect(page.locator('.member-row').filter({hasText:'김민서'})).toHaveCount(0);
       await page.locator('.member-row').filter({hasText:'이준호'}).getByRole('button',{name:/이준호/}).first().click();
-      await expect(page.getByRole('dialog').getByLabel('전화번호')).toHaveCount(0);
-      await expect(page.getByRole('dialog').getByRole('textbox',{name:'생일',exact:true})).toHaveCount(0);
+      await expect(page.getByRole('dialog').getByLabel('전화번호')).toHaveValue('010-0000-1202');
+      await expect(page.getByRole('dialog').getByLabel('전화번호')).not.toBeEditable();
+      await expect(page.getByRole('dialog').getByRole('textbox',{name:'생일',exact:true})).not.toBeEditable();
       await page.goto('/profile');
       await page.getByLabel('전화번호').fill('010-0000-9915');
       await page.getByRole('button',{name:'저장하기',exact:true}).click();

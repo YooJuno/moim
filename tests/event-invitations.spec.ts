@@ -1,0 +1,43 @@
+import {expect,test} from '@playwright/test';
+for(const width of [390,1440]){
+ test(`creates member invitations and lets the invitee respond from notifications at ${width}px`,async({page})=>{
+  await page.setViewportSize({width,height:900});await page.clock.setFixedTime(new Date('2026-10-24T12:00:00+09:00'));
+  await page.goto('/calendar?create=1');let dialog=page.getByRole('dialog');
+  await dialog.getByLabel('일정 제목').fill('초대 테스트 일정');
+  await dialog.locator('.event-invite-picker > summary').click();
+  await expect(dialog.getByRole('checkbox',{name:'이준호',exact:true})).toBeChecked();
+  await expect(dialog.getByRole('checkbox',{name:'신예린',exact:true})).toHaveCount(0);
+  await dialog.getByRole('button',{name:'선택 해제',exact:true}).click();
+  await dialog.getByRole('checkbox',{name:'이준호',exact:true}).check();await dialog.getByRole('checkbox',{name:'김민서',exact:true}).check();
+  await dialog.locator('input[placeholder="장소 이름 또는 주소"]').fill('서울 중랑구 농구장');
+  await dialog.getByRole('button',{name:'일정 만들기',exact:true}).click();
+  await expect(dialog).toHaveAccessibleName('초대 테스트 일정');
+  const event=await page.evaluate(()=>{const d=JSON.parse(localStorage.getItem('moim-demo-v1')!);const event=d.events.find((e:any)=>e.title==='초대 테스트 일정');return{...event,responses:d.rsvps.filter((r:any)=>r.eventId===event.id)};});
+  expect(event.invitedMemberIds.sort()).toEqual(['demo-me','m-jun']);expect(event.responses).toEqual([]);
+  await dialog.locator('.event-invited > summary').click();await expect(dialog.locator('.event-invited-list')).toContainText('이준호');
+  await dialog.getByRole('button',{name:'Google 캘린더',exact:true}).click();
+  await expect(dialog.getByRole('checkbox',{name:'이준호 초대',exact:true})).toBeChecked();
+  await dialog.getByRole('button',{name:'닫기',exact:true}).last().click();
+  await dialog.getByRole('button',{name:'닫기',exact:true}).last().click();
+  await page.locator('.notifications > summary').click();
+  await expect(page.locator('.notification-panel')).toBeVisible();
+  await page.locator('.notification-event').filter({hasText:'초대 테스트 일정'}).click();
+  dialog=page.getByRole('dialog');await expect(dialog).toHaveAccessibleName('초대 테스트 일정');
+  await dialog.getByRole('button',{name:'참여해요',exact:true}).click();
+  await expect(dialog.getByRole('button',{name:'참여해요',exact:true})).toHaveAttribute('aria-pressed','true');
+  await dialog.getByRole('button',{name:'닫기',exact:true}).last().click();
+  await page.locator('.notifications > summary').click();
+  await expect(page.locator('.notification-event')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.goto(`/calendar?event=${event.id}`);dialog=page.getByRole('dialog');
+  await dialog.getByRole('button',{name:'일정 수정',exact:true}).click();
+  await dialog.locator('.event-invite-picker > summary').click();
+  await expect(dialog.getByRole('checkbox',{name:'이준호',exact:true})).toBeChecked();
+  await expect(dialog.getByRole('checkbox',{name:'김민서',exact:true})).toBeChecked();
+  await dialog.getByRole('checkbox',{name:'이준호',exact:true}).uncheck();
+  await dialog.getByRole('button',{name:'수정하기',exact:true}).click();
+  const saved=await page.evaluate(id=>JSON.parse(localStorage.getItem('moim-demo-v1')!).events.find((e:any)=>e.id===id),event.id);
+  expect(saved.invitedMemberIds).toEqual(['demo-me']);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ });
+}

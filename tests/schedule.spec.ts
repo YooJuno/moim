@@ -161,7 +161,7 @@ test('a member can explicitly submit no availability and revise it', async ({ pa
   await expect(dialog.locator('.poll-participant-row').filter({ hasText: '김민서' })).toContainText('가능한 시간 없음');
   await dialog.locator('.poll-time-cell').first().click();
   await dialog.getByRole('button', { name: '선택 수정하기' }).click();
-  await expect(dialog.locator('.poll-participant-row').filter({ hasText: '김민서' })).toContainText('1개 시간 가능');
+  await expect(dialog.locator('.poll-participant-row').filter({ hasText: '김민서' })).toContainText('참여 완료');
   await page.reload();
   await expect(page.getByRole('dialog').locator('.poll-time-cell.is-selected')).toHaveCount(1);
 });

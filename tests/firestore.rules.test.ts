@@ -79,12 +79,33 @@ describe.skipIf(!enabled)('Firebase access boundaries',()=>{
     await assertSucceeds(setDoc(doc(db,'members','new'),member('new','member','pending')));
     await assertFails(updateDoc(doc(db,'members','new'),{status:'active'}));
   });
-  it('protects phone and area from other members and treasurers',async()=>{
+  it('keeps private profile preferences separate from the shared member directory',async()=>{
     await assertSucceeds(getDoc(doc(client('member'),'profiles','member')));
     await assertSucceeds(getDoc(doc(client('leader'),'profiles','member')));
     await assertFails(getDoc(doc(client('treasurer'),'profiles','member')));
     await assertFails(getDoc(doc(client('creator'),'profiles','member')));
     await assertFails(getDocs(collection(client('member'),'profiles')));
+  });
+  it('shares member contact details inside the group while keeping edits limited to owner and admin',async()=>{
+    await assertSucceeds(updateDoc(doc(client('member'),'members','member'),{phone:'010-1234-5678',area:'서울 중랑구'}));
+    for(const id of ['leader','treasurer','creator','pending']) {
+      const snapshot=await assertSucceeds(getDoc(doc(client(id),'members','member')));
+      expect(snapshot.data()).toMatchObject({phone:'010-1234-5678',area:'서울 중랑구',email:'member@example.com'});
+    }
+    for(const db of [environment.unauthenticatedContext().firestore(),client('rejected')]) await assertFails(getDoc(doc(db,'members','member')));
+    await assertFails(updateDoc(doc(client('creator'),'members','member'),{phone:'010-9999-9999'}));
+    await assertFails(updateDoc(doc(client('member'),'members','member'),{role:'leader'}));
+    await assertSucceeds(updateDoc(doc(client('leader'),'members','member'),{area:'서울 마포구'}));
+    await assertFails(updateDoc(doc(client('member'),'members','member'),{phone:'1'.repeat(31)}));
+    await assertFails(updateDoc(doc(client('member'),'members','member'),{area:'a'.repeat(101)}));
+  });
+  it('lets only admins set event invitations and rejects duplicate or malformed lists',async()=>{
+    await assertSucceeds(updateDoc(doc(client('leader'),'events','e1'),{invitedMemberIds:['member','creator']}));
+    await assertSucceeds(getDoc(doc(client('member'),'events','e1')));
+    await assertFails(updateDoc(doc(client('member'),'events','e1'),{invitedMemberIds:['member']}));
+    await assertFails(updateDoc(doc(client('leader'),'events','e1'),{invitedMemberIds:['member','member']}));
+    await assertFails(updateDoc(doc(client('leader'),'events','e1'),{invitedMemberIds:'member'}));
+    await assertSucceeds(updateDoc(doc(client('leader'),'events','e1'),{invitedMemberIds:[]}));
   });
   it('allows filtered active directory reads and prevents self role escalation',async()=>{
     const db=client('member');
@@ -384,12 +405,12 @@ describe.skipIf(!enabled)('Firebase access boundaries',()=>{
     await assertFails(updateDoc(doc(db,'members','creator'),{birthday:'03-15'}));
     await assertSucceeds(updateDoc(doc(db,'members','member'),{birthday:deleteField()}));
   });
-  it('mirrors public birthday and private profile atomically while keeping phone and area out of directory documents',async()=>{
+  it('mirrors shared member details while retaining private profile boundaries',async()=>{
     const db=client('member');const batch=writeBatch(db);
     batch.update(doc(db,'members','member'),{name:'생일 등록',birthday:'03-15'});
     batch.set(doc(db,'profiles','member'),{id:'member',phone:'010-0000-0000',area:'테스트 지역',birthday:'03-15'});await assertSucceeds(batch.commit());
-    await assertFails(updateDoc(doc(db,'members','member'),{phone:'010-0000-0000'}));
-    await assertFails(updateDoc(doc(client('leader'),'members','member'),{area:'테스트 지역'}));
+    await assertSucceeds(updateDoc(doc(db,'members','member'),{phone:'010-0000-0000'}));
+    await assertSucceeds(updateDoc(doc(client('leader'),'members','member'),{area:'테스트 지역'}));
     await assertFails(getDoc(doc(client('creator'),'profiles','member')));
     await assertSucceeds(updateDoc(doc(client('leader'),'members','member'),{birthday:'12-31'}));
   });

@@ -384,7 +384,7 @@ export const messagesEn: Record<string, string> = {
   '연결할 기존 멤버': 'Roster entry to connect',
   '연락처 · 거주 지역': 'Contact details · Area',
   '연락처 미등록': 'No contact details',
-  '연락처와 거주 지역은 본인과 관리자만 볼 수 있어요.': 'Only you and administrators can view your contact details and area.',
+
   '영수증': 'Receipt',
   '영수증 맞춤 보기': 'Fit receipt to screen',
   '영수증 미리보기': 'Receipt preview',
@@ -504,7 +504,7 @@ export const messagesEn: Record<string, string> = {
   '전체 시간 가능': 'Available for all times',
   '전화번호': 'Phone number',
   '전화번호 없음': 'No phone number',
-  '전화번호와 거주 지역은 본인과 관리자만 볼 수 있어요.': 'Only you and administrators can view your phone number and area.',
+
   '접수 거절': 'Submission rejected',
   '접수 완료': 'Submitted',
   '정렬': 'Sort',

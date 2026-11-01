@@ -1,7 +1,8 @@
+import { EventInvitePicker } from '../components/EventInvitePicker';
 import { useI18n } from "../lib/preferences";
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CalendarDays, CalendarPlus, Cake, Check, ChevronRight, Clock3, Download, MapPin, Pencil, Plus, Share2, MessageSquare, Trash2, Users, X } from 'lucide-react';
+import { CalendarDays, CalendarPlus, Cake, Check, ChevronRight, Clock3, Download, MapPin, Pencil, Plus, Share2, MessageSquare, Trash2, UserPlus, Users, X } from 'lucide-react';
 import { useApp } from '../lib/store';
 import type { MoimEvent } from '../lib/types';
 import { errorMessage, formatDate, localDate, memberName, today, uid } from '../lib/utils';
@@ -132,6 +133,7 @@ function EventDetail({ event, onClose, onEdit, onDelete }: {
     <div className="event-detail-date"><div className="event-date-icon"><CalendarDays size={24}/></div><div><strong>{formatDate(event.date, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}</strong><p>{event.start}–{event.end}{getHoliday(event.date) && <span className="event-holiday">{t(getHoliday(event.date) || "")}</span>}</p></div>{event.pollId && <Badge tone="blue">{t("투표로 확정")}</Badge>}</div>
     <div className="event-location"><MapPin size={19}/><span>{event.location || t("장소 추후 안내")}</span></div>{event.location && <MapLinks location={event.location}/>}
     {event.description && <p className="event-description">{event.description}</p>}
+    {!!event.invitedMemberIds?.length && <details className="event-invited"><summary><UserPlus size={17}/>{t('초대 멤버')}<span>{event.invitedMemberIds.length}</span><ChevronRight size={15}/></summary><div className="event-invited-list">{app.members.filter(member=>member.status==='active'&&event.invitedMemberIds?.includes(member.id)).map(member=><span key={member.id}><Avatar member={member} size={25}/>{member.name}</span>)}</div></details>}
     <div className="event-rsvp"><h3>{t("참석 여부")}</h3><div className="event-rsvp-buttons"><Button variant={own?.status === 'going' ? 'primary' : 'secondary'} icon={Check} loading={busy === 'going'} disabled={!app.canParticipate || (busy !== null && busy !== 'going')} aria-pressed={own?.status === 'going'} onClick={() => save('going')}>{t("참여해요")}</Button><Button variant={own?.status === 'notGoing' ? 'primary' : 'secondary'} icon={X} loading={busy === 'notGoing'} disabled={!app.canParticipate || (busy !== null && busy !== 'notGoing')} aria-pressed={own?.status === 'notGoing'} onClick={() => save('notGoing')}>{t("어려워요")}</Button></div>{own && <p className="muted">{own.status === 'going' ? t("참여 예정으로 등록했어요.") : t("불참으로 등록했어요.")}</p>}</div>
     {app.isAdmin && <div className="event-google-calendar"><Button variant="secondary" icon={CalendarPlus} onClick={() => setCalendarOpen(true)}>{t("Google 캘린더")}</Button>{event.calendarLink && <span className={event.calendarLink.signature !== calendarSignature(event, event.calendarLink.attendeeIds) ? 'needs-update' : ''}>{event.calendarLink.signature !== calendarSignature(event, event.calendarLink.attendeeIds) ? t("변경사항 있음") : t("연결됨")}</span>}</div>}
     <KakaoCalendarButton event={event}/>
@@ -155,13 +157,16 @@ function EventEditor({ event, initialDate, onClose, onSaved }: {
     const [end, setEnd] = useState(event?.end ?? '21:00');
     const [location, setLocation] = useState(event?.location ?? '');
     const [description, setDescription] = useState(event?.description ?? '');
+    const activeMembers=app.members.filter(member=>member.status==='active'&&!member.removedAt).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+    const [invitees,setInvitees]=useState<string[]|null>(event?.invitedMemberIds??null);
+    const invitedMemberIds=(invitees??activeMembers.map(member=>member.id)).filter(id=>activeMembers.some(member=>member.id===id));
     const [busy, setBusy] = useState(false);
     const [month, setMonth] = useState(() => { const d = new Date(`${date}T12:00:00`); return new Date(d.getFullYear(), d.getMonth(), 1); });
     return <Modal title={event ? t("일정 수정") : t("새 모임 일정")} onClose={() => !busy && onClose()} wide footer={<><Button icon={X} iconOnly variant="secondary" disabled={busy} onClick={onClose}>{t("취소")}</Button><Button type="submit" form="event-editor" icon={Check} loading={busy}>{event ? t("수정하기") : t("일정 만들기")}</Button></>}><form id="event-editor" className="stack" onSubmit={async (e) => { e.preventDefault(); if (!app.user || busy)
         return; if (!title.trim() || !date || !start || !end || start >= end) {
         toast('제목과 날짜, 시작·종료 시간을 확인해 주세요.', 'error');
         return;
-    } setBusy(true); const next: MoimEvent = { id: event?.id ?? uid(), title: title.trim(), description: description.trim(), date, start, end, location: location.trim(), creatorId: event?.creatorId ?? app.user.id, createdAt: event?.createdAt ?? new Date().toISOString(), ...(event?.pollId ? { pollId: event.pollId } : {}), ...(event?.calendarLink ? { calendarLink: event.calendarLink } : {}) }; try {
+    } setBusy(true); const next: MoimEvent = { id: event?.id ?? uid(), title: title.trim(), description: description.trim(), invitedMemberIds, date, start, end, location: location.trim(), creatorId: event?.creatorId ?? app.user.id, createdAt: event?.createdAt ?? new Date().toISOString(), ...(event?.pollId ? { pollId: event.pollId } : {}), ...(event?.calendarLink ? { calendarLink: event.calendarLink } : {}) }; try {
         await app.saveEvent(next, !!event);
         toast(event ? '일정을 수정했어요.' : '새 일정을 만들었어요.');
         onSaved(next);
@@ -173,6 +178,7 @@ function EventEditor({ event, initialDate, onClose, onSaved }: {
         setBusy(false);
     } }}>
     <Field label={t("일정 제목")} required><input value={title} onChange={e => setTitle(e.target.value)} maxLength={80} placeholder={t("어떤 만남인가요?")} required autoFocus/></Field>
+    <EventInvitePicker members={activeMembers} selected={invitedMemberIds} onChange={setInvitees} disabled={busy}/>
     <div className="event-editor-date"><h3>{t("날짜")}<span className="muted">{formatDate(date)}</span></h3><div className="poll-date-picker"><MonthNavigation compact month={month} onChange={setMonth}/><MonthGrid compact month={month} selectedDates={[date]} onSelect={value => { setDate(value); const d = new Date(`${value}T12:00:00`); setMonth(new Date(d.getFullYear(), d.getMonth(), 1)); }}/></div></div>
     <div className="form-grid"><Field label={t("시작 시간")} required><TimeInput value={start} onChange={setStart} required/></Field><div className="event-end-field"><Field label={t("종료 시간")} required><TimeInput value={end} disabled={end === '24:00'} onChange={setEnd} allowMidnight required/></Field><label className="event-midnight"><input type="checkbox" checked={end === '24:00'} onChange={e => setEnd(e.target.checked ? '24:00' : '')}/>{t("자정 (24:00)")}</label></div></div>
     <PlacePicker value={location} onChange={setLocation} disabled={busy}/>

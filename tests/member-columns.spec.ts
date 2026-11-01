@@ -37,19 +37,16 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
       test(`${administrator ? '관리자' : '일반 멤버'}가 보는 직책 없는 행도 등록일과 동작 열을 유지한다`, async ({ page }) => {
         const { chair, blank } = await prepareRows(page, administrator);
         await expect(chair).toBeVisible(); await expect(blank).toBeVisible();
-        if (administrator && viewport.name === 'desktop') {
-          await sameColumn(chair.locator('.member-contact'), blank.locator('.member-contact'));
-          await sameColumn(page.locator('.member-list-head>span').nth(2), blank.locator('.member-contact'));
-        } else if (administrator) {
-          await expect(chair.locator('.member-contact')).toBeHidden();
-          await expect(blank.locator('.member-contact')).toBeHidden();
-        } else {
-          await expect(page.locator('.member-contact')).toHaveCount(0);
+        await expect(chair.locator('.member-contact')).toBeVisible();
+        await expect(blank.locator('.member-contact')).toBeVisible();
+        if(viewport.name==='desktop') {
+          await sameColumn(chair.locator('.member-contact'),blank.locator('.member-contact'));
+          await sameColumn(page.locator('.member-list-head>span').nth(2),blank.locator('.member-contact'));
         }
         await sameColumn(chair.locator('.member-joined'), blank.locator('.member-joined'));
         await sameColumn(chair.locator('.member-row-action'), blank.locator('.member-row-action'));
         if (viewport.name === 'desktop') {
-          await sameColumn(page.locator('.member-list-head>span').nth(administrator ? 3 : 2), blank.locator('.member-joined'));
+          await sameColumn(page.locator('.member-list-head>span').nth(3), blank.locator('.member-joined'));
           await sameColumn(chair.locator('.member-role-badges'), blank.locator('.member-role-badges'));
         }
         await expect(chair.locator('.member-role-badges')).toHaveText('회장');

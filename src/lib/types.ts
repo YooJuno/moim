@@ -1,7 +1,7 @@
 import type { BankTransaction } from './bank-import';
 export type Role = 'leader' | 'treasurer' | 'member';
 export type MemberStatus = 'active' | 'pending' | 'rejected';
-export interface Member { removedAt?: string; removedBy?: string; id: string; name: string; email: string; photoURL?: string; isRoster?: boolean; position?: string; birthday?: string; role: Role; status: MemberStatus; canCreatePoll: boolean; joinedAt: string }
+export interface Member { removedAt?: string; removedBy?: string; id: string; name: string; email: string; phone?: string; area?: string; photoURL?: string; isRoster?: boolean; position?: string; birthday?: string; role: Role; status: MemberStatus; canCreatePoll: boolean; joinedAt: string }
 export interface UserPreferences { language: 'ko' | 'en'; theme: 'system' | 'light' | 'dark' }
 export interface Profile { id: string; phone: string; area: string; birthday?: string; language?: UserPreferences['language']; theme?: UserPreferences['theme'] }
 export interface Settings { name: string; description: string; photoURL?: string; bankName?: string; bankAccount?: string; smsEnabled?: boolean; smsAutoOnConfirm?: boolean }
@@ -13,7 +13,7 @@ export interface PollSlot { id: string; date: string; start: string; end: string
 export interface Poll { id: string; title: string; description: string; slots: PollSlot[]; slotIds: string[]; deadline: string | null; slotMinutes?: 30 | 60; timeWindows?: PollSlot[]; status: 'open' | 'closed' | 'confirmed'; creatorId: string; createdAt: string; updatedAt: string; eventId?: string }
 export interface Vote { id: string; pollId: string; memberId: string; slotIds: string[]; updatedAt: string }
 export interface CalendarLink { ownerId: string; googleEventId: string; htmlLink: string; syncedAt: string; attendeeIds: string[]; signature: string }
-export interface MoimEvent { id: string; title: string; description: string; date: string; start: string; end: string; location: string; creatorId: string; createdAt: string; pollId?: string; calendarLink?: CalendarLink }
+export interface MoimEvent { id: string; title: string; description: string; date: string; start: string; end: string; location: string; creatorId: string; createdAt: string; pollId?: string; invitedMemberIds?: string[]; calendarLink?: CalendarLink }
 export interface Rsvp { id: string; eventId: string; memberId: string; status: 'going' | 'notGoing'; updatedAt: string }
 export interface Bylaws { content: string; updatedAt: string; editorId: string }
 export interface SavedPlace { id: string; name: string; address: string; createdAt: string; updatedAt: string }

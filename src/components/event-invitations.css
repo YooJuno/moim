@@ -1,0 +1,37 @@
+.event-invite-picker { border:1px solid var(--surface-e8edf5); border-radius:12px; overflow:hidden; }
+.event-invite-picker > summary { display:flex; align-items:center; gap:9px; min-height:50px; padding:10px 13px; cursor:pointer; list-style:none; color:var(--text-4e5968); font-size:13px; }
+.event-invite-picker > summary::-webkit-details-marker, .notifications > summary::-webkit-details-marker { display:none; }
+.event-invite-picker > summary > span { margin-left:auto; color:var(--text-8b95a1); font-size:12px; }
+.event-invite-picker[open] > summary > svg:last-child { transform:rotate(180deg); }
+.event-invite-options { border-top:1px solid var(--surface-edf0f4); padding:4px 12px 12px; }
+.event-invite-tools { display:flex; justify-content:flex-end; margin-bottom:4px; }
+.event-invite-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; max-height:260px; overflow-y:auto; }
+.event-invite-grid > label { display:flex; align-items:center; gap:8px; min-height:46px; padding:8px; border:1px solid var(--surface-edf0f4); border-radius:9px; font-size:12px; cursor:pointer; }
+.event-invite-grid > label.is-selected { background:var(--surface-edf3ff); border-color:var(--surface-dbe8ff); }
+.event-invite-grid > label > span:not(.avatar) { min-width:0; overflow-wrap:anywhere; }
+.event-invite-grid input { margin-left:auto; width:16px; height:16px; accent-color:var(--blue); flex-shrink:0; }
+.event-invited { margin:16px 0; }
+.event-invited > h3 { display:flex; align-items:center; gap:7px; font-size:13px; margin:0 0 10px; }
+.event-invited-list { display:flex; flex-wrap:wrap; gap:8px 13px; }
+.event-invited-list > span { display:flex; align-items:center; gap:5px; font-size:12px; color:var(--text-6b7684); }
+.notifications { position:relative; }
+.notifications > summary { position:relative; display:flex; align-items:center; justify-content:center; width:36px; height:36px; list-style:none; cursor:pointer; color:var(--text-8b95a1); border-radius:10px; }
+.notifications > summary:hover { background:var(--surface-f2f4f6); }
+.notification-count { position:absolute; top:-1px; right:-3px; display:grid; place-items:center; min-width:17px; height:17px; padding:0 4px; border-radius:9px; background:var(--blue); color:var(--surface-ffffff); font-size:10px; }
+.notification-panel { position:absolute; right:0; top:calc(100% + 12px); z-index:60; width:min(340px,calc(100vw - 32px)); max-height:70dvh; overflow-y:auto; padding:14px; border:1px solid var(--surface-edf0f4); border-radius:14px; background:var(--surface-ffffff); box-shadow:0 8px 28px #172c4b1a; }
+.notification-panel h3 { font-size:14px; margin:2px 3px 10px; }
+.notification-panel > p { margin:0; padding:18px 4px; font-size:12px; color:var(--text-8b95a1); }
+.notification-event { display:flex; align-items:center; gap:10px; padding:12px 4px; border-top:1px solid var(--surface-edf0f4); }
+.notification-event > svg:first-child { color:var(--blue); flex-shrink:0; }
+.notification-event > span { min-width:0; }
+.notification-event strong { display:block; font-size:13px; overflow-wrap:anywhere; }
+.notification-event small { display:block; margin-top:4px; font-size:11px; color:var(--text-8b95a1); }
+.notification-event > svg:last-child { margin-left:auto; flex-shrink:0; color:var(--text-8b95a1); }
+.notification-notices { display:flex; align-items:center; gap:8px; padding:12px 4px 2px; border-top:1px solid var(--surface-edf0f4); color:var(--text-6b7684); font-size:12px; }
+.notification-notices > svg:last-child { margin-left:auto; }
+@media (max-width:760px) { .notification-panel { right:-43px; } .topbar-actions { gap:8px; } }
+.event-invited > summary { display:flex; align-items:center; gap:7px; min-height:40px; list-style:none; cursor:pointer; font-size:13px; font-weight:600; }
+.event-invited > summary::-webkit-details-marker { display:none; }
+.event-invited > summary > span { color:var(--text-8b95a1); font-size:12px; font-weight:500; }
+.event-invited > summary > svg:last-child { margin-left:auto; }
+.event-invited[open] > summary > svg:last-child { transform:rotate(90deg); }

@@ -133,15 +133,17 @@ test('회계 수입 추가·수정·필터·CSV 내보내기·삭제', async ({ 
   await expect(row).toHaveCount(0);
 });
 
-test('멤버 화면은 다른 사람의 개인정보와 운영 버튼을 숨긴다', async ({ page }) => {
+test('멤버는 연락처를 확인하고 운영 버튼은 관리자에게만 보인다', async ({ page }) => {
   await page.goto('/profile');
   await page.locator('.settings-section').first().getByRole('button',{name:'저장하기'}).click();
   await page.evaluate(()=>{const data=JSON.parse(localStorage.getItem('moim-demo-v1')!);const me=data.members.find((member:{id:string})=>member.id==='demo-me');me.role='member';me.canCreatePoll=false;localStorage.setItem('moim-demo-v1',JSON.stringify(data));});
   await page.goto('/members');
-  await expect(page.getByText('010-0000-1202',{exact:true})).toHaveCount(0);
+  await expect(page.getByText('010-0000-1202',{exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:/가입 대기/})).toHaveCount(0);
   await page.getByRole('button',{name:/이준호/}).first().click();
-  await expect(page.getByRole('dialog').getByLabel('전화번호')).toHaveCount(0);
+  await expect(page.getByRole('dialog').getByLabel('전화번호')).toHaveValue('010-0000-1202');
+  await expect(page.getByRole('dialog').getByLabel('전화번호')).not.toBeEditable();
+  await expect(page.getByRole('dialog').getByLabel('이메일')).toHaveValue('junho@example.com');
   await page.getByRole('dialog').getByRole('button',{name:'닫기',exact:true}).click();
   await page.goto('/ledger');
   await expect(page.getByRole('button',{name:'내역 추가',exact:true})).toHaveCount(0);

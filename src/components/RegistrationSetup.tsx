@@ -51,7 +51,6 @@ export function RegistrationSetup() {
         <Field label={t('거주 지역')} required><input value={area} onChange={event => { dirty.current.add('area'); setArea(event.target.value); }} maxLength={100} autoComplete="address-level2" placeholder={t('서울 중랑구')} required/></Field>
         <BirthdayField value={birthday} required onChange={value => { dirty.current.add('birthday'); setBirthday(value); }}/>
       </fieldset>
-      <p className="field-hint">{t('전화번호와 거주 지역은 본인과 관리자만 볼 수 있어요.')}</p>
       <Button iconOnly type="submit" icon={Save} loading={busy} disabled={!profile}>{t('저장하고 계속')}</Button>
     </form>
     <Button variant="ghost" icon={LogOut} disabled={busy} onClick={() => void app.logout().catch(error => toast(errorMessage(error), 'error'))}>{t('로그아웃')}</Button>

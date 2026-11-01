@@ -27,7 +27,7 @@ export function GoogleCalendarInvite({ event, onClose }: {
     const eligible = app.members.filter(member => member.status === 'active' && member.id !== app.user?.id && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(member.email));
     const goingIds = app.rsvps.filter(rsvp => rsvp.eventId === event.id && rsvp.status === 'going').map(rsvp => rsvp.memberId);
     const [selected, setSelected] = useState<string[]>(() => {
-        const defaults = event.calendarLink?.attendeeIds ?? goingIds;
+        const defaults = event.calendarLink?.attendeeIds ?? event.invitedMemberIds ?? goingIds;
         return eligible.filter(member => defaults.includes(member.id)).map(member => member.id);
     });
     const [connected, setConnected] = useState(() => hasGoogleCalendarAccess());

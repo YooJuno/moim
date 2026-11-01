@@ -431,13 +431,13 @@ test('real Firebase gallery uses compact private photo documents and preserves r
   await expect(image).toBeVisible();await expect(image).toHaveAttribute('src',/^blob:/);await expect.poll(()=>image.evaluate((element:HTMLImageElement)=>element.naturalWidth)).toBeGreaterThan(0);await restored.close();
 });
 
-test('real Firebase profile mirrors public month-day birthday while keeping contact data private',async({page})=>{
+test('real Firebase profile synchronizes shared contacts and birthday with private profile data',async({page})=>{
   await login(page,leaderEmail);await page.goto('/profile');
   await chooseBirthday(page,'02-29');await page.getByRole('button',{name:'저장하기',exact:true}).click();
   await expect(page.getByText('내 정보를 저장했어요.',{exact:true})).toBeVisible();
   await environment.withSecurityRulesDisabled(async testContext=>{
     const publicMember=(await getDoc(doc(testContext.firestore(),'members',leaderId))).data()!;const profile=(await getDoc(doc(testContext.firestore(),'profiles',leaderId))).data()!;
-    expect(publicMember.birthday).toBe('02-29');expect(profile.birthday).toBe('02-29');expect(publicMember.phone).toBeUndefined();expect(publicMember.area).toBeUndefined();expect(profile.phone).toBe('010-1111-1111');
+    expect(publicMember.birthday).toBe('02-29');expect(profile.birthday).toBe('02-29');expect(publicMember.phone).toBe(profile.phone);expect(publicMember.area).toBe(profile.area);expect(profile.phone).toBe('010-1111-1111');
   });
   await page.reload();await expect(page.getByRole('textbox',{name:'생일',exact:true})).toHaveValue('02-29');
   await chooseBirthday(page,'');await page.getByRole('button',{name:'저장하기',exact:true}).click();await expect(page.getByText('내 정보를 저장했어요.',{exact:true})).toBeVisible();
