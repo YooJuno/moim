@@ -5,6 +5,7 @@ import type { Firestore } from 'firebase/firestore';
 import type { Member } from './types';
 import { reportError } from './telemetry';
 import { memberDisplayName, needsMemberName } from '../../shared/member-name';
+import { missingRegistrationFields, registrationPrefill } from '../../shared/registration-fields';
 
 export const AUTH_RECOVERY_TIMEOUT_MS = 20_000;
 const popupRequests = new WeakMap<Auth, Promise<UserCredential>>();
@@ -44,7 +45,11 @@ export async function ensureMemberProfile(auth: Auth, database: Firestore, actor
     const profileRef = doc(database, 'profiles', actor.uid);
     const [member, profile] = await Promise.all([transaction.get(memberRef), transaction.get(profileRef)]);
     assertSession();
+    if (member.exists() && member.data().removedAt) return;
     const name = memberDisplayName(actor.displayName, ...actor.providerData.map(provider => provider.displayName));
+    const phone = [actor.phoneNumber, ...actor.providerData.map(provider => provider.phoneNumber)]
+      .map(value => registrationPrefill(value).phone).find(Boolean);
+    const prefill = registrationPrefill(phone);
     if (!member.exists()) {
       const next: Member = {
         id: actor.uid, name, email: actor.email || '',
@@ -55,7 +60,11 @@ export async function ensureMemberProfile(auth: Auth, database: Firestore, actor
     } else if (!member.data().removedAt && needsMemberName(member.data().name) && !needsMemberName(name)) {
       transaction.update(memberRef, { name });
     }
-    if (!profile.exists()) transaction.set(profileRef, { id: actor.uid, phone: '', area: '' });
+    if (!profile.exists()) transaction.set(profileRef, { id: actor.uid, phone: '', area: '', ...prefill });
+    else {
+      const missing = missingRegistrationFields(profile.data(), prefill);
+      if (Object.keys(missing).length) transaction.update(profileRef, missing);
+    }
   });
 }
 

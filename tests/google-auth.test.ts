@@ -94,6 +94,28 @@ describe('Google popup', () => {
 });
 
 describe('interrupted member bootstrap', () => {
+  it('prefills an available Google provider name and phone without asking for extra scopes', async () => {
+    const { auth } = session();
+    const googleActor = { ...actor, displayName: null, phoneNumber: null, providerData: [{ providerId:'google.com', displayName:'박성진', phoneNumber:'+82 10-1234-5678' }] } as User;
+    await ensureMemberProfile(auth, database, googleActor);
+    expect(records.get(`members/${actor.uid}`)).toMatchObject({name:'박성진',status:'pending'});
+    expect(records.get(`profiles/${actor.uid}`)).toEqual({id:actor.uid,phone:'010-1234-5678',area:''});
+  });
+
+  it('fills only a missing phone on a later Google sign-in and keeps the saved name and profile', async () => {
+    const { auth } = session();
+    records.set(`members/${actor.uid}`, member);
+    const profile = {id:actor.uid,phone:'',area:'',birthday:'02-20',theme:'dark'};
+    records.set(`profiles/${actor.uid}`, profile);
+    const googleActor = {...actor,phoneNumber:'+82 10-1234-5678'} as User;
+    await ensureMemberProfile(auth,database,googleActor);
+    expect(records.get(`members/${actor.uid}`)).toEqual(member);
+    expect(records.get(`profiles/${actor.uid}`)).toEqual({...profile,phone:'010-1234-5678'});
+    writes.mockClear();
+    await ensureMemberProfile(auth,database,{...googleActor,phoneNumber:'010-9999-9999'} as User);
+    expect(writes).not.toHaveBeenCalled();
+  });
+
   it('creates only a pending ordinary member and an empty private profile for a restored Auth session', async () => {
     const { auth } = session();
     await ensureMemberProfile(auth, database, actor);

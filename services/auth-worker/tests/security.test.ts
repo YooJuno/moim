@@ -20,6 +20,27 @@ async function callback(state:string){const response=await app.fetch(req(`/oauth
 async function code(intent='signin'){return (await callback((await begin(intent)).state)).url.searchParams.get('code')!;}
 beforeEach(async()=>{fixtureIp++;store=new MemoryStore();now=Date.now();identity={subject:'subject-1',name:'같은 이름',email:'same@example.com',accessToken:'sensitive-access',refreshToken:'sensitive-refresh',expiresAt:now+3600000,scopes:['talk_calendar']};users=new Map([['google-user',{uid:'google-user',email:'same@example.com',providers:['google.com']}],['other-user',{uid:'other-user'}]]);deps={store,now:()=>now,verifyIdToken:async token=>{if(token==='valid')return users.get('google-user')!;if(token==='other')return users.get('other-user')!;throw new HttpError(401,'invalid_firebase_token');},lookupUser:async uid=>users.get(uid) ?? null,createUser:async(uid,name)=>{users.set(uid,{uid,name});},customToken:async uid=>`sensitive-custom-${uid}`,providerExchange:async()=>({...identity}),calendarCall:vi.fn(async()=> 'external-1'),refreshKakao:vi.fn(async()=>({accessToken:'new-access',expiresAt:now+3600000}))};app=createApp(env,deps);await store.seed('members/google-user',{id:'google-user',name:'기존 이름',role:'leader',status:'active',canCreatePoll:true});await store.seed('profiles/google-user',{id:'google-user',phone:'private-phone',area:'private-area'});});
 describe('OAuth security boundaries',()=>{
+ it('prefills provided private details and preserves saved information on repeat login',async()=>{
+  identity={...identity,phone:'+82 10-1234-5678',birthday:'02-20'};
+  const first=await (await app.fetch(post('/oauth/exchange',{code:await code(),verifier}))).json() as any;
+  const profilePath=`profiles/${first.uid}`,memberPath=`members/${first.uid}`;
+  expect((await store.get(profilePath))!.data).toEqual({id:first.uid,phone:'010-1234-5678',area:'',birthday:'02-20'});
+  expect((await store.get(memberPath))!.data.birthday).toBeUndefined();
+  await store.seed(profilePath,{id:first.uid,phone:'010-5555-5555',area:'서울 중랑구',birthday:'03-04',theme:'dark'});
+  await store.seed(memberPath,{...(await store.get(memberPath))!.data,name:'직접 입력한 이름',status:'active',role:'treasurer'});
+  await app.fetch(post('/oauth/exchange',{code:await code(),verifier}));
+  expect((await store.get(profilePath))!.data).toEqual({id:first.uid,phone:'010-5555-5555',area:'서울 중랑구',birthday:'03-04',theme:'dark'});
+  expect((await store.get(memberPath))!.data).toMatchObject({name:'직접 입력한 이름',status:'active',role:'treasurer'});
+ });
+ it('fills blanks when a returning member grants additional details without changing their saved birthday',async()=>{
+  const first=await (await app.fetch(post('/oauth/exchange',{code:await code(),verifier}))).json() as any;
+  const memberPath=`members/${first.uid}`,profilePath=`profiles/${first.uid}`;
+  await store.seed(memberPath,{...(await store.get(memberPath))!.data,birthday:'03-04'});
+  await store.seed(profilePath,{id:first.uid,phone:'',area:'',language:'en'});
+  identity={...identity,phone:'010-1234-5678',birthday:'02-20'};
+  await app.fetch(post('/oauth/exchange',{code:await code(),verifier}));
+  expect((await store.get(profilePath))!.data).toEqual({id:first.uid,phone:'010-1234-5678',area:'',language:'en',birthday:'03-04'});
+ });
  it('returns only public config booleans and disables missing provider secrets',async()=>{expect(await (await app.fetch(req('/config'))).json()).toEqual({providers:{kakao:true,naver:true},calendar:{kakao:true},notifications:{sms:false},places:{naver:false}});const off=createApp({...env,NAVER_CLIENT_SECRET:''},deps);expect((await (await off.fetch(req('/config'))).json() as any).providers.naver).toBe(false);});
  it('rejects foreign origins and arbitrary return destinations',async()=>{expect((await app.fetch(req(`/oauth/kakao/start?challenge=${await sha256(verifier)}&returnOrigin=https://evil.test`))).status).toBe(403);expect((await app.fetch(req('/config',{headers:{Origin:'https://evil.test'}}))).status).toBe(403);expect(store.values.size).toBe(2);expect((await app.fetch(post('/oauth/kakao/link/start',{challenge:await sha256(verifier),returnOrigin:origin+'/path'},'valid'))).status).toBe(403);});
  it('consumes state once and redirects an opaque code without any identity tokens',async()=>{const start=await begin();expect(start.location).not.toContain('kakao-secret');const result=await callback(start.state);expect(result.url.origin).toBe(origin);expect(result.url.pathname).toBe('/auth/callback');expect(result.url.searchParams.get('code')).toMatch(/^[A-Za-z0-9_-]{43}$/);expect(result.url.href).not.toMatch(/sensitive|firebaseCustomToken|access_token/);expect((await app.fetch(req(`/oauth/kakao/callback?state=${start.state}&code=replay`))).status).toBe(400);expect(users.size).toBe(2);});

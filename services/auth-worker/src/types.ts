@@ -19,7 +19,7 @@ export interface Store {
  recentErrors?<T=Record<string,unknown>>(limit:number,since:string):Promise<StoredDocument<T>[]>;
 }
 export interface FirebaseIdentity {uid:string;email?:string;name?:string;disabled?:boolean;providers?:string[];authTime?:number;validSince?:number}
-export interface ProviderIdentity {subject:string;name:string;email:string;accessToken:string;refreshToken?:string;expiresAt:number;scopes:string[]}
+export interface ProviderIdentity {subject:string;name:string;email:string;phone?:string;birthday?:string;accessToken:string;refreshToken?:string;expiresAt:number;scopes:string[]}
 export interface Dependencies {
  store:Store;now:()=>number;
  verifyIdToken:(token:string)=>Promise<FirebaseIdentity>;

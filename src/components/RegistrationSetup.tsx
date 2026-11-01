@@ -19,11 +19,14 @@ export function RegistrationSetup() {
   const [area, setArea] = useState(profile?.area ?? '');
   const [birthday, setBirthday] = useState(profile?.birthday ?? app.user?.birthday ?? '');
   const [busy, setBusy] = useState(false);
-  const dirty = useRef(false);
+  const dirty = useRef(new Set<'name' | 'phone' | 'area' | 'birthday'>());
   useEffect(() => {
-    if (!profile || dirty.current) return;
-    setPhone(profile.phone); setArea(profile.area); setBirthday(profile.birthday ?? app.user?.birthday ?? '');
-  }, [profile?.id, profile?.phone, profile?.area, profile?.birthday, app.user?.birthday]);
+    if (!dirty.current.has('name')) setName(needsMemberName(app.user?.name) ? '' : app.user!.name);
+    if (!profile) return;
+    if (!dirty.current.has('phone')) setPhone(profile.phone);
+    if (!dirty.current.has('area')) setArea(profile.area);
+    if (!dirty.current.has('birthday')) setBirthday(profile.birthday ?? app.user?.birthday ?? '');
+  }, [profile?.id, profile?.phone, profile?.area, profile?.birthday, app.user?.name, app.user?.birthday]);
   async function save(event: React.FormEvent) {
     event.preventDefault();
     if (!app.user || !profile || busy) return;
@@ -39,14 +42,14 @@ export function RegistrationSetup() {
   }
   return <main className="auth-screen registration-screen"><div className="auth-card">
     <UserRound size={26} aria-hidden="true"/><h1>{t('가입 정보')}</h1>
-    <form className="stack auth-form" onSubmit={save} onChangeCapture={() => { dirty.current = true; }}>
+    <form className="stack auth-form" onSubmit={save}>
       {!profile && <p role="status" className="muted">{t('개인정보 불러오는 중')}</p>}
       {app.error && <p role="alert" className="auth-error">{t(app.error)}</p>}
       <fieldset className="member-profile-fields stack" disabled={!profile || busy}>
-        <Field label={t('이름')} required><input value={name} onChange={event => setName(event.target.value)} maxLength={30} autoComplete="name" placeholder={t('이름')} required autoFocus/></Field>
-        <Field label={t('전화번호')} required><input type="tel" inputMode="tel" value={phone} onChange={event => setPhone(event.target.value)} maxLength={30} autoComplete="tel" placeholder="010-0000-0000" required/></Field>
-        <Field label={t('거주 지역')} required><input value={area} onChange={event => setArea(event.target.value)} maxLength={100} autoComplete="address-level2" placeholder={t('서울 중랑구')} required/></Field>
-        <BirthdayField value={birthday} required onChange={value => { dirty.current = true; setBirthday(value); }}/>
+        <Field label={t('이름')} required><input value={name} onChange={event => { dirty.current.add('name'); setName(event.target.value); }} maxLength={30} autoComplete="name" placeholder={t('이름')} required autoFocus/></Field>
+        <Field label={t('전화번호')} required><input type="tel" inputMode="tel" value={phone} onChange={event => { dirty.current.add('phone'); setPhone(event.target.value); }} maxLength={30} autoComplete="tel" placeholder="010-0000-0000" required/></Field>
+        <Field label={t('거주 지역')} required><input value={area} onChange={event => { dirty.current.add('area'); setArea(event.target.value); }} maxLength={100} autoComplete="address-level2" placeholder={t('서울 중랑구')} required/></Field>
+        <BirthdayField value={birthday} required onChange={value => { dirty.current.add('birthday'); setBirthday(value); }}/>
       </fieldset>
       <p className="field-hint">{t('전화번호와 거주 지역은 본인과 관리자만 볼 수 있어요.')}</p>
       <Button iconOnly type="submit" icon={Save} loading={busy} disabled={!profile}>{t('저장하고 계속')}</Button>

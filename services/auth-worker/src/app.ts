@@ -1,5 +1,6 @@
 import {createCalendarSyncService} from './calendar-sync';
 import {memberDisplayName,needsMemberName} from '../../../shared/member-name';
+import {missingRegistrationFields,registrationPrefill,validSignupBirthday} from '../../../shared/registration-fields';
 import {calendarAllowed} from './calendar-access';
 import {decrypt,encrypt,keyedId,randomToken,sha256} from './crypto';
 import {authorizationUrl,providerEnabled} from './providers';
@@ -32,7 +33,24 @@ function uidPath(uid:string){if(!/^[A-Za-z0-9:_-]{1,128}$/.test(uid))throw new H
 function updated<T extends object>(path:string,data:T,current:StoredDocument<unknown>|null):Mutation {return {path,data:data as Record<string,unknown>,...(current ? {version:current.version}:{createOnly:true})};}
 async function consume<T>(path:string,current:StoredDocument<T>,deps:Dependencies){try{await deps.store.commit([{path,remove:true,version:current.version}]);}catch(error){if(error instanceof ConflictError)throw new HttpError(409,'already_consumed');throw error;}}
 async function verified(request:Request,deps:Dependencies){const identity=await deps.verifyIdToken(authToken(request));uidPath(identity.uid);const current=await deps.lookupUser(identity.uid);if(!current || current.disabled || (current.validSince && identity.authTime!==undefined && identity.authTime<current.validSince))throw new HttpError(401,'firebase_account_unavailable');return identity;}
-async function ensureMember(uid:string,identity:ProviderIdentity,deps:Dependencies){for(let attempt=0;attempt<3;attempt++){const member=await deps.store.get(`members/${uid}`),profile=await deps.store.get(`profiles/${uid}`);const now=new Date(deps.now()).toISOString();const writes:Mutation[]=[];if(!member)writes.push({path:`members/${uid}`,createOnly:true,data:{id:uid,name:memberDisplayName(identity.name),email:identity.email,role:'member',status:'pending',canCreatePoll:false,joinedAt:now}});else if(!member.data.removedAt&&needsMemberName(member.data.name)&&!needsMemberName(identity.name))writes.push(updated(`members/${uid}`,{...member.data,name:memberDisplayName(identity.name)},member));if(!profile)writes.push({path:`profiles/${uid}`,createOnly:true,data:{id:uid,phone:'',area:''}});if(!writes.length)return;try{await deps.store.commit(writes);return;}catch(error){if(!(error instanceof ConflictError) || attempt===2)throw error;}}}
+async function ensureMember(uid:string,identity:ProviderIdentity,deps:Dependencies){
+ for(let attempt=0;attempt<3;attempt++){
+  const member=await deps.store.get(`members/${uid}`),profile=await deps.store.get(`profiles/${uid}`);
+  if(member?.data.removedAt)return;
+  const now=new Date(deps.now()).toISOString(),writes:Mutation[]=[];
+  if(!member)writes.push({path:`members/${uid}`,createOnly:true,data:{id:uid,name:memberDisplayName(identity.name),email:identity.email,role:'member',status:'pending',canCreatePoll:false,joinedAt:now}});
+  else if(needsMemberName(member.data.name)&&!needsMemberName(identity.name))writes.push(updated(`members/${uid}`,{...member.data,name:memberDisplayName(identity.name)},member));
+  const savedBirthday=typeof member?.data.birthday==='string'&&validSignupBirthday(member.data.birthday)?member.data.birthday:undefined;
+  const prefill=registrationPrefill(identity.phone,savedBirthday??identity.birthday);
+  if(!profile)writes.push({path:`profiles/${uid}`,createOnly:true,data:{id:uid,phone:'',area:'',...prefill}});
+  else {
+   const missing=missingRegistrationFields(profile.data,prefill);
+   if(Object.keys(missing).length)writes.push(updated(`profiles/${uid}`,{...profile.data,...missing},profile));
+  }
+  if(!writes.length)return;
+  try{await deps.store.commit(writes);return;}catch(error){if(!(error instanceof ConflictError)||attempt===2)throw error;}
+ }
+}
 async function bindIdentity(provider:Provider,identity:ProviderIdentity,intent:Intent,targetUid:string|undefined,deps:Dependencies){
  const hash=await sha256(`${provider}\u0000${identity.subject}`);const mappingPath=`authProviderSubjects/${hash}`;
  for(let attempt=0;attempt<4;attempt++){

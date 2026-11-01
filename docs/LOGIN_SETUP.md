@@ -1,6 +1,6 @@
 # 카카오·네이버 로그인 연결
 
-확인일: 2026-11-01. 기존 사이트는 [moim-juno.web.app](https://moim-juno.web.app)이며 Firebase Spark를 유지합니다. 카카오·네이버 로그인에는 개발자 앱의 로그인 키와 별도 인증 서버가 필요합니다. 인증 서버는 [https://moim-auth.moim-auth-worker.workers.dev](https://moim-auth.moim-auth-worker.workers.dev)에 배포했습니다. Firebase 서버 인증과 SOLAPI Secret 연결, 카카오 로그인 키 등록은 완료했습니다. 카카오는 운영에서 활성화됐으며 네이버 로그인 키 등록이 남아 있습니다. 기존 서비스에서는 아래 Cloudflare 계정·서비스 계정 생성 단계를 반복할 필요가 없습니다.
+확인일: 2026-11-02. 기존 사이트는 [moim-juno.web.app](https://moim-juno.web.app)이며 Firebase Spark를 유지합니다. 카카오·네이버 로그인에는 개발자 앱의 로그인 키와 별도 인증 서버가 필요합니다. 인증 서버는 [https://moim-auth.moim-auth-worker.workers.dev](https://moim-auth.moim-auth-worker.workers.dev)에 배포했습니다. Firebase 서버 인증과 SOLAPI Secret 연결, 카카오 로그인 키 등록은 완료했습니다. 카카오는 운영에서 활성화됐으며 네이버 로그인 키 등록이 남아 있습니다. 기존 서비스에서는 아래 Cloudflare 계정·서비스 계정 생성 단계를 반복할 필요가 없습니다.
 
 현재 서비스에 남은 작업은 네이버 로그인 앱 설정과 톡캘린더 권한 설정입니다. 아래는 새 프로젝트에서 소셜 로그인을 처음 연결하거나 기존 키를 교체할 때의 절차입니다.
 
@@ -41,7 +41,7 @@ Cloudflare는 기본으로 Workers Free를 제공합니다. 현재 무료 한도
 
 3. **카카오 로그인 > 사용 설정 > 상태**를 **ON**으로 바꿉니다.
 4. **앱 > 플랫폼 키 > REST API 키 > 클라이언트 시크릿**에서 시크릿을 확인합니다. 서버의 `KAKAO_CLIENT_SECRET`에 등록합니다. 현재 카카오 문서는 새 REST API 키의 Client Secret이 기본 활성화된다고 안내하며, 이 서버도 시크릿을 사용합니다.
-5. **카카오 로그인 > 동의항목 > 개인정보**에서 필요한 항목을 설정합니다. 닉네임을 이름 입력의 초기값으로 쓰려면 닉네임 항목을 설정합니다. 이메일·전화번호·생일을 로그인 필수 항목으로 추가할 필요는 없습니다. 별도 권한이 필요한 개인정보는 심사를 거쳐야 합니다. [카카오 로그인 사용 설정·시크릿·동의항목](https://developers.kakao.com/docs/ko/kakaologin/prerequisite)
+5. **카카오 로그인 > 동의항목 > 개인정보 > 닉네임**을 **필수 동의**로 저장합니다. 수집 목적은 `가입 시 이름 자동 입력 및 멤버 식별`로 입력할 수 있습니다. 닉네임 항목이 꺼져 있으면 로그인에 성공해도 이름이 전달되지 않습니다. 이미 가입한 사람도 설정 변경 후 다시 카카오로 로그인하고 동의해야 이름을 받을 수 있습니다. 닉네임은 실제 이름과 다를 수 있어 가입 화면에서 확인·수정하도록 합니다. 이메일·전화번호·생일을 로그인 필수 항목으로 추가할 필요는 없습니다. 별도 권한이 필요한 개인정보는 심사를 거쳐야 합니다. [카카오 로그인 사용 설정·시크릿·동의항목](https://developers.kakao.com/docs/ko/kakaologin/prerequisite)
 
 현재 Worker는 REST OAuth로 사용자 정보를 확인하므로 이 절차에서 OpenID Connect 활성화는 요구하지 않습니다. 톡캘린더는 별도 동의와 사용 권한이 필요합니다. 현재 서비스에서는 `KAKAO_CALENDAR_ENABLED=true`, `KAKAO_CALENDAR_TEST_ONLY=true`와 비공개 테스트 계정 목록으로 본인 연결 테스트만 허용합니다. [톡캘린더 설정과 검수](KAKAO_CALENDAR_SETUP.md)를 참고하세요.
 
