@@ -1,23 +1,37 @@
-.schedule-day-markers { display: none; }
+.schedule-day-heading { display: flex; align-items: center; gap: 2px; }
+.calendar-main .schedule-day-heading { justify-content: space-between; width: 100%; }
+.schedule-birthday-indicator { display: none; }
+.calendar-page { --calendar-birthday-color: #a63e70; }
+[data-theme="dark"] .calendar-page { --calendar-birthday-color: #f2a1c6; }
+.calendar-main .schedule-day { min-height: 100px; padding: 8px; gap: 3px; }
+.calendar-main .schedule-day-number { font-size: 14px; font-weight: 550; margin: 0; }
 .calendar-main .schedule-day.has-events { background: var(--surface-e2edff); }
 .calendar-main .schedule-day.has-events:hover { background: var(--surface-dae7ff); }
+.calendar-main .schedule-day.has-birthdays:not(.has-events) { background: var(--surface-fff0f1); }
 .calendar-main .schedule-day.has-events .schedule-day-number { font-weight: 750; }
 .calendar-main .schedule-day.has-events:not(.is-holiday):not(.is-saturday):not(.is-selected) .schedule-day-number { color: #246bfd; }
-.calendar-main .schedule-day.has-events .schedule-event-label { background: none; color: #246bfd; padding-left: 2px; font-weight: 650; }
+.calendar-main .schedule-event-label { display: flex; flex-direction: column; gap: 2px; padding: 3px 0 3px 6px; margin: 0; border-left: 2px solid var(--blue); border-radius: 0; background: none; white-space: normal; color: var(--blue); }
+.calendar-main .schedule-event-label strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 13px; line-height: 1.4; font-weight: 650; overflow-wrap: anywhere; }
+.calendar-main .schedule-event-label > span { font-size: 12px; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.calendar-main .schedule-birthday-label { display: flex; align-items: center; gap: 4px; width: 100%; padding: 2px 0; margin: 0; font-size: 13px; font-weight: 600; color: var(--calendar-birthday-color); background: none; }
+.calendar-main .schedule-birthday-label > svg { flex-shrink: 0; width: 14px; height: 14px; }
+.calendar-main .schedule-birthday-label > span { overflow-wrap: anywhere; white-space: normal; }
+.calendar-main .schedule-birthday-more, .calendar-main .schedule-event-more { margin: 0; font-size: 11px; }
 .calendar-main .schedule-day.is-selected { box-shadow: inset 0 0 0 1.5px #246bfd; }
 .calendar-main .schedule-day.is-selected.is-holiday { box-shadow: inset 0 0 0 1.5px #f0636c; }
 
 @media (max-width: 700px) {
   .calendar-page .calendar-layout { gap: 20px; }
-  .calendar-main .schedule-day { min-height: 44px; padding: 2px; align-items: center; }
+  .calendar-main .schedule-day { min-height: 74px; padding: 4px 3px; align-items: flex-start; gap: 3px; }
   .calendar-main .schedule-day-number { margin: 0; }
-  .calendar-main .schedule-day-markers { display: flex; align-items: center; justify-content: center; gap: 4px; height: 12px; color: var(--text-6b89bd); }
-  .calendar-main .schedule-day-markers i { width: 4px; height: 4px; border-radius: 50%; background: #246bfd; }
-  .calendar-main .schedule-day.has-events .schedule-day-markers i { display: none; }
-  .calendar-main .schedule-day-markers svg { color: #c078ad; }
-  .calendar-main :is(.schedule-event-label,.schedule-event-more,.schedule-birthday-label,.schedule-birthday-more,.schedule-holiday-label) { display: none; }
+  .calendar-main .schedule-birthday-indicator { display: block; flex-shrink: 0; color: var(--calendar-birthday-color); }
+  .calendar-main .schedule-birthday-label { font-size: 12px; line-height: 1.4; }
+  .calendar-main .schedule-birthday-label > svg { display: none; }
+  .calendar-main .schedule-event-label { padding: 0; border: 0; }
+  .calendar-main .schedule-event-label strong { font-size: 11px; }
+  .calendar-main .schedule-event-label > span { font-size: 10px; }
+  .calendar-main .schedule-holiday-label { font-size: 10px; white-space: normal; }
   .calendar-main .schedule-weekdays { padding: 10px 0 8px; }
-  .calendar-main .calendar-legend { padding: 10px 12px; }
   .calendar-day-sheet { align-self: flex-end; margin: 0 -12px -12px; width: calc(100% + 24px); max-width: none; max-height: 78dvh; border-radius: 22px 22px 0 0; }
   .calendar-day-sheet .modal-header { padding: 20px 20px 12px; }
   .calendar-day-sheet .modal-header h2 { font-size: 17px; }

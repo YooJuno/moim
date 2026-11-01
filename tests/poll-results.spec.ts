@@ -31,42 +31,34 @@ async function prepareResults(page:Page, scenario:Scenario) {
     localStorage.setItem('moim-demo-v1',JSON.stringify(data)); return poll.id as string;
   },scenario);
   await page.reload();
-  await page.getByRole('dialog').getByRole('button', { name:'결과 보기', exact:true }).click();
   return pollId;
 }
 
 test.beforeEach(async ({page}) => { await page.clock.setFixedTime(new Date('2026-10-24T12:00:00+09:00')); });
 
-test('results retain all three distinct continuous cohorts and allow duration, people and minimum filters', async ({page}) => {
+test('results appear above the grid with fixed people-first ordering and no filters or count badge', async ({page}) => {
   await prepareResults(page,'example');
   const results = page.getByRole('region', {name:'가능한 시간대',exact:true});
-  let rows = results.locator('.poll-availability-row');
+  const rows = results.locator('.poll-availability-row');
   await expect(rows).toHaveCount(3);
-  await expect(results.getByLabel('최소 인원',{exact:true})).toHaveValue('2');
-  await expect(rows.nth(0)).toContainText('18:00–20:00');
-  await expect(rows.nth(0)).toContainText('총 2시간');
-  await expect(rows.nth(1)).toContainText('19:00–21:00');
-  await expect(rows.nth(2)).toContainText('19:00–20:00');
-  await expect(rows.nth(2)).toContainText('3명 가능');
-  await rows.nth(0).locator('summary').click();
-  await expect(rows.nth(0)).toContainText('이준호');
-  await expect(rows.nth(0)).toContainText('박서연');
-  await expect(rows.nth(0)).not.toContainText('최도윤');
-  await results.getByLabel('결과 정렬',{exact:true}).selectOption('participants');
+  await expect(results.getByRole('combobox')).toHaveCount(0);
+  await expect(results.locator('h3')).toHaveText('가능한 시간대');
   await expect(rows.nth(0)).toContainText('19:00–20:00');
   await expect(rows.nth(0)).toContainText('총 1시간');
-  await results.getByLabel('최소 인원',{exact:true}).selectOption('3');
-  await expect(rows).toHaveCount(1);
-  await expect(rows.first()).toContainText('3명 가능');
-  await results.getByLabel('최소 인원',{exact:true}).selectOption('4');
-  await expect(rows).toHaveCount(0);
-  await expect(results).toContainText('조건에 맞는 시간대가 없어요.');
+  await expect(rows.nth(0)).toContainText('3명 가능');
+  await expect(rows.nth(1)).toContainText('18:00–20:00');
+  await expect(rows.nth(2)).toContainText('19:00–21:00');
+  await rows.nth(0).locator('summary').click();
+  for(const name of ['이준호','박서연','최도윤']) await expect(rows.nth(0)).toContainText(name);
+  const layout = await page.evaluate(() => ({participants:document.querySelector('.poll-participant-toggle')!.getBoundingClientRect().top,results:document.querySelector('.poll-availability')!.getBoundingClientRect().top,grid:document.querySelector('.poll-time-scroll')!.getBoundingClientRect().top}));
+  expect(layout.participants).toBeLessThan(layout.results);
+  expect(layout.results).toBeLessThan(layout.grid);
 });
 
 test('choosing a four-hour result keeps its full start and end when confirming a meeting', async ({page}) => {
   await page.setViewportSize({width:390,height:844});
   const pollId = await prepareResults(page,'long');
-  const row = page.getByRole('region',{name:'가능한 시간대',exact:true}).locator('.poll-availability-row').first();
+  const row = page.getByRole('region',{name:'가능한 시간대',exact:true}).locator('.poll-availability-row').nth(1);
   await expect(row).toContainText('18:00–22:00');
   await expect(row).toContainText('총 4시간');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -84,21 +76,29 @@ test('choosing a four-hour result keeps its full start and end when confirming a
   expect(saved.date).toBe('2026-10-31'); expect(saved.start).toBe('18:00'); expect(saved.end).toBe('22:00');
 });
 
-test('results fall back to one person only when nobody overlaps', async ({page}) => {
+test('results retain solo availability when nobody overlaps', async ({page}) => {
   await prepareResults(page,'solo');
   const results = page.getByRole('region',{name:'가능한 시간대',exact:true});
-  await expect(results.getByLabel('최소 인원',{exact:true})).toHaveValue('1');
   await expect(results.locator('.poll-availability-row')).toHaveCount(3);
-  await results.getByLabel('최소 인원',{exact:true}).selectOption('2');
-  await expect(results.locator('.poll-availability-row')).toHaveCount(0);
-  await expect(results).toContainText('조건에 맞는 시간대가 없어요.');
+  await expect(results.getByRole('combobox')).toHaveCount(0);
+  for(const row of await results.locator('.poll-availability-row').all()) await expect(row).toContainText('1명 가능');
 });
 
-test('results show the first twenty windows and reveal the rest without dropping dates', async ({page}) => {
+test('results show three compact windows and expand the rest in a bounded list', async ({page}) => {
   await prepareResults(page,'many');
   const results = page.getByRole('region',{name:'가능한 시간대',exact:true});
-  await expect(results.locator('.poll-availability-row')).toHaveCount(20);
+  await expect(results.locator('.poll-availability-row')).toHaveCount(3);
   await results.getByRole('button',{name:/더 보기/}).click();
   await expect(results.locator('.poll-availability-row')).toHaveCount(21);
-  await expect(results.getByRole('button',{name:/더 보기/})).toHaveCount(0);
+  expect((await results.locator('.poll-availability-list').boundingBox())!.height).toBeLessThanOrEqual(270);
+  await results.getByRole('button',{name:'결과 접기',exact:true}).click();
+  await expect(results.locator('.poll-availability-row')).toHaveCount(3);
+});
+
+test('the default confirmation uses the top ranked full range', async ({page}) => {
+  await prepareResults(page,'example');
+  await page.getByRole('dialog').getByRole('button',{name:'일정 확정',exact:true}).last().click();
+  const dialog = page.getByRole('dialog',{name:'모임 일정 확정',exact:true});
+  await expect(dialog.getByLabel('시작 시간',{exact:true}).locator('option:checked')).toContainText('19:00');
+  await expect(dialog.getByLabel('종료 시간',{exact:true}).locator('option:checked')).toHaveText('20:00 · 60분');
 });

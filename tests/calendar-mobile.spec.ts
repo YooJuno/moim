@@ -9,8 +9,10 @@ for (const browserName of ['chromium', 'webkit'] as const) {
       await page.clock.setFixedTime(new Date('2026-10-24T12:00:00+09:00'));
       await page.goto('/calendar');
       await expect(page.locator('.calendar-main')).toBeVisible();
-      expect((await page.locator('.calendar-main').boundingBox())!.height).toBeLessThan(415);
+      expect((await page.locator('.calendar-main').boundingBox())!.height).toBeLessThan(700);
       const event = page.locator('.event-agenda-card').filter({ hasText: '커피 한 잔, 함께해요' });
+      await expect(page.locator('.calendar-legend')).toHaveCount(0);
+      await expect(page.locator('.calendar-main [data-date="2026-10-27"] .schedule-event-label strong').first()).toBeVisible();
       const day = page.locator('.calendar-main [data-date="2026-10-31"]');
       const date = '2026-10-27';
       await expect(page.locator(`.calendar-main [data-date="${date}"]`)).toHaveClass(/has-events/);

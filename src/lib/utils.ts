@@ -1,7 +1,7 @@
 import type { Category, Member, PollSlot, Role } from './types';
 import { formatI18nDate, getLanguage, getLocale, translate } from './i18n';
 import { errorCode, reportError } from './telemetry';
-export const categoryLabels: Record<Category, string> = {notice:'공지사항',chat:'자유게시판',info:'정보 나눔',gallery:'사진첩'};
+export const categoryLabels: Record<Category, string> = {notice:'공지사항',chat:'자유게시판',info:'자유게시판',gallery:'사진첩'};
 export const roleLabels: Record<Role, string> = {leader:'관리자',treasurer:'회계 담당',member:'일반'};
 export const uid = () => crypto.randomUUID();
 export const today = () => localDate(new Date());

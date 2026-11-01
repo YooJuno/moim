@@ -1,6 +1,6 @@
 import { useI18n } from "../lib/preferences";
 import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronRight, Clock3, Link2, Search, ShieldCheck, SlidersHorizontal, Trash2, UserPlus, Users, X, Save } from 'lucide-react';
+import { Check, ChevronRight, Clock3, Link2, Search, Share2, ShieldCheck, SlidersHorizontal, Trash2, UserPlus, Users, X, Save } from 'lucide-react';
 import { useApp } from '../lib/store';
 import type { Member, MemberStatus, Role } from '../lib/types';
 import { errorMessage, formatDate, roleLabels } from '../lib/utils';
@@ -33,7 +33,7 @@ export function Members() {
         setBusy(null);
     } }
     return <div className="page members-page">
-    <PageHeader title={t("멤버")} action={<div className="member-header-actions"><span className="member-total"><Users size={17}/><strong>{active.length}</strong>{t("명")}</span><Button iconOnly variant="ghost" size="sm" icon={UserPlus} data-tour="invite" onClick={()=>setInviteOpen(true)}>{t("초대")}</Button>{app.isAdmin && <Button iconOnly icon={UserPlus} onClick={() => setAdding(true)}>{t("멤버 추가")}</Button>}</div>}/>
+    <PageHeader title={t("멤버")} action={<div className="member-header-actions"><Button iconOnly variant="secondary" icon={Share2} data-tour="invite" onClick={()=>setInviteOpen(true)}>{t("초대")}</Button>{app.isAdmin && <Button iconOnly icon={UserPlus} onClick={() => setAdding(true)}>{t("멤버 추가")}</Button>}</div>}/>
     <div className="member-summary-grid"><div className="card member-summary"><span className="member-summary-icon blue"><Users size={21}/></span><div><span>{t("전체 멤버")}</span><strong>{active.length}<small>{t("명")}</small></strong></div></div><div className="card member-summary"><span className="member-summary-icon violet"><ShieldCheck size={21}/></span><div><span>{t("운영진")}</span><strong>{active.filter(member => isPosition(member.position)).length}<small>{t("명")}</small></strong></div></div>{app.isAdmin && <button className="card member-summary member-pending-summary" onClick={() => setTab('pending')}><span className="member-summary-icon orange"><Clock3 size={21}/></span><div><span>{t("가입 대기")}</span><strong>{pending.length}<small>{t("명")}</small></strong></div><ChevronRight size={19}/></button>}</div>
     <div className="member-toolbar">{app.isAdmin ? <div className="tabs" aria-label={t("가입 상태")}><button className={`tab ${tab === 'active' ? 'active' : ''}`} onClick={() => setTab('active')}>{t("멤버")}</button><button className={`tab ${tab === 'pending' ? 'active' : ''}`} onClick={() => setTab('pending')}>{t("가입 대기")}{pending.length > 0 && <span className="member-tab-count">{pending.length}</span>}</button><button className={`tab ${tab === 'rejected' ? 'active' : ''}`} onClick={() => setTab('rejected')}>{t("승인 거절")}</button></div> : <strong>{t("멤버")}</strong>}<label className="community-search"><Search size={18}/><input type="search" placeholder={t("이름으로 검색")} aria-label={t("멤버 이름 검색")} value={search} onChange={e => setSearch(e.target.value)}/></label></div>
     <div className="card member-list"><div className={`member-list-head ${!app.isAdmin ? 'member-public-head' : ''}`}><span>{t("이름")}</span><span>{t("직책")}</span>{app.isAdmin && <span>{t("연락처 · 거주 지역")}</span>}<span>{tab === 'pending' ? t("가입 신청일") : t("등록일")}</span><span /></div>

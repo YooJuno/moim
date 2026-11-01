@@ -36,12 +36,9 @@ for(const viewport of [{name:'desktop',width:1440,height:1000},{name:'mobile',wi
       for(const cell of await cells.all())await expect(cell).toBeDisabled();
       await expect(page.getByRole('button',{name:'투표 만들기',exact:true})).toHaveCount(0);
       for(const name of ['선택 저장하기','선택 수정하기','가능한 시간이 없어요','드래그 선택','투표 수정','투표 삭제','투표 마감','일정 확정'])await expect(dialog.getByRole('button',{name,exact:true})).toHaveCount(0);
-      await dialog.getByRole('button',{name:'결과 보기',exact:true}).click();
       const results=dialog.getByRole('region',{name:'가능한 시간대',exact:true});
       await expect(results.locator('.poll-availability-row').first()).toBeVisible();
-      await results.getByLabel('결과 정렬',{exact:true}).selectOption('participants');
-      await expect(results.getByLabel('결과 정렬',{exact:true})).toHaveValue('participants');
-      await results.getByLabel('최소 인원',{exact:true}).selectOption('1');
+      await expect(results.getByRole('combobox')).toHaveCount(0);
       await expect(results.locator('.poll-availability-row').first()).toContainText(/총 .*시간/);
       await results.locator('.poll-availability-row').first().locator('summary').click();
       await expect(results.locator('.poll-availability-members[open]').first().locator('.avatar').first()).toBeVisible();

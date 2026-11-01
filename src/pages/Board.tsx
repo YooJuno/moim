@@ -1,7 +1,7 @@
 import { useI18n } from "../lib/preferences";
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowRight, Camera, FileText, Heart, ImagePlus, Info, MessageCircle, Megaphone, MoreHorizontal, Paperclip, Pencil, Pin, Plus, Search, Send, Trash2, X } from 'lucide-react';
+import { ArrowRight, Camera, FileText, Heart, ImagePlus, MessageCircle, Megaphone, MoreHorizontal, Paperclip, Pencil, Pin, Plus, Search, Send, Trash2, X } from 'lucide-react';
 import { useApp } from '../lib/store';
 import type { Category, Post } from '../lib/types';
 import { categoryLabels, errorMessage, formatDate, memberName, relativeDate, uid } from '../lib/utils';
@@ -9,19 +9,22 @@ import { Avatar, Badge, Button, EmptyState, Field, IconButton, Modal, PageHeader
 import { attachmentSize, PostAttachments } from '../components/PostAttachments';
 import { MAX_POST_FILES, validatePostFiles } from '../lib/attachments';
 import './community.css';
-const categoryIcons = { notice: Megaphone, chat: MessageCircle, info: Info, gallery: Camera };
-const categories = Object.keys(categoryLabels) as Category[];
+const categoryIcons = { notice: Megaphone, chat: MessageCircle, info: MessageCircle, gallery: Camera };
+const categories: Category[] = ['notice', 'chat', 'gallery'];
+// Keep existing posts and links readable after retiring the info board.
+const boardCategory = (category: string | null) => category === 'info' ? 'chat' : category;
 export function Board() {
     const { t } = useI18n();
     const app = useApp();
     const [params, setParams] = useSearchParams();
-    const category = categories.includes(params.get('category') as Category) ? params.get('category') as Category : 'all';
+    const requestedCategory = boardCategory(params.get('category'));
+    const category = categories.includes(requestedCategory as Category) ? requestedCategory as Category : 'all';
     const [search, setSearch] = useState('');
     const [editor, setEditor] = useState<Post | 'new' | null>(null);
     useEffect(() => { if (!app.canParticipate)
         setEditor(null); }, [app.canParticipate]);
     const selectedPost = app.posts.find(post => post.id === params.get('post'));
-    const filtered = app.posts.filter(post => (category === 'all' || post.category === category) && `${post.title} ${post.body} ${memberName(app.members, post.authorId)}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())).sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.createdAt.localeCompare(a.createdAt));
+    const filtered = app.posts.filter(post => (category === 'all' || boardCategory(post.category) === category) && `${post.title} ${post.body} ${memberName(app.members, post.authorId)}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())).sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.createdAt.localeCompare(a.createdAt));
     function changeCategory(value: string) { setParams(value === 'all' ? {} : { category: value }); }
     function openPost(id: string) { const next = new URLSearchParams(params); next.set('post', id); setParams(next); }
     function closePost() { const next = new URLSearchParams(params); next.delete('post'); setParams(next); }
@@ -45,7 +48,7 @@ export function Board() {
                 const author = app.members.find(member => member.id === post.authorId);
                 const Icon = categoryIcons[post.category];
                 return <button className="board-post-row" key={post.id} onClick={() => openPost(post.id)}>
-        <div className={`board-post-icon ${post.category}`}><Icon size={21}/></div>
+        <div className={`board-post-icon ${boardCategory(post.category)}`}><Icon size={21}/></div>
         <div className="board-post-content"><div className="board-post-top"><span>{t(categoryLabels[post.category])}</span>{post.pinned && <Badge tone="blue"><Pin size={11}/>{t("고정")}</Badge>}</div><h3>{post.title}</h3><p>{post.body}</p><div className="board-post-meta"><Avatar member={author} name={memberName(app.members, post.authorId)} size={20}/><span>{memberName(app.members, post.authorId)}</span><span>·</span><span>{relativeDate(post.createdAt)}</span></div></div>
         {post.images.length > 0 && <img className="board-row-thumb" src={post.images[0]} alt="" loading="lazy"/>}
         <div className="board-post-counts"><span><Heart size={15}/>{post.likedBy.length}</span><span><MessageCircle size={15}/>{app.comments.filter(comment => comment.postId === post.id).length}</span>{!!post.attachments?.length && <span aria-label={t('첨부 파일 {0}개', { '0': post.attachments.length })}><Paperclip size={15}/>{post.attachments.length}</span>}</div><ArrowRight className="board-row-arrow" size={17}/>
@@ -68,7 +71,8 @@ function PostEditor({ post, initialCategory, onClose, onSaved }: {
     const toast = useToast();
     const inputRef = useRef<HTMLInputElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [category, setCategory] = useState<Category>(post?.category ?? (initialCategory === 'notice' && !app.isAdmin ? 'chat' : initialCategory));
+    const initialBoard = boardCategory(post?.category ?? initialCategory) as Category;
+    const [category, setCategory] = useState<Category>(initialBoard === 'notice' && !app.isAdmin && !post ? 'chat' : initialBoard);
     const [title, setTitle] = useState(post?.title ?? '');
     const [body, setBody] = useState(post?.body ?? '');
     const [images, setImages] = useState(post?.images ?? []);

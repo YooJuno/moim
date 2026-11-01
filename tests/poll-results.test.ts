@@ -16,15 +16,15 @@ describe('continuous poll results', () => {
   it('retains both two-hour cohorts and the shorter three-person cohort', () => {
     const {poll,votes} = example();
     const result = getPollAvailabilityWindows(poll,votes,2);
-    expect(summary(result)).toEqual([['18:00','20:00',120,'AB'],['19:00','21:00',120,'AC'],['19:00','20:00',60,'ABC']]);
-    expect(result[0].startSlotId).toBe(`${date}-18`);
-    expect(result[0].endSlotId).toBe(`${date}-19`);
-    expect(result[1].endSlotId).toBe(`${date}-20`);
+    expect(summary(result)).toEqual([['19:00','20:00',60,'ABC'],['18:00','20:00',120,'AB'],['19:00','21:00',120,'AC']]);
+    expect(result[1].startSlotId).toBe(`${date}-18`);
+    expect(result[1].endSlotId).toBe(`${date}-19`);
+    expect(result[2].endSlotId).toBe(`${date}-20`);
   });
   it('removes contained ranges only for the same exact participant set', () => {
     const candidates = slots();
     const votes = [vote('A',candidates.map(slot => slot.id)),vote('B',candidates.map(slot => slot.id)),vote('C',[candidates[1].id])];
-    expect(summary(getPollAvailabilityWindows({id:'p1',slots:candidates},votes,2))).toEqual([['18:00','22:00',240,'AB'],['19:00','20:00',60,'ABC']]);
+    expect(summary(getPollAvailabilityWindows({id:'p1',slots:candidates},votes,2))).toEqual([['19:00','20:00',60,'ABC'],['18:00','22:00',240,'AB']]);
   });
   it('never bridges a missing candidate hour or joins different dates', () => {
     const candidates = [...slots(date,[18,20]),...slots('2026-11-01',[18])];
@@ -32,11 +32,12 @@ describe('continuous poll results', () => {
     const result = getPollAvailabilityWindows({id:'p1',slots:candidates},votes,2);
     expect(result.map(window => [window.date,window.start,window.end])).toEqual([[date,'18:00','19:00'],[date,'20:00','21:00'],['2026-11-01','18:00','19:00']]);
   });
-  it('sorts by duration by default and by cohort size when requested', () => {
+  it('always ranks people first, then duration, then date and time', () => {
     const {poll,votes} = example();
     const result = getPollAvailabilityWindows(poll,votes,2);
-    expect(sortPollResults(result,'participants').map(window => window.memberIds.join(''))).toEqual(['ABC','AB','AC']);
-    expect(result.map(window => window.memberIds.join(''))).toEqual(['AB','AC','ABC']);
+    const longer = {...result[0],date:'2026-11-01',start:'16:00',end:'19:00',durationMinutes:180};
+    expect(sortPollResults([...result].reverse().concat(longer)).map(window => [window.memberIds.join(''), window.durationMinutes])).toEqual([['ABC',180],['ABC',60],['AB',120],['AC',120]]);
+    expect(result.map(window => window.memberIds.join(''))).toEqual(['ABC','AB','AC']);
   });
   it('filters the number of people across the entire range', () => {
     const {poll,votes} = example();

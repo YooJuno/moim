@@ -11,13 +11,11 @@ export interface PollAvailabilityWindow {
   startSlotId: string;
   endSlotId: string;
 }
-export type PollResultSort = 'duration' | 'participants';
-
-export function sortPollResults(windows: PollAvailabilityWindow[], order: PollResultSort = 'duration'): PollAvailabilityWindow[] {
+export function sortPollResults(windows: PollAvailabilityWindow[]): PollAvailabilityWindow[] {
   return windows.slice().sort((a, b) => {
     const duration = b.durationMinutes - a.durationMinutes;
     const participants = b.memberIds.length - a.memberIds.length;
-    return (order === 'participants' ? participants || duration : duration || participants)
+    return participants || duration
       || a.date.localeCompare(b.date) || a.start.localeCompare(b.start) || a.end.localeCompare(b.end)
       || a.memberIds.join('\0').localeCompare(b.memberIds.join('\0'));
   });

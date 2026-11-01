@@ -15,7 +15,7 @@ export function Home() {
   const active = app.members.filter(member => member.status === 'active');
   const activeIds = new Set(active.map(member => member.id));
   const now = today();
-  const birthdays = upcomingBirthdays(active, now).slice(0, 4);
+  const birthdays = upcomingBirthdays(active, now).slice(0, 2);
   const events = app.events
     .filter(event => `${event.date}T${event.end}` >= `${now}T${new Date().toTimeString().slice(0, 5)}`)
     .sort((a, b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`));

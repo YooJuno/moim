@@ -102,6 +102,37 @@
 .poll-detail-modal .poll-detail-actions { width: auto; justify-content: flex-end; gap: 8px; }
 .poll-detail-modal .poll-detail-actions > .button { flex: 0 0 auto; }
 
+.poll-detail-modal .poll-participant-toggle { margin: 0 0 8px; padding: 10px 0; min-height: 40px; color: var(--text-6b7684); }
+.poll-detail-modal .poll-participant-list { max-height: 200px; overflow-y: auto; margin-bottom: 12px; }
+.poll-availability { border: 1px solid var(--surface-e8edf5); border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+.poll-availability-heading { display: flex; align-items: center; justify-content: space-between; min-height: 40px; padding: 0 10px 0 12px; background: var(--surface-f7f9fc); }
+.poll-availability-heading h3 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--text-4e5968); }
+.poll-availability-list { border-top: 1px solid var(--surface-edf0f5); }
+.poll-availability-list.is-expanded { max-height: 270px; overflow-y: auto; overscroll-behavior: contain; }
+.poll-availability-row { position: relative; border-bottom: 1px solid var(--surface-edf0f5); }
+.poll-availability-row:last-child { border-bottom: 0; }
+.poll-availability-main { display: flex; align-items: center; gap: 9px; min-height: 58px; padding: 8px 12px; cursor: pointer; list-style: none; color: var(--text-6b7684); }
+.poll-availability-main::-webkit-details-marker { display: none; }
+.poll-availability-main:hover { background: var(--surface-f7f9fc); }
+.poll-availability-main:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.poll-availability-row.can-confirm .poll-availability-main { padding-right: 52px; }
+.poll-availability-row > .button { position: absolute; top: 9px; right: 6px; }
+.poll-availability-time { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.poll-availability-date { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; font-size: 12px; line-height: 1.4; color: var(--text-6b7684); }
+.poll-availability-date > strong { font-weight: 500; white-space: nowrap; }
+.poll-availability-range { font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--text-4e5968); font-variant-numeric: tabular-nums; }
+.poll-availability-duration { font-size: 11px; font-weight: 400; color: var(--text-8b95a1); white-space: nowrap; }
+.poll-availability-count { display: flex; align-items: center; gap: 4px; margin-left: auto; flex-shrink: 0; color: var(--blue); font-size: 13px; font-weight: 650; }
+.poll-availability-chevron { flex-shrink: 0; transition: transform .15s; }
+.poll-availability-members[open] .poll-availability-chevron { transform: rotate(90deg); }
+.poll-availability-members > div { display: flex; flex-wrap: wrap; gap: 8px 14px; padding: 2px 12px 12px 42px; }
+.poll-availability-members > div > span { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-6b7684); }
+.poll-availability-empty { margin: 0; padding: 14px 12px; font-size: 12px; color: var(--text-8b95a1); }
+@media (max-width: 360px) {
+  .poll-availability-date { font-size: 11px; }
+  .poll-availability-duration { font-size: 10px; }
+}
+
 @media (max-width: 400px) {
   .poll-month-preset { display: flex; flex-direction: column; align-items: stretch; }
   .poll-month-preset > label { min-width: 0; width: 100%; }

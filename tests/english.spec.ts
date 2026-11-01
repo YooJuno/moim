@@ -13,11 +13,12 @@ for(const viewport of [{name:'desktop',width:1440,height:1000},{name:'mobile',wi
     await page.goto('/profile');
     await page.getByRole('combobox',{name:'언어',exact:true}).selectOption('en');
     await expect(page.locator('html')).toHaveAttribute('lang','en');
-    const routes:[string,string][]=[['/','Group home'],['/polls','Schedule polls'],['/calendar','Group events'],['/board','Board'],['/members','Members'],['/ledger','Ledger'],['/rules','Group rules'],['/places','Saved places'],['/settings','Group settings']];
+    await page.evaluate(()=>{const data=JSON.parse(localStorage.getItem('moim-demo-v1')!);data.settings.name='Sunday basketball';localStorage.setItem('moim-demo-v1',JSON.stringify(data));});
+    const routes:[string,string][]=[['/','Sunday basketball'],['/polls','Schedule polls'],['/calendar','Group events'],['/board','Board'],['/members','Members'],['/ledger','Ledger'],['/rules','Group rules'],['/places','Saved places'],['/settings','Group settings']];
     for(const [url,title]of routes){await page.goto(url);await expect(page.locator('.page-header h1')).toHaveText(title);await assertEnglishChrome(page);}
     await page.goto('/board');
     await expect(page.getByRole('button',{name:'Chat',exact:true})).toBeVisible();
-    await expect(page.getByRole('button',{name:'Tips',exact:true})).toBeVisible();
+    await expect(page.getByRole('button',{name:'Tips',exact:true})).toHaveCount(0);
     await page.goto('/polls?create=1');
     const editor=page.getByRole('dialog');
     await expect(editor).toHaveAccessibleName('New schedule poll');
@@ -33,8 +34,7 @@ for(const viewport of [{name:'desktop',width:1440,height:1000},{name:'mobile',wi
     await detail.locator('.poll-time-cell').first().click();
     await detail.getByRole('button',{name:'Save selection',exact:true}).click();
     await expect(page.locator('.toast').last()).toHaveText('Your availability has been saved.');
-    await detail.getByRole('button',{name:'Show results',exact:false}).click();
-    await expect(detail.locator('.poll-result-filters')).not.toContainText(/[가-힣]/);
+    await expect(detail.locator('.poll-result-filters')).toHaveCount(0);
     await expect(detail.locator('.poll-availability-duration').first()).toContainText('1h');
     await detail.getByRole('button',{name:'Close',exact:true}).first().click();
     await page.goto('/members');

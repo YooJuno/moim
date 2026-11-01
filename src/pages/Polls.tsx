@@ -2,7 +2,7 @@ import { translate } from "../lib/i18n";
 import { useI18n } from "../lib/preferences";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowRight, BarChart3, CalendarCheck, Check, ChevronRight, Clock3, ListChecks, LockKeyhole, Pencil, Plus, RotateCcw, Share2, Trash2, Trophy, Users, X, Save } from 'lucide-react';
+import { ArrowRight, BarChart3, CalendarCheck, Check, ChevronDown, ChevronRight, ChevronUp, Clock3, ListChecks, LockKeyhole, Pencil, Plus, RotateCcw, Share2, Trash2, Trophy, Users, X, Save } from 'lucide-react';
 import { useApp } from '../lib/store';
 import type { Poll, PollSlot, Vote } from '../lib/types';
 import { errorMessage, formatDate, formatTime, memberName, shortDate, slotLabel, today, uid } from '../lib/utils';
@@ -17,8 +17,8 @@ import { MonthNavigation, ScrollingCalendar } from './ScheduleGrid';
 import { getHoliday, hasHolidayData } from '../lib/holidays';
 import { contiguousEndSlots, expandTimeWindows, pollTimeWindows, timeToMinutes } from '../lib/poll-times';
 import { monthlyPollDates, monthlyPollTitle, nextPollMonth } from '../lib/poll-presets';
-import { formatPollDuration, getPollAvailabilityWindows, sortPollResults } from '../lib/poll-results';
-import type { PollAvailabilityWindow, PollResultSort } from '../lib/poll-results';
+import { formatPollDuration, getPollAvailabilityWindows } from '../lib/poll-results';
+import type { PollAvailabilityWindow } from '../lib/poll-results';
 import './schedule.css';
 import './poll-time-grid.css';
 const isOpen = (poll: Poll) => poll.status === 'open' && (!poll.deadline || new Date(poll.deadline).getTime() > Date.now());
@@ -82,7 +82,7 @@ export function Polls() {
                 const votes = app.votes.filter(v => v.pollId === poll.id);
                 const ownVote = votes.find(v => v.memberId === app.user?.id);
                 const staleVote = ownVote?.slotIds.some(id => !poll.slotIds.includes(id));
-                const first = sortPollResults(getPollAvailabilityWindows(poll, votes), 'participants')[0];
+                const first = getPollAvailabilityWindows(poll, votes)[0];
                 const total = app.members.filter(m => m.status === 'active').length;
                 const participating = votes.map(v => app.members.find(m => m.id === v.memberId)).filter((m): m is NonNullable<typeof m> => !!m);
                 return <button className="card poll-card" key={poll.id} onClick={() => openDetail(poll)}>
@@ -286,6 +286,9 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
     {poll.description && <p className="poll-detail-description">{poll.description}</p>}
     {interactive && ownVote?.slotIds.some(id => !poll.slotIds.includes(id)) && <p className="poll-vote-changed">{t("후보 시간이 변경됐어요. 선택을 확인하고 다시 저장해 주세요.")}</p>}
     {poll.status === 'confirmed' && poll.eventId && <a className="poll-confirmed-link" href={`/calendar?event=${encodeURIComponent(poll.eventId)}`}><CalendarCheck size={20}/><span>{t("확정된 일정 확인하기")}</span><ChevronRight size={17}/></a>}
+    <button className="poll-participant-toggle" onClick={() => setShowParticipants(!showParticipants)} aria-expanded={showParticipants}><Users size={16}/><span>{t("참여 현황")}<strong>{votes.length}{t("명")}</strong><span className="muted">{t(" · 미응답 {0}명", {"0":waiting.length})}</span></span><ChevronRight size={16} className={showParticipants ? 'rotated' : ''}/></button>
+    {showParticipants && <div className="poll-participant-list">{votes.map(vote => { const member = app.members.find(m => m.id === vote.memberId); return <div className="poll-participant-row" key={vote.id}><Avatar member={member} name={member?.name ?? t("멤버")} size={30}/><strong>{member?.name ?? t("멤버")}</strong><span>{vote.slotIds.filter(id => poll.slotIds.includes(id)).length ? t("참여 완료") : vote.slotIds.length ? t("후보 변경 \u00B7 재응답 필요") : t("가능한 시간 없음")}</span></div>; })}{waiting.map(member => <div className="poll-participant-row" key={member.id}><Avatar member={member} size={30}/><strong>{member.name}</strong><span className="muted">{t("미응답")}</span></div>)}</div>}
+    <AvailabilityResults poll={poll} votes={votes} onConfirm={onConfirm} disabled={busy || saving}/>
     <div className="section-head poll-grid-heading"><div><h3>{interactive ? t("시간 선택") : t("투표 결과")}</h3><p className="muted">{interactive ? <><span className="poll-pointer-hint">{t("드래그로 선택")}</span><span className="poll-touch-hint">{t("꾹 눌러 여러 칸 선택")}</span></> : t("{0}명이 응답했어요.", { "0": votes.length })}</p></div><div className="poll-grid-controls"><span className="poll-grid-legend"><i />{t("가능 인원")}</span></div></div>
     <div ref={grid} className="poll-time-scroll"><table className="poll-time-table"><thead><tr><th scope="col">{t("시간")}</th>{dates.map(date => <th scope="col" key={date} className={getHoliday(date) || new Date(`${date}T12:00:00`).getDay() === 0 ? 'poll-table-holiday' : new Date(`${date}T12:00:00`).getDay() === 6 ? 'poll-table-saturday' : ''}><strong>{shortDate(date)}</strong><span>{formatDate(date, { weekday: 'short' })}{getHoliday(date) && ` · ${t(getHoliday(date) || "")}`}</span></th>)}</tr></thead><tbody>{times.map((time, rowIndex) => {
             const [start, end] = time.split('|');
@@ -306,9 +309,7 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
                 })}</tr>;
         })}</tbody></table></div>
     {interactive && <button className={`poll-unavailable ${unavailable ? 'active' : ''}`} aria-pressed={unavailable} onClick={() => { setUnavailable(!unavailable); setSelected([]); }} disabled={saving}><span className="poll-check-box">{unavailable && <Check size={13}/>}</span>{t("가능한 시간이 없어요")}</button>}
-    <AvailabilityResults poll={poll} votes={votes} onConfirm={onConfirm} disabled={busy || saving}/>
-    <button className="poll-participant-toggle" onClick={() => setShowParticipants(!showParticipants)} aria-expanded={showParticipants}><Users size={16}/><span>{t("참여 현황")}<strong>{votes.length}{t("명")}</strong><span className="muted">{t(" · 미응답 {0}명", {"0":waiting.length})}</span></span><ChevronRight size={16} className={showParticipants ? 'rotated' : ''}/></button>
-    {showParticipants && <div className="poll-participant-list">{votes.map(vote => { const member = app.members.find(m => m.id === vote.memberId); return <div className="poll-participant-row" key={vote.id}><Avatar member={member} name={member?.name ?? t("멤버")} size={30}/><strong>{member?.name ?? t("멤버")}</strong><span>{vote.slotIds.filter(id => poll.slotIds.includes(id)).length ? t("{0}개 시간 가능", { "0": vote.slotIds.filter(id => poll.slotIds.includes(id)).length }) : vote.slotIds.length ? t("후보 변경 \u00B7 재응답 필요") : t("가능한 시간 없음")}</span></div>; })}{waiting.map(member => <div className="poll-participant-row" key={member.id}><Avatar member={member} size={30}/><strong>{member.name}</strong><span className="muted">{t("미응답")}</span></div>)}</div>}
+
   </Modal>;
 }
 function AvailabilityResults({ poll, votes, onConfirm, disabled }: {
@@ -319,27 +320,27 @@ function AvailabilityResults({ poll, votes, onConfirm, disabled }: {
 }) {
     const { t } = useI18n();
     const app = useApp();
-    const allWindows = useMemo(() => getPollAvailabilityWindows(poll, votes), [poll.id, poll.slots, votes]);
-    const largestCohort = allWindows.reduce((maximum, window) => Math.max(maximum, window.memberIds.length), 0);
-    const [expanded, setExpanded] = useState(!isOpen(poll));
-    const [minimum, setMinimum] = useState(largestCohort >= 2 ? 2 : 1);
-    const [order, setOrder] = useState<PollResultSort>('duration');
-    const [limit, setLimit] = useState(20);
-    const minimumTouched = useRef(false);
-    useEffect(() => { minimumTouched.current = false; setMinimum(largestCohort >= 2 ? 2 : 1); setExpanded(!isOpen(poll)); setLimit(20); }, [poll.id]);
-    useEffect(() => { if (!minimumTouched.current)
-        setMinimum(largestCohort >= 2 ? 2 : 1); }, [largestCohort]);
-    useEffect(() => { setLimit(20); }, [minimum, order]);
-    const windows = useMemo(() => sortPollResults(allWindows.filter(window => window.memberIds.length >= minimum), order), [allWindows, minimum, order]);
-    const memberCount = Math.max(1, app.members.filter(member => member.status === 'active').length, largestCohort);
+    const windows = useMemo(() => getPollAvailabilityWindows(poll, votes), [poll.id, poll.slots, votes]);
+    const [expanded, setExpanded] = useState(false);
+    useEffect(() => setExpanded(false), [poll.id]);
     const canConfirm = app.isAdmin && poll.status !== 'confirmed';
-    return <section className="poll-availability" aria-label={t("가능한 시간대")}><div className="poll-availability-heading"><h3><Clock3 size={17}/>{t("가능한 시간대")}<span>{windows.length}{t("개")}</span></h3><Button variant="ghost" size="sm" icon={BarChart3} onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>{expanded ? t("결과 접기") : t("결과 보기")}</Button></div>
-    {expanded && <><div className="poll-result-filters"><label><span>{t("최소 인원")}</span><select aria-label={t("최소 인원")} value={minimum} onChange={event => { minimumTouched.current = true; setMinimum(Number(event.target.value)); }}>{Array.from({ length: memberCount }, (_, index) => <option value={index + 1} key={index + 1}>{index + 1}{t("명 이상")}</option>)}</select></label><label><span>{t("정렬")}</span><select aria-label={t("결과 정렬")} value={order} onChange={event => setOrder(event.target.value as PollResultSort)}><option value="duration">{t("오래 만나는 순")}</option><option value="participants">{t("인원 많은 순")}</option></select></label></div>
-      {windows.length ? <div className="poll-availability-list">{windows.slice(0, limit).map((window, index) => <article className="poll-availability-row" key={JSON.stringify([window.date, window.start, window.end, window.memberIds])} data-date={window.date} data-start={window.start} data-end={window.end} data-duration={window.durationMinutes} data-member-count={window.memberIds.length}><div className="poll-availability-main"><span className={`poll-rank ${index === 0 ? 'first' : ''}`}>{index + 1}</span><div className="poll-availability-time"><strong>{formatDate(window.date)}</strong><span>{window.start}–{window.end}</span></div><strong className="poll-availability-duration">{t("총 {0}", {"0":formatPollDuration(window.durationMinutes)})}</strong>{canConfirm && <Button variant="secondary" size="sm" disabled={disabled} onClick={() => onConfirm(window)} aria-label={t("{0} {1}\u2013{2} 일정 확정", { "0": formatDate(window.date), "1": window.start, "2": window.end })}>{t("일정 확정")}</Button>}</div><details className="poll-availability-members"><summary><Users size={13}/>{window.memberIds.length}{t("명 가능")}<ChevronRight size={13}/></summary><div>{window.memberIds.map(id => <span key={id}><Avatar member={app.members.find(member => member.id === id)} name={memberName(app.members, id)} size={25}/>{memberName(app.members, id)}</span>)}</div></details></article>)}</div> : <p className="poll-availability-empty">{votes.length ? t("조건에 맞는 시간대가 없어요.") : t("아직 응답한 멤버가 없어요.")}</p>}
-      {windows.length > limit && <Button className="poll-results-more" variant="ghost" size="sm" onClick={() => setLimit(current => current + 20)}>{t("더 보기")}<span>{windows.length - limit}{t("개")}</span></Button>}
-    </>}
-  </section>;
+    return <section className="poll-availability" aria-label={t("가능한 시간대")}>
+      <div className="poll-availability-heading"><h3><Clock3 size={16}/>{t("가능한 시간대")}</h3>
+        {windows.length > 3 && <Button iconOnly variant="ghost" icon={expanded ? ChevronUp : ChevronDown} onClick={() => setExpanded(!expanded)} aria-expanded={expanded} aria-controls={`poll-results-${poll.id}`}>{expanded ? t("결과 접기") : t("더 보기")}</Button>}
+      </div>
+      {windows.length ? <div id={`poll-results-${poll.id}`} className={`poll-availability-list ${expanded ? 'is-expanded' : ''}`}>
+        {(expanded ? windows : windows.slice(0, 3)).map((window, index) => <article className={`poll-availability-row ${canConfirm ? 'can-confirm' : ''}`} key={JSON.stringify([window.date, window.start, window.end, window.memberIds])} data-date={window.date} data-start={window.start} data-end={window.end} data-duration={window.durationMinutes} data-member-count={window.memberIds.length}>
+          <details className="poll-availability-members"><summary className="poll-availability-main">
+            <span className={`poll-rank ${index === 0 ? 'first' : ''}`}>{index + 1}</span>
+            <span className="poll-availability-time"><span className="poll-availability-date"><strong>{formatDate(window.date, {month:'long',day:'numeric',weekday:'short'})}</strong><small className="poll-availability-duration">{t("총 {0}", {"0":formatPollDuration(window.durationMinutes)})}</small></span><strong className="poll-availability-range">{window.start}–{window.end}</strong></span>
+            <span className="poll-availability-count"><Users size={14}/>{window.memberIds.length}<span className="sr-only">{t("명 가능")}</span></span><ChevronRight className="poll-availability-chevron" size={14}/>
+          </summary><div>{window.memberIds.map(id => <span key={id}><Avatar member={app.members.find(member => member.id === id)} name={memberName(app.members, id)} size={25}/>{memberName(app.members, id)}</span>)}</div></details>
+          {canConfirm && <Button iconOnly variant="ghost" icon={CalendarCheck} disabled={disabled} onClick={() => onConfirm(window)} aria-label={t("{0} {1}\u2013{2} 일정 확정", { "0": formatDate(window.date), "1": window.start, "2": window.end })}>{t("일정 확정")}</Button>}
+        </article>)}
+      </div> : <p className="poll-availability-empty">{votes.length ? t("가능한 시간이 없어요") : t("아직 응답한 멤버가 없어요.")}</p>}
+    </section>;
 }
+
 type TimeRange = {
     id: string;
     start: string;
@@ -501,11 +502,12 @@ function ConfirmPoll({ poll, range, onClose }: {
     const toast = useToast();
     const [, setParams] = useSearchParams();
     const ranked = poll.slots.map(slot => ({ slot, count: app.votes.filter(v => v.pollId === poll.id && v.slotIds.includes(slot.id)).length })).sort((a, b) => b.count - a.count || a.slot.date.localeCompare(b.slot.date) || a.slot.start.localeCompare(b.slot.start));
-    const [slotId, setSlotId] = useState(range?.startSlotId ?? ranked[0]?.slot.id ?? '');
+    const initialRange = range ?? getPollAvailabilityWindows(poll, app.votes)[0];
+    const [slotId, setSlotId] = useState(initialRange?.startSlotId ?? ranked[0]?.slot.id ?? '');
     const ends = contiguousEndSlots(poll.slots, slotId);
     const startSlot = poll.slots.find(slot => slot.id === slotId);
     const defaultEnd = (startId: string) => { const options = contiguousEndSlots(poll.slots, startId); const start = poll.slots.find(slot => slot.id === startId); return options.filter(slot => start && timeToMinutes(slot.end) - timeToMinutes(start.start) <= 120).at(-1)?.id ?? options[0]?.id ?? ''; };
-    const [endSlotId, setEndSlotId] = useState(() => range?.endSlotId ?? defaultEnd(ranked[0]?.slot.id ?? ''));
+    const [endSlotId, setEndSlotId] = useState(() => initialRange?.endSlotId ?? defaultEnd(ranked[0]?.slot.id ?? ''));
     const chosenEnd = ends.find(slot => slot.id === endSlotId);
     const rangeSlots = ends.slice(0, ends.findIndex(slot => slot.id === endSlotId) + 1);
     const availableCount = app.votes.filter(vote => vote.pollId === poll.id && rangeSlots.length && rangeSlots.every(slot => vote.slotIds.includes(slot.id))).length;
