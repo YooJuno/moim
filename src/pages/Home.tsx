@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Cake, Check, ChevronRight, Clock3, MapPin, Plus, Users, Vote } from 'lucide-react';
+import { ArrowRight, Cake, CalendarDays, Check, ChevronRight, Clock3, ListChecks, MapPin, Megaphone, Plus, Users, Vote } from 'lucide-react';
 import { MapLinks } from '../components/MapLinks';
-import { Avatar, Button, PageHeader } from '../components/ui';
+import { Avatar, PageHeader } from '../components/ui';
 import { useApp } from '../lib/store';
 import { useI18n } from '../lib/preferences';
 import { formatDate, formatTime, relativeDate, today } from '../lib/utils';
@@ -39,12 +39,12 @@ export function Home() {
   return <div className="page home-page">
     <PageHeader tourId="home" title={app.settings.name}
       description={formatDate(new Date().toISOString(), { month: 'long', day: 'numeric', weekday: 'long' })}
-      action={app.canCreatePoll ? <Link to="/polls?create=1"><Button iconOnly variant="secondary" icon={Plus}>{t('투표 만들기')}</Button></Link> : undefined}/>
+      action={app.canCreatePoll ? <Link to="/polls?create=1" className="button button-primary button-md button-icon-only" aria-label={t('투표 만들기')} title={t('투표 만들기')}><Plus size={20} aria-hidden="true"/></Link> : undefined}/>
 
     <div className="home-dashboard">
       <section className="home-panel home-polls-panel" aria-label={t('진행 중인 투표')}>
         <div className="home-panel-heading">
-          <div className="home-poll-heading"><h2>{t('진행 중인 투표')}<span className="home-section-count">{openPolls.length}</span></h2>
+          <div className="home-poll-heading"><h2><span className="home-section-icon"><ListChecks size={17} aria-hidden="true"/></span>{t('진행 중인 투표')}<span className="home-section-count">{openPolls.length}</span></h2>
             {unansweredCount > 0 && <p className="home-poll-pending"><span aria-hidden="true"/>{t('응답할 투표')} {unansweredCount}</p>}
           </div>
           <Link to="/polls" className="home-more">{t('전체 보기')}<ChevronRight size={14}/></Link>
@@ -66,7 +66,7 @@ export function Home() {
                   <span className="home-poll-response">{t('{0}/{1} 응답', { '0': votes.length, '1': active.length })}</span>
                 </div>
               </div>
-              <span className={`home-poll-action ${voted ? 'is-complete' : ''}`}>
+              <span className={`home-poll-action ${pending ? 'button button-primary button-sm' : voted ? 'is-complete' : ''}`}>
                 {voted && <Check size={14}/>}
                 {pending ? t('시간 선택하기') : voted ? t('참여 완료') : t('결과 보기')}
                 {!voted && <ChevronRight size={15}/>}
@@ -78,30 +78,33 @@ export function Home() {
       </section>
 
       <section className="home-panel home-next-event" aria-label={t('다가오는 모임')}>
-        <div className="home-panel-heading"><h2>{t('다가오는 모임')}</h2>{next && <span className="home-event-dday">{days === 0 ? t('오늘') : `D-${days}`}</span>}</div>
+        <div className="home-panel-heading"><h2><span className="home-section-icon"><CalendarDays size={17} aria-hidden="true"/></span>{t('다가오는 모임')}</h2>{next && <span className="home-event-dday">{days === 0 ? t('오늘') : `D-${days}`}</span>}</div>
         {next ? <>
-          <h3 className="home-event-title">{next.title}</h3>
+          <div className="home-event-summary">
+            <div className="home-event-date" aria-hidden="true"><span>{formatDate(next.date, {month:'short'})}</span><strong>{new Date(`${next.date}T12:00:00`).getDate()}</strong></div>
+            <div className="home-event-summary-copy"><h3 className="home-event-title">{next.title}</h3>
+              <p className="home-event-time"><Clock3 size={14} aria-hidden="true"/>{formatDate(next.date)}<strong>{next.start}–{next.end}</strong></p>
+            </div>
+          </div>
           <div className="home-event-details">
-            <div><Clock3 size={17}/><span>{formatDate(next.date)}<strong>{next.start}–{next.end}</strong></span></div>
             <div><MapPin size={17}/><div className="hero-location-copy"><strong>{nextPlace || next.location || t('장소 미정')}</strong>{nextPlace && <small>{nextAddress}</small>}
-              {next.location && <div className="hero-location-links"><MapLinks location={next.location} compact/></div>}
-            </div></div>
+            </div>{next.location && <div className="hero-location-links"><MapLinks location={next.location}/></div>}</div>
           </div>
           <div className="home-event-footer"><div className="hero-attendees"><Users size={14}/><span>{attendees.length}{t('명 참여')}</span></div>
-            <Link to={`/calendar?event=${encodeURIComponent(next.id)}`} className="home-event-open">{t('일정 확인')}<ArrowRight size={15}/></Link>
+            <Link to={`/calendar?event=${encodeURIComponent(next.id)}`} className="home-event-open button button-secondary button-sm">{t('일정 확인')}<ArrowRight size={15}/></Link>
           </div>
         </> : <div className="home-panel-empty"><p>{t('예정된 일정이 없어요.')}</p><Link className="home-more" to="/calendar">{t('캘린더 열기')}<ChevronRight size={14}/></Link></div>}
       </section>
 
       <section className="home-panel home-notices-panel" aria-label={t('공지사항')}>
-        <div className="home-panel-heading"><h2>{t('공지사항')}</h2><Link to="/board?category=notice" className="home-more">{t('전체 보기')}<ChevronRight size={14}/></Link></div>
+        <div className="home-panel-heading"><h2><span className="home-section-icon"><Megaphone size={17} aria-hidden="true"/></span>{t('공지사항')}</h2><Link to="/board?category=notice" className="home-more">{t('전체 보기')}<ChevronRight size={14}/></Link></div>
         {notices.length ? <div className="home-notice-list">{notices.map(post => <Link key={post.id} to={`/board?category=notice&post=${encodeURIComponent(post.id)}`} className="home-notice-row">
           <strong>{post.title}</strong><time dateTime={post.createdAt}>{relativeDate(post.createdAt)}</time><ChevronRight size={15}/>
         </Link>)}</div> : <p className="home-empty-line">{t('등록된 공지가 없어요.')}</p>}
       </section>
 
       <section className="home-panel home-birthdays-panel" aria-label={t('다가오는 생일')}>
-        <div className="home-panel-heading"><h2><Cake size={16}/>{t('다가오는 생일')}</h2></div>
+        <div className="home-panel-heading"><h2><span className="home-section-icon"><Cake size={17} aria-hidden="true"/></span>{t('다가오는 생일')}</h2></div>
         {birthdays.length ? <div className="home-birthday-list">{birthdays.map(({ member, date, daysUntil }) => <Link to={`/calendar?date=${date}`} key={member.id} className="home-birthday-row">
           <Avatar member={member} size={30}/><strong>{member.name}</strong><span>{formatDate(date, { month: 'numeric', day: 'numeric' })}</span>
           <small className={daysUntil === 0 ? 'is-today' : undefined}>{daysUntil === 0 ? t('오늘') : `D-${daysUntil}`}</small>
