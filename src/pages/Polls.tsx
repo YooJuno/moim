@@ -2,7 +2,7 @@ import { translate } from "../lib/i18n";
 import { useI18n } from "../lib/preferences";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowRight, BarChart3, CalendarCheck, Check, CheckCheck, ChevronRight, Clock3, ListChecks, Pencil, Plus, Share2, Trash2, Trophy, Users, X } from 'lucide-react';
+import { ArrowRight, BarChart3, CalendarCheck, Check, ChevronRight, Clock3, ListChecks, Pencil, Plus, Share2, Trash2, Trophy, Users, X } from 'lucide-react';
 import { useApp } from '../lib/store';
 import type { Poll, PollSlot, Vote } from '../lib/types';
 import { errorMessage, formatDate, formatTime, memberName, shortDate, slotLabel, today, uid } from '../lib/utils';
@@ -295,7 +295,6 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
                 })}</tr>;
         })}</tbody></table></div>
     {interactive && <button className={`poll-unavailable ${unavailable ? 'active' : ''}`} aria-pressed={unavailable} onClick={() => { setUnavailable(!unavailable); setSelected([]); }} disabled={saving}><span className="poll-check-box">{unavailable && <Check size={13}/>}</span>{t("가능한 시간이 없어요")}</button>}
-    {!!selected.length && <p className="poll-selection-summary"><CheckCheck size={15}/>{selected.length}{t("개 시간 선택")}{ownVote ? t(" \u00B7 저장하면 이전 선택이 변경돼요.") : ''}</p>}
     <AvailabilityResults poll={poll} votes={votes} onConfirm={onConfirm} disabled={busy || saving}/>
     <button className="poll-participant-toggle" onClick={() => setShowParticipants(!showParticipants)} aria-expanded={showParticipants}><Users size={16}/><span>{t("참여 현황")}<strong>{votes.length}{t("명")}</strong><span className="muted">{t(" · 미응답 {0}명", {"0":waiting.length})}</span></span><ChevronRight size={16} className={showParticipants ? 'rotated' : ''}/></button>
     {showParticipants && <div className="poll-participant-list">{votes.map(vote => { const member = app.members.find(m => m.id === vote.memberId); return <div className="poll-participant-row" key={vote.id}><Avatar member={member} name={member?.name ?? t("멤버")} size={30}/><strong>{member?.name ?? t("멤버")}</strong><span>{vote.slotIds.filter(id => poll.slotIds.includes(id)).length ? t("{0}개 시간 가능", { "0": vote.slotIds.filter(id => poll.slotIds.includes(id)).length }) : vote.slotIds.length ? t("후보 변경 \u00B7 재응답 필요") : t("가능한 시간 없음")}</span></div>; })}{waiting.map(member => <div className="poll-participant-row" key={member.id}><Avatar member={member} size={30}/><strong>{member.name}</strong><span className="muted">{t("미응답")}</span></div>)}</div>}

@@ -2,7 +2,6 @@
 export const messagesEn: Record<string, string> = {
   ' · {0} 단위': ' · {0} intervals',
   ' · 수정됨': ' · edited',
-  ' · 저장하면 이전 선택이 변경돼요.': ' · Saving replaces your previous selection.',
   ' 모임 설정도 여기에서 관리해요.': ' You can also manage group settings here.',
   ' 모임 일정 있음': ' has group events',
   ' 외 {0}일': ' and {0} more dates',
@@ -66,7 +65,6 @@ export const messagesEn: Record<string, string> = {
   '개': ' items',
   '개 날짜 ·': ' dates · ',
   '개 시간': ' time slots',
-  '개 시간 선택': ' time slots selected',
   '개 시간대': ' time slots',
   '개인정보 불러오는 중': 'Loading private profile',
   '거절': 'Reject',
