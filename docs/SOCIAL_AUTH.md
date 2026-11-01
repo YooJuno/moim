@@ -1,13 +1,13 @@
 # 카카오·네이버 로그인 연결
 
-현재는 활성화 전입니다. 프런트엔드 코드와 인증 서비스 코드를 준비했으며, 인증 서버 배포와 Firebase 인증 연결은 완료했으며 각 제공자의 앱 등록·키 설정이 끝난 뒤 켤 수 있습니다. `VITE_AUTH_API_URL`이 없거나 서비스의 `/config`에 제공자가 비활성으로 표시되면 해당 로그인 버튼은 나오지 않습니다. 기존 Google 로그인은 그대로 사용할 수 있습니다.
+2026-11-01 기준 카카오 로그인은 운영에서 활성화했습니다. 카카오 REST API 키·Client Secret은 Worker Secret에 저장하며 레포와 브라우저 코드에는 포함하지 않습니다. 네이버 로그인과 톡캘린더는 아직 비활성화 상태입니다. `VITE_AUTH_API_URL`이 없거나 서비스의 `/config`에 제공자가 비활성으로 표시되면 해당 로그인 버튼은 나오지 않습니다. 기존 Google 로그인은 그대로 사용할 수 있습니다.
 
 ## 등록 순서
 
 1. 현재 인증 서버는 `https://moim-auth.moim-auth-worker.workers.dev`입니다. 새 프로젝트에 연결할 때는 [인증 서비스 안내](../services/auth-worker/README.md)에 따라 별도 서버를 준비합니다.
 2. [Kakao Developers](https://developers.kakao.com/docs/latest/ko/kakaologin/prerequisite)에서 앱을 등록하고 카카오 로그인을 활성화합니다. 서비스 README에 지정된 실제 Worker 콜백 주소를 Redirect URI로 등록합니다. REST API 키와 Client Secret은 Worker의 비밀 설정에만 넣습니다.
 3. [네이버 Developers](https://developers.naver.com/docs/login/register/register.md)에서 네이버 로그인 애플리케이션을 등록합니다. 서비스 URL은 실제 사이트 주소, Callback URL은 서비스 README의 실제 Worker 콜백 주소로 설정합니다. Client ID와 Client Secret은 Worker에만 둡니다.
-4. Worker에 허용할 사이트 origin, 실제 인증 서비스 주소, Firebase 인증 설정과 각 제공자의 키를 입력하고 배포합니다. 현재 서버에는 Firebase/SOLAPI 설정이 등록돼 있으며 카카오·네이버 앱 키 등록만 남아 있습니다.
+4. Worker에 허용할 사이트 origin, 실제 인증 서비스 주소, Firebase 인증 설정과 각 제공자의 키를 입력하고 배포합니다. 현재 서버에는 Firebase/SOLAPI/카카오 로그인 설정이 등록돼 있으며 네이버 로그인 키 등록이 남아 있습니다.
 5. `/config`에서 사용할 제공자만 활성으로 반환하는지 확인한 뒤 프런트엔드의 `VITE_AUTH_API_URL`을 실제 인증 서비스 URL로 설정하고 다시 빌드합니다.
 
 Kakao JavaScript 키는 기존 카카오톡 공유용 설정입니다. 카카오 로그인용 REST API 키·Client Secret과 서로 다른 설정이며, 네이버 Client Secret을 포함한 비밀키를 `VITE_` 변수나 브라우저 코드에 넣으면 안 됩니다.
@@ -29,3 +29,10 @@ Kakao JavaScript 키는 기존 카카오톡 공유용 설정입니다. 카카오
 - `services/auth-worker/`: OAuth 제공자 콜백, 신원 연결, Firebase custom token 발급
 
 카카오 캘린더 기능은 로그인 활성화와 별개의 권한·설정이 필요합니다. 로그인 코드가 준비됐다는 이유로 캘린더 전송이 활성화됐다고 표시하지 않습니다.
+
+## 운영 확인
+
+- `/config`의 `providers.kakao=true`, `providers.naver=false`, `calendar.kakao=false`를 확인했습니다.
+- 운영 로그인 화면의 카카오 버튼을 PC와 카카오톡 모바일 환경에서 확인했습니다.
+- 카카오 계정 로그인 화면 진입까지 확인했으며, 실제 계정의 동의·연결 완료는 사용자가 직접 진행합니다.
+- 기존 Google 사용자는 먼저 Google로 로그인한 뒤 **내 정보 → 계정 → 카카오 연결**을 진행합니다.

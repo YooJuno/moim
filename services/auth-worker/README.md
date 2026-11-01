@@ -1,6 +1,6 @@
 # 소셜 로그인·톡캘린더 Worker
 
-Firebase Hosting 프런트엔드에 연결하는 별도 Cloudflare Worker입니다. Firebase 요금제를 바꾸지 않고 카카오·네이버 OAuth의 비밀키 처리와 Firebase 커스텀 토큰 발급을 분리합니다. 운영 서버는 `https://moim-auth.moim-auth-worker.workers.dev`이며 Firebase 서버 인증과 SOLAPI Secret을 연결했습니다. 카카오·네이버 로그인 앱 키는 아직 등록하지 않았고 실제 문자는 발송하지 않았습니다.
+Firebase Hosting 프런트엔드에 연결하는 별도 Cloudflare Worker입니다. Firebase 요금제를 바꾸지 않고 카카오·네이버 OAuth의 비밀키 처리와 Firebase 커스텀 토큰 발급을 분리합니다. 운영 서버는 `https://moim-auth.moim-auth-worker.workers.dev`이며 Firebase 서버 인증과 SOLAPI Secret을 연결했습니다. 카카오 로그인 키는 Worker Secret에 등록해 운영에서 활성화했습니다. 네이버 로그인 키는 아직 등록하지 않았고 톡캘린더는 비활성화 상태입니다. 실제 문자는 발송하지 않았습니다.
 
 사용자 콘솔 설정: [로그인 설정 안내](../../docs/LOGIN_SETUP.md).
 

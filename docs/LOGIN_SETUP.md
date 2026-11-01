@@ -1,8 +1,8 @@
 # 카카오·네이버 로그인 연결
 
-확인일: 2026-10-24. 기존 사이트는 [moim-juno.web.app](https://moim-juno.web.app)이며 Firebase Spark를 유지합니다. 카카오·네이버 로그인에는 개발자 앱의 로그인 키와 별도 인증 서버가 필요합니다. 인증 서버는 [https://moim-auth.moim-auth-worker.workers.dev](https://moim-auth.moim-auth-worker.workers.dev)에 배포했습니다. Firebase 서버 인증과 SOLAPI Secret 연결은 완료했으며 카카오·네이버 앱의 로그인 키 등록이 남아 있습니다. 기존 서비스에서는 아래 Cloudflare 계정·서비스 계정 생성 단계를 반복할 필요가 없습니다.
+확인일: 2026-11-01. 기존 사이트는 [moim-juno.web.app](https://moim-juno.web.app)이며 Firebase Spark를 유지합니다. 카카오·네이버 로그인에는 개발자 앱의 로그인 키와 별도 인증 서버가 필요합니다. 인증 서버는 [https://moim-auth.moim-auth-worker.workers.dev](https://moim-auth.moim-auth-worker.workers.dev)에 배포했습니다. Firebase 서버 인증과 SOLAPI Secret 연결, 카카오 로그인 키 등록은 완료했습니다. 카카오는 운영에서 활성화됐으며 네이버 로그인 키 등록이 남아 있습니다. 기존 서비스에서는 아래 Cloudflare 계정·서비스 계정 생성 단계를 반복할 필요가 없습니다.
 
-현재 연결에서 필요한 작업은 카카오·네이버 개발자 앱의 콜백과 로그인 키 설정입니다. 한 제공자만 먼저 설정해도 됩니다. 아래 서버 준비 단계는 새 프로젝트에서 처음 연결할 때의 절차입니다.
+현재 서비스에 남은 작업은 네이버 로그인 앱 설정과 톡캘린더 권한 설정입니다. 아래는 새 프로젝트에서 소셜 로그인을 처음 연결하거나 기존 키를 교체할 때의 절차입니다.
 
 ## 1. Cloudflare 계정과 서버 주소 준비
 

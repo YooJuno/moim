@@ -22,7 +22,7 @@ npm run test:e2e
 
 ## 카카오·네이버 로그인
 
-Google 로그인은 운영에 연결되어 있습니다. 카카오·네이버는 선택적으로 사용할 수 있는 인증 서버와 계정 연결 화면을 준비했습니다. 인증 서버는 Cloudflare Free에 배포했고 각 개발자 앱의 로그인 키 등록이 남아 있어 현재 Google만 활성화돼 있습니다. [설정 순서](docs/LOGIN_SETUP.md), [구현과 검증](docs/SOCIAL_AUTH.md)을 참고하세요. 앱 비밀키를 준비한 서버만 로그인 버튼을 표시합니다.
+Google과 카카오 로그인이 운영에 연결되어 있습니다. 카카오 REST API 키와 Client Secret은 Cloudflare Worker Secret에 등록했습니다. 네이버 로그인은 키 등록 전이며, 톡캘린더는 별도 권한 설정 전이라 비활성화돼 있습니다. 기존 Google 사용자는 내 정보의 계정 연결에서 카카오를 먼저 연결해야 같은 멤버 정보를 유지합니다. [설정 순서](docs/LOGIN_SETUP.md), [구현과 검증](docs/SOCIAL_AUTH.md)을 참고하세요. 앱 비밀키를 준비한 서버만 로그인 버튼을 표시합니다.
 
 ## Firebase 연결
 
