@@ -49,6 +49,12 @@ it('does not duplicate unchanged events and updates the same ID when time or ven
  await store.seed('events/e1',{...event,start:'15:00',location:'새 주소'});await run();expect(deps.calendarCall).toHaveBeenLastCalledWith('a','external-a',expect.objectContaining({location:{name:'새 주소'}}));
  expect((await store.get(await linkPath('a')))?.data.status).toBe('synced');
 });
+it('keeps already registered voters on later date changes until they explicitly decline',async()=>{
+ await member('a');await store.seed('votes/p1_a',{pollId:'p1',memberId:'a',slotIds:['a','b']});await run();
+ await store.seed('events/e1',{...event,date:'2026-11-11',start:'18:00',end:'20:00'});await run();
+ expect(deps.calendarCall).toHaveBeenLastCalledWith('a','external-a',expect.objectContaining({time:expect.objectContaining({start_at:'2026-11-11T09:00:00.000Z'})}));expect(deps.calendarDelete).not.toHaveBeenCalled();
+ await going('a','notGoing');await run();expect(deps.calendarDelete).toHaveBeenCalledWith('a','external-a');
+});
 it('removes the registered event on decline and on event deletion',async()=>{
  await member('a');await going('a');await run();await going('a','notGoing');await run();expect(deps.calendarDelete).toHaveBeenCalledWith('a','external-a');
  await going('a');await run();await store.commit([{path:'events/e1',remove:true}]);await run();expect(deps.calendarDelete).toHaveBeenCalledTimes(2);

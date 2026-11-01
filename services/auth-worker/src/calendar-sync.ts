@@ -70,7 +70,8 @@ export function createCalendarSyncService(env:Env,deps:Dependencies,verify:(requ
    if(settings?.data.enabled!==true||!record){completed.add(uid);counts.skipped++;continue;}
    const principal=principals.get(uid);if(!principal||principal.disabled){completed.add(uid);counts.skipped++;continue;}
    const vote=votes.find(item=>item.data.memberId===uid);
-   const remove=!event||member?.data.status!=='active'||!eligibleForEvent(event.data,rsvp?.data,poll?.data,vote?.data);
+   const registered=!!old?.data.kakaoEventId&&old.data.status!=='deleted';
+   const remove=!event||member?.data.status!=='active'||rsvp?.data.status==='notGoing'||(!registered&&!eligibleForEvent(event.data,rsvp?.data,poll?.data,vote?.data));
    let token:Token;try{token=await decrypt<Token>(encryptedToken(record),env.TOKEN_ENCRYPTION_KEY!,`authProviderTokens/${uid}-kakao`);}catch{completed.add(uid);counts.failed++;continue;}
    if(!token.scopes.includes('talk_calendar')){completed.add(uid);counts.skipped++;continue;}
    if(old?.data.status==='processing'){
