@@ -10,6 +10,30 @@
   border-radius: 18px;
   background: var(--surface-ffffff);
 }
+.home-polls-panel {
+  --text-8b95a1: #5e6e86;
+  --text-e07e65: #a94630;
+  background: var(--surface-edf3ff);
+  border-color: var(--surface-dbe8ff);
+}
+.home-polls-panel .home-panel-heading h2,
+.home-polls-panel .home-section-count { color: var(--blue); }
+.home-polls-panel .home-poll-row { border-color: var(--surface-dbe8ff); }
+.home-polls-panel .needs-response .home-poll-action { background: var(--surface-ffffff); }
+.home-next-event {
+  --text-4e5968: #f5f8ff;
+  --text-8b95a1: #c0cfe5;
+  --text-4e6fa4: #dce8ff;
+  --surface-edf0f4: #ffffff24;
+  --surface-f5f7fa: #ffffff16;
+  --blue: #e1ecff;
+  background: #263f66;
+  border-color: #263f66;
+}
+.home-notices-panel,
+.home-birthdays-panel { background: transparent; border-color: transparent; }
+html[data-theme="dark"] .home-next-event { background: #1c304d; border-color: #304563; }
+html[data-theme="dark"] .home-polls-panel { --text-8b95a1: #adc0de; --text-e07e65: #f2a18c; }
 .home-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 24px; margin-bottom: 18px; }
 .home-panel-heading h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 650; color: var(--text-4e5968); }
 .home-panel-heading h2 > svg { color: var(--text-8b95a1); }
@@ -49,6 +73,8 @@
 .home-page .hero-attendees > span { font-size: inherit; }
 .home-event-open { display: inline-flex; align-items: center; gap: 12px; min-height: 38px; color: var(--blue); font-size: 12px; font-weight: 600; }
 .home-event-open:hover { text-decoration: underline; }
+.home-next-event .home-event-open { padding: 0 12px; border-radius: 8px; background: #ffffff12; }
+.home-next-event .home-event-open:hover { background: #ffffff24; text-decoration: none; }
 .home-notice-row { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 14px 0; border-bottom: 1px solid var(--surface-edf0f4); }
 .home-notice-row:first-child { padding-top: 4px; }
 .home-notice-row:last-child { border-bottom: 0; padding-bottom: 4px; }
