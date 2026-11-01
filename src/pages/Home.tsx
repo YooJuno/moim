@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Cake, CalendarDays, Check, ChevronRight, Clock3, ListChecks, MapPin, Megaphone, Users, Vote } from 'lucide-react';
+import { ArrowRight, Cake, CalendarDays, Check, ChevronRight, Clock3, ListChecks, MapPin, Users, Vote } from 'lucide-react';
 import { MapLinks } from '../components/MapLinks';
 import { Avatar, PageHeader } from '../components/ui';
 import { useApp } from '../lib/store';
 import { useI18n } from '../lib/preferences';
-import { formatDate, formatTime, relativeDate, today } from '../lib/utils';
+import { formatDate, formatTime, today } from '../lib/utils';
 import { upcomingBirthdays } from '../lib/birthdays';
 import { addressForMap } from '../lib/map-links';
 import './home.css';
@@ -33,8 +33,6 @@ export function Home() {
       || (a.deadline ? new Date(a.deadline).getTime() : Infinity) - (b.deadline ? new Date(b.deadline).getTime() : Infinity)
       || b.createdAt.localeCompare(a.createdAt));
   const unansweredCount = openPolls.filter(poll => needsResponse(poll.id)).length;
-  const notices = app.posts.filter(post => post.category === 'notice')
-    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.createdAt.localeCompare(a.createdAt)).slice(0, 3);
 
   return <div className="page home-page">
     <PageHeader tourId="home" title={app.settings.name}/>
@@ -92,13 +90,6 @@ export function Home() {
             <Link to={`/calendar?event=${encodeURIComponent(next.id)}`} className="home-event-open button button-secondary button-sm">{t('일정 확인')}<ArrowRight size={15}/></Link>
           </div>
         </> : <div className="home-panel-empty"><p>{t('예정된 일정이 없어요.')}</p><Link className="home-more" to="/calendar">{t('캘린더 열기')}<ChevronRight size={14}/></Link></div>}
-      </section>
-
-      <section className="home-panel home-notices-panel" aria-label={t('공지사항')}>
-        <div className="home-panel-heading"><h2><span className="home-section-icon"><Megaphone size={17} aria-hidden="true"/></span>{t('공지사항')}</h2><Link to="/board?category=notice" className="home-more">{t('전체 보기')}<ChevronRight size={14}/></Link></div>
-        {notices.length ? <div className="home-notice-list">{notices.map(post => <Link key={post.id} to={`/board?category=notice&post=${encodeURIComponent(post.id)}`} className="home-notice-row">
-          <strong>{post.title}</strong><time dateTime={post.createdAt}>{relativeDate(post.createdAt)}</time><ChevronRight size={15}/>
-        </Link>)}</div> : <p className="home-empty-line">{t('등록된 공지가 없어요.')}</p>}
       </section>
 
       <section className="home-panel home-birthdays-panel" aria-label={t('다가오는 생일')}>
