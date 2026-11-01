@@ -18,6 +18,7 @@ import { monthlyPollDates, monthlyPollTitle, nextPollMonth } from '../lib/poll-p
 import { formatPollDuration, getPollAvailabilityWindows, sortPollResults } from '../lib/poll-results';
 import type { PollAvailabilityWindow, PollResultSort } from '../lib/poll-results';
 import './schedule.css';
+import './poll-time-grid.css';
 const isOpen = (poll: Poll) => poll.status === 'open' && (!poll.deadline || new Date(poll.deadline).getTime() > Date.now());
 const canManage = (poll: Poll, userId: string | undefined, admin: boolean, allowed: boolean) => admin || (allowed && poll.creatorId === userId);
 const localDateTime = (value: string) => { const d = new Date(value); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -212,7 +213,7 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
     finally {
         setSaving(false);
     } };
-    return <Modal title={poll.title} onClose={onClose} wide footer={<div className="poll-detail-footer"><div className="poll-detail-tools">{manageable && <><IconButton label={t("투표 수정")} icon={Pencil} onClick={onEdit} disabled={busy || saving}/><IconButton label={t("투표 삭제")} icon={Trash2} onClick={onDelete} disabled={busy || saving}/><Button variant="ghost" size="sm" onClick={onStatus} loading={busy}>{open ? t("투표 마감") : t("다시 열기")}</Button></>}</div><div className="poll-detail-actions">{app.isAdmin && poll.status !== 'confirmed' && <Button variant="secondary" icon={CalendarCheck} onClick={() => onConfirm()} disabled={busy || saving}>{t("일정 확정")}</Button>}{interactive ? <Button icon={Check} loading={saving} disabled={(!selected.length && !unavailable) || busy} onClick={save}>{ownVote ? t("선택 수정하기") : t("선택 저장하기")}</Button> : <Button variant="secondary" onClick={onClose}>{t("닫기")}</Button>}</div></div>}>
+    return <Modal title={poll.title} onClose={onClose} wide className="poll-detail-modal" footer={<div className="poll-detail-footer"><div className="poll-detail-tools">{manageable && <><IconButton label={t("투표 수정")} icon={Pencil} onClick={onEdit} disabled={busy || saving}/><IconButton label={t("투표 삭제")} icon={Trash2} onClick={onDelete} disabled={busy || saving}/><Button variant="ghost" size="sm" onClick={onStatus} loading={busy}>{open ? t("투표 마감") : t("다시 열기")}</Button></>}</div><div className="poll-detail-actions">{app.isAdmin && poll.status !== 'confirmed' && <Button variant="secondary" icon={CalendarCheck} onClick={() => onConfirm()} disabled={busy || saving}>{t("일정 확정")}</Button>}{interactive ? <Button icon={Check} loading={saving} disabled={(!selected.length && !unavailable) || busy} onClick={save}>{ownVote ? t("선택 수정하기") : t("선택 저장하기")}</Button> : <Button variant="secondary" onClick={onClose}>{t("닫기")}</Button>}</div></div>}>
     <div className="poll-detail-meta"><Badge tone={poll.status === 'confirmed' ? 'green' : open ? 'blue' : 'gray'}>{poll.status === 'confirmed' ? t("일정 확정") : open ? t("투표 중") : t("마감")}</Badge><span><Clock3 size={14}/>{poll.deadline ? <>{formatDate(poll.deadline)} {t("{0} 마감", {"0":formatTime(poll.deadline)})}</> : t("마감 없음")}</span></div>
     {poll.description && <p className="poll-detail-description">{poll.description}</p>}
     {interactive && ownVote?.slotIds.some(id => !poll.slotIds.includes(id)) && <p className="poll-vote-changed">{t("후보 시간이 변경됐어요. 선택을 확인하고 다시 저장해 주세요.")}</p>}
@@ -233,7 +234,7 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
                     } if (suppressClick.current) {
                         suppressClick.current = false;
                         return;
-                    } toggleSlot(slot.id); }} aria-pressed={chosen} aria-label={t("{0}, {1}명 가능{2}", { "0": slotLabel(slot), "1": count, "2": chosen ? t(", 선택됨") : '' })} title={votes.filter(v => v.slotIds.includes(slot.id)).map(v => memberName(app.members, v.memberId)).join(', ') || t("선택한 사람이 없어요")}>{chosen ? <Check size={17}/> : <span className="poll-cell-check"/>}<strong>{count}<small>{t("명")}</small></strong></button></td>;
+                    } toggleSlot(slot.id); }} aria-pressed={chosen} aria-label={t("{0}, {1}명 가능{2}", { "0": slotLabel(slot), "1": count, "2": chosen ? t(", 선택됨") : '' })} title={votes.filter(v => v.slotIds.includes(slot.id)).map(v => memberName(app.members, v.memberId)).join(', ') || t("선택한 사람이 없어요")}>{chosen && <Check className="poll-cell-selected" size={12} aria-hidden="true"/>}<strong>{count}</strong></button></td>;
                 })}</tr>;
         })}</tbody></table></div>
     {interactive && <button className={`poll-unavailable ${unavailable ? 'active' : ''}`} aria-pressed={unavailable} onClick={() => { setUnavailable(!unavailable); setSelected([]); }} disabled={saving}><span className="poll-check-box">{unavailable && <Check size={13}/>}</span>{t("가능한 시간이 없어요")}</button>}
