@@ -6,6 +6,10 @@ export function setLanguage(language:Language){currentLanguage=language==='en'?'
 export const localeFor=(language:Language)=>language==='en'?'en-US':'ko-KR';
 export const getLocale=()=>localeFor(currentLanguage);
 const english:Record<string,string>={
+  '투표 메뉴': 'Poll actions',
+  '시간 선택': 'Choose times',
+  '드래그로 선택': 'Drag to select',
+  '꾹 눌러 여러 칸 선택': 'Hold to select multiple slots',
   '모임 계좌': 'Group bank account',
   '복사': 'Copy',
   '은행': 'Bank',

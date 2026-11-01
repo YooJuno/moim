@@ -18,8 +18,8 @@ export function MapLinks({ location, name, compact = false }: {
         return null;
     return <>
       <div className={`map-links ${compact ? 'is-compact' : ''}`}>
-        <button type="button" onClick={()=>setAction('map')}><Map size={14}/>{t("지도 보기")}</button>
-        <button type="button" onClick={()=>setAction('directions')}><Navigation size={14}/>{t("길찾기")}</button>
+        <button type="button" className="map-link-icon" aria-label={t('지도 보기')} title={t('지도 보기')} onClick={()=>setAction('map')}><Map size={18} aria-hidden="true"/></button>
+        <button type="button" className="map-link-icon" aria-label={t('길찾기')} title={t('길찾기')} onClick={()=>setAction('directions')}><Navigation size={18} aria-hidden="true"/></button>
       </div>
       {action&&<Modal title={t(action==='map'?'지도 앱 선택':'길찾기 앱 선택')} onClose={()=>setAction(null)}>
         <div className="map-choice-place">{name&&<strong>{name}</strong>}<p>{location.trim()||name}</p></div>

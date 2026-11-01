@@ -1,6 +1,6 @@
 import { useI18n } from "../lib/preferences";
 import { useRef, useState } from 'react';
-import { MapPin, Pencil, Plus, Trash2 } from 'lucide-react';
+import { MapPin, Pencil, Plus, Trash2, Save, X } from 'lucide-react';
 import { useApp } from '../lib/store';
 import type { SavedPlace } from '../lib/types';
 import { errorMessage, uid } from '../lib/utils';
@@ -30,10 +30,10 @@ export function SavedPlacesManager() {
     } }
     if (!app.isAdmin)
         return null;
-    return <section className="card saved-places" aria-label={t("자주 가는 장소")}><div className="saved-places-heading"><span className="saved-places-heading-icon"><MapPin size={20}/></span><h2>{t("자주 가는 장소")}</h2><Button variant="secondary" size="sm" icon={Plus} onClick={() => setEditing('new')}>{t("장소 추가")}</Button></div>
+    return <section className="card saved-places" aria-label={t("자주 가는 장소")}><div className="saved-places-heading"><span className="saved-places-heading-icon"><MapPin size={20}/></span><h2>{t("자주 가는 장소")}</h2><Button iconOnly variant="secondary" size="sm" icon={Plus} onClick={() => setEditing('new')}>{t("장소 추가")}</Button></div>
     {places.length > 0 ? <div className="saved-places-list">{places.map(place => <div className="saved-place-row" key={place.id}><span className="saved-place-icon"><MapPin size={17}/></span><div className="saved-place-info"><strong>{place.name}</strong><span>{place.address}</span><MapLinks location={place.address} name={place.name} compact/></div><div className="saved-place-actions"><IconButton label={t("{0} 수정", { "0": place.name })} icon={Pencil} onClick={() => setEditing(place)}/><IconButton label={t("{0} 삭제", { "0": place.name })} icon={Trash2} onClick={() => setDeleting(place)}/></div></div>)}</div> : <EmptyState icon={MapPin} title={t("저장된 장소가 없어요")}/>}
     {editing && <PlaceEditor place={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)}/>}
-    {deleting && <Modal title={t("장소를 삭제할까요?")} onClose={() => !busy && setDeleting(null)} footer={<><Button variant="secondary" disabled={busy} onClick={() => setDeleting(null)}>{t("취소")}</Button><Button variant="danger" icon={Trash2} loading={busy} onClick={() => void remove()}>{t("삭제")}</Button></>}><div className="saved-place-delete-preview"><MapPin size={20}/><div><strong>{deleting.name}</strong><span>{deleting.address}</span></div></div></Modal>}
+    {deleting && <Modal title={t("장소를 삭제할까요?")} onClose={() => !busy && setDeleting(null)} footer={<><Button icon={X} iconOnly variant="secondary" disabled={busy} onClick={() => setDeleting(null)}>{t("취소")}</Button><Button iconOnly variant="danger" icon={Trash2} loading={busy} onClick={() => void remove()}>{t("삭제")}</Button></>}><div className="saved-place-delete-preview"><MapPin size={20}/><div><strong>{deleting.name}</strong><span>{deleting.address}</span></div></div></Modal>}
   </section>;
 }
 function PlaceEditor({ place, onClose }: {
@@ -63,5 +63,5 @@ function PlaceEditor({ place, onClose }: {
     finally {
         setSaving(false);
     } }
-    return <Modal title={place ? t("장소 수정") : t("장소 추가")} onClose={() => !saving && onClose()} footer={<><Button variant="secondary" disabled={saving} onClick={onClose}>{t("취소")}</Button><Button form="saved-place-form" type="submit" loading={saving}>{t("저장")}</Button></>}><form id="saved-place-form" className="stack" onSubmit={save}><Field label={t("장소 이름")} required><input value={name} onChange={event => setName(event.target.value)} maxLength={80} required autoFocus/></Field><AddressField value={address} onChange={setAddress} searchName={name} onPlaceSelect={result => { if (!name.trim()) setName(result.name.slice(0, 80)); }} required disabled={saving}/></form></Modal>;
+    return <Modal title={place ? t("장소 수정") : t("장소 추가")} onClose={() => !saving && onClose()} footer={<><Button icon={X} iconOnly variant="secondary" disabled={saving} onClick={onClose}>{t("취소")}</Button><Button icon={Save} iconOnly form="saved-place-form" type="submit" loading={saving}>{t("저장")}</Button></>}><form id="saved-place-form" className="stack" onSubmit={save}><Field label={t("장소 이름")} required><input value={name} onChange={event => setName(event.target.value)} maxLength={80} required autoFocus/></Field><AddressField value={address} onChange={setAddress} searchName={name} onPlaceSelect={result => { if (!name.trim()) setName(result.name.slice(0, 80)); }} required disabled={saving}/></form></Modal>;
 }

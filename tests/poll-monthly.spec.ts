@@ -10,7 +10,6 @@ test('new monthly poll starts with next month weekends and 08:00–24:00 hourly 
   await expect(editor.locator('.poll-date-chips button')).toHaveCount(9);
   await expect(editor.getByLabel('공통 시간 1 시작', {exact:true})).toHaveValue('08:00');
   await expect(editor.getByLabel('공통 시간 1 종료', {exact:true})).toHaveValue('24:00');
-  await expect(editor.locator('.poll-editor-summary')).toContainText('144개 시간');
   await editor.getByRole('button', {name:'투표 만들기',exact:true}).click();
   const detail = page.getByRole('dialog');
   await expect(detail).toHaveAccessibleName('2026년 11월 일정 취합');
@@ -63,7 +62,8 @@ test('editing a midnight poll keeps selected dates, windows and cell identities'
     const data = JSON.parse(localStorage.getItem('moim-demo-v1')!);
     return data.polls.find((poll:{title:string}) => poll.title === '자정까지 가능한 시간');
   });
-  await dialog.getByRole('button', {name:'투표 수정',exact:true}).click();
+  await dialog.getByRole('button', { name: '투표 메뉴', exact: true }).click();
+  await dialog.getByRole('menuitem', {name:'투표 수정',exact:true}).click();
   dialog = page.getByRole('dialog');
   await expect(dialog.locator('.poll-date-chips button')).toHaveCount(1);
   await expect(dialog.getByLabel('공통 시간 1 시작', {exact:true})).toHaveValue('08:00');

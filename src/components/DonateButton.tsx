@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Heart } from 'lucide-react';
+import { Heart, X } from 'lucide-react';
 import { useI18n } from '../lib/preferences';
 import { Button, Modal, useToast } from './ui';
 import './donate-button.css';
@@ -42,6 +42,6 @@ export function DonateButton() {
 
   return <>
     <button type="button" className="donate-button" title={`${details} · ${t('계좌번호 복사')}`} aria-label={t('후원 계좌번호 복사')} onClick={() => void copy()}><Heart size={12} strokeWidth={1.7}/><span>{t('후원')}</span></button>
-    {manual && <Modal title={t('후원 계좌')} onClose={() => setManual(false)} footer={<Button variant="secondary" onClick={() => setManual(false)}>{t('닫기')}</Button>}><p className="donate-account-owner">{t('카카오뱅크')} · 유준호</p><input aria-label={t('계좌번호')} value={account} readOnly onFocus={event => event.target.select()} onClick={event => event.currentTarget.select()}/></Modal>}
+    {manual && <Modal title={t('후원 계좌')} onClose={() => setManual(false)} footer={<Button icon={X} iconOnly variant="secondary" onClick={() => setManual(false)}>{t('닫기')}</Button>}><p className="donate-account-owner">{t('카카오뱅크')} · 유준호</p><input aria-label={t('계좌번호')} value={account} readOnly onFocus={event => event.target.select()} onClick={event => event.currentTarget.select()}/></Modal>}
   </>;
 }

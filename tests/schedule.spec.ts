@@ -54,7 +54,8 @@ test('shared times, day override, voting, editing, confirmation and RSVP retain 
   expect(original.poll.deadline).toBeNull();
   expect(original.poll.slotMinutes).toBe(60);
   expect(original.vote.slotIds).toHaveLength(2);
-  await dialog.getByRole('button', { name: '투표 수정', exact: true }).click();
+  await dialog.getByRole('button', { name: '투표 메뉴', exact: true }).click();
+  await dialog.getByRole('menuitem', { name: '투표 수정', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveAccessibleName('투표 수정');
   await page.getByRole('dialog').getByLabel('투표 제목').fill('함께하는 11월 주말 · 장소 확정');
   await page.getByRole('button', { name: '수정하고 열기' }).click();
@@ -182,11 +183,14 @@ test('no-deadline poll offers hourly cells, partial availability and editable de
   await dialog.getByRole('button', { name: /20:00–21:00/ }).click();
   await dialog.getByRole('button', { name: '선택 저장하기', exact: true }).click();
   await expect(dialog.locator('.poll-time-cell.is-selected')).toHaveCount(2);
-  await dialog.getByRole('button', { name: '투표 마감', exact: true }).click();
+  await dialog.getByRole('button', { name: '투표 메뉴', exact: true }).click();
+  await dialog.getByRole('menuitem', { name: '투표 마감', exact: true }).click();
   await expect(dialog.getByText('마감', { exact: true })).toBeVisible();
-  await dialog.getByRole('button', { name: '다시 열기', exact: true }).click();
+  await dialog.getByRole('button', { name: '투표 메뉴', exact: true }).click();
+  await dialog.getByRole('menuitem', { name: '다시 열기', exact: true }).click();
   await expect(dialog.getByText('투표 중', { exact: true })).toBeVisible();
-  await dialog.getByRole('button', { name: '투표 수정', exact: true }).click();
+  await dialog.getByRole('button', { name: '투표 메뉴', exact: true }).click();
+  await dialog.getByRole('menuitem', { name: '투표 수정', exact: true }).click();
   dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('checkbox', { name: '마감 없음', exact: true })).toBeChecked();
   await expect(dialog.getByLabel('공통 시간 1 시작', { exact: true })).toHaveAttribute('data-step-minutes', '60');

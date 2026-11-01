@@ -39,7 +39,7 @@ export function Home() {
   return <div className="page home-page">
     <PageHeader tourId="home" title={app.settings.name}
       description={formatDate(new Date().toISOString(), { month: 'long', day: 'numeric', weekday: 'long' })}
-      action={app.canCreatePoll ? <Link to="/polls?create=1"><Button variant="secondary" icon={Plus}>{t('투표 만들기')}</Button></Link> : undefined}/>
+      action={app.canCreatePoll ? <Link to="/polls?create=1"><Button iconOnly variant="secondary" icon={Plus}>{t('투표 만들기')}</Button></Link> : undefined}/>
 
     <div className="home-dashboard">
       <section className="home-panel home-polls-panel" aria-label={t('진행 중인 투표')}>

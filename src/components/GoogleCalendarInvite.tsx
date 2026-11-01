@@ -1,6 +1,6 @@
 import { useI18n } from "../lib/preferences";
 import { useState } from 'react';
-import { CalendarCheck, CalendarPlus, Check, Clock3, ExternalLink, Link2, MapPin, Send, Users } from 'lucide-react';
+import { CalendarCheck, CalendarPlus, Check, Clock3, ExternalLink, Link2, MapPin, Send, Users, X } from 'lucide-react';
 import { useApp } from '../lib/store';
 import type { CalendarLink, MoimEvent } from '../lib/types';
 import { calendarSignature, connectGoogleCalendar, hasGoogleCalendarAccess, syncGoogleCalendarEvent } from '../lib/google-calendar';
@@ -91,7 +91,7 @@ export function GoogleCalendarInvite({ event, onClose }: {
     };
     if (!app.isAdmin)
         return null;
-    return <Modal title={t("Google 캘린더")} onClose={() => !busy && onClose()} footer={<><Button variant="secondary" disabled={busy !== null} onClick={onClose}>{t("닫기")}</Button><Button icon={recipients.length ? Send : CalendarPlus} loading={busy === 'sync'} disabled={disabled} onClick={sync}>{t(submitLabel)}</Button></>}>
+    return <Modal title={t("Google 캘린더")} onClose={() => !busy && onClose()} footer={<><Button icon={X} iconOnly variant="secondary" disabled={busy !== null} onClick={onClose}>{t("닫기")}</Button><Button icon={recipients.length ? Send : CalendarPlus} loading={busy === 'sync'} disabled={disabled} onClick={sync}>{t(submitLabel)}</Button></>}>
     <div className="google-calendar-event"><div className="google-calendar-symbol"><CalendarPlus size={23}/></div><div><strong>{event.title}</strong><p><Clock3 size={13}/>{formatDate(event.date)} · {event.start}–{event.end}</p>{event.location && <p><MapPin size={13}/>{event.location}</p>}</div></div>
     {link && <div className="google-calendar-last-sync"><span><CalendarCheck size={14}/>{t("마지막 반영 {0}", {"0":formatDate(link.syncedAt, {month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})})}</span>{changed ? <Badge tone="orange">{t("변경사항 있음")}</Badge> : <Badge tone="green">{t("최신 상태")}</Badge>}{htmlLink && <a href={htmlLink} target="_blank" rel="noopener noreferrer" aria-label={t("Google 캘린더에서 일정 열기")}><ExternalLink size={15}/></a>}</div>}
     {foreignOwner ? <div className="google-calendar-owner"><Link2 size={17}/><p>{t("{0} 님의 Google 캘린더에 연결된 일정이에요. 연결한 관리자가 변경할 수 있어요.", {"0":memberName(app.members, link!.ownerId)})}</p></div> : <div className="google-calendar-connection"><div><span className={`google-calendar-connection-dot ${connected ? 'connected' : ''}`}/><strong>{connected ? t("Google 캘린더 연결됨") : t("Google 계정 연결")}</strong></div><Button variant="secondary" size="sm" icon={connected ? Check : Link2} disabled={app.isDemo || busy !== null} loading={busy === 'connect'} onClick={connect}>{connected ? t("다시 연결") : t("Google 캘린더 연결")}</Button></div>}

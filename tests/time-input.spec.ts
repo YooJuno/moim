@@ -64,7 +64,8 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
       await expect(detail.locator('.poll-detail-meta')).toContainText('23:50');
       await expect(detail.locator('.poll-detail-meta')).not.toContainText(/오전|오후|\bAM\b|\bPM\b/);
       await page.reload();
-      await page.getByRole('dialog').getByRole('button', { name: '투표 수정', exact: true }).click();
+      await page.getByRole('dialog').getByRole('button', { name: '투표 메뉴', exact: true }).click();
+      await page.getByRole('dialog').getByRole('menuitem', { name: '투표 수정', exact: true }).click();
       editor = page.getByRole('dialog');
       await expect(editor.getByLabel('공통 시간 1 시작', { exact: true })).toHaveValue('18:00');
       await expect(editor.getByLabel('공통 시간 1 종료', { exact: true })).toHaveValue('24:00');

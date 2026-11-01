@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, FileSpreadsheet, Upload } from 'lucide-react';
+import { Check, FileSpreadsheet, Upload, X } from 'lucide-react';
 import { useApp } from '../lib/store';
 import { useI18n } from '../lib/preferences';
 import { classifyBankTransactions, type BankImportPlan } from '../lib/bank-import';
@@ -32,7 +32,7 @@ export function BankImport({ onClose, onSaved }: { onClose: () => void; onSaved:
     try{const result=await app.importBankTransactions(plan.transactions);toast(t('{0}건을 반영했어요. 중복 {1}건은 제외했어요.',{'0':result.added,'1':result.skipped}));onSaved();}
     catch(problem){errorMessage(problem);setError('거래내역을 저장하지 못했어요. 연결과 회계 권한을 확인해 주세요.');setBusy(null);}
   }
-  return <Modal title={t('엑셀 가져오기')} wide className="bank-import-modal" onClose={close} footer={<><Button variant="secondary" disabled={busy==='save'} onClick={close}>{t('닫기')}</Button>{plan?<Button icon={Check} loading={busy==='save'} disabled={!fresh.length} onClick={()=>void save()}>{t('{0}건 반영',{'0':fresh.length})}</Button>:<Button type="submit" form="bank-import-form" icon={Upload} loading={busy==='read'} disabled={!file}>{t('내역 확인')}</Button>}</>}>
+  return <Modal title={t('엑셀 가져오기')} wide className="bank-import-modal" onClose={close} footer={<><Button icon={X} iconOnly variant="secondary" disabled={busy==='save'} onClick={close}>{t('닫기')}</Button>{plan?<Button icon={Check} loading={busy==='save'} disabled={!fresh.length} onClick={()=>void save()}>{t('{0}건 반영',{'0':fresh.length})}</Button>:<Button type="submit" form="bank-import-form" icon={Upload} loading={busy==='read'} disabled={!file}>{t('내역 확인')}</Button>}</>}>
     {!plan?<form id="bank-import-form" className="stack" onSubmit={preview}>
       <Field label={t('거래내역 엑셀')} required><div className="bank-import-file"><FileSpreadsheet size={24}/><input type="file" accept=".xlsx" aria-label={t('거래내역 엑셀')} disabled={!!busy} onChange={event=>{setFile(event.target.files?.[0]??null);setPassword('');setError('');}}/></div></Field>
       <Field label={t('엑셀 비밀번호')}><input type="password" value={password} onChange={event=>setPassword(event.target.value)} autoComplete="off" disabled={!!busy} placeholder={t('파일에 설정한 비밀번호')}/></Field>

@@ -97,3 +97,22 @@
   .poll-pointer-hint { display: none; }
   .poll-touch-hint { display: inline; }
 }
+
+.poll-detail-modal .poll-detail-footer { flex-direction: row; justify-content: flex-end; gap: 8px; }
+.poll-detail-modal .poll-detail-actions { width: auto; justify-content: flex-end; gap: 8px; }
+.poll-detail-modal .poll-detail-actions > .button { flex: 0 0 auto; }
+
+@media (max-width: 400px) {
+  .poll-month-preset { display: flex; flex-direction: column; align-items: stretch; }
+  .poll-month-preset > label { min-width: 0; width: 100%; }
+  .poll-month-preset input { min-width: 0; width: 100%; }
+  .poll-month-preset > .button { width: 100%; max-width: 100%; white-space: normal; }
+}
+
+.poll-card { min-width: 0; }
+.poll-best > div { min-width: 0; }
+@media (max-width: 400px) {
+  .poll-grid { grid-template-columns: minmax(0, 1fr); }
+  .poll-best strong { flex-wrap: wrap; white-space: normal; }
+  .poll-card-bottom { flex-wrap: wrap; gap: 8px; }
+}

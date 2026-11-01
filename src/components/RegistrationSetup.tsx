@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, LogOut, UserRound } from 'lucide-react';
+import { LogOut, UserRound, Save } from 'lucide-react';
 import { needsMemberName } from '../../shared/member-name';
 import { useApp } from '../lib/store';
 import { useI18n } from '../lib/preferences';
@@ -49,7 +49,7 @@ export function RegistrationSetup() {
         <BirthdayField value={birthday} required onChange={value => { dirty.current = true; setBirthday(value); }}/>
       </fieldset>
       <p className="field-hint">{t('전화번호와 거주 지역은 본인과 관리자만 볼 수 있어요.')}</p>
-      <Button type="submit" icon={Check} loading={busy} disabled={!profile}>{t('저장하고 계속')}</Button>
+      <Button iconOnly type="submit" icon={Save} loading={busy} disabled={!profile}>{t('저장하고 계속')}</Button>
     </form>
     <Button variant="ghost" icon={LogOut} disabled={busy} onClick={() => void app.logout().catch(error => toast(errorMessage(error), 'error'))}>{t('로그아웃')}</Button>
   </div></main>;

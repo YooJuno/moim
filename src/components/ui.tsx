@@ -5,13 +5,15 @@ import { createPortal } from 'react-dom';
 import { Check, LoaderCircle, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Member } from '../lib/types';
+import './ui-actions.css';
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
     variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
     size?: 'sm' | 'md';
     icon?: LucideIcon;
     loading?: boolean;
+    iconOnly?: boolean;
 };
-export function Button({ variant = 'primary', size = 'md', icon: Icon, loading = false, children, className = '', type = 'button', disabled, ...props }: ButtonProps) { return <button {...props} type={type} className={`button button-${variant} button-${size} ${className}`} disabled={disabled || loading}>{loading ? <LoaderCircle size={17} className="spin"/> : Icon ? <Icon size={17}/> : null}{children}</button>; }
+export function Button({ variant = 'primary', size = 'md', icon: Icon, loading = false, iconOnly = false, children, className = '', type = 'button', disabled, ...props }: ButtonProps) { return <button {...props} type={type} title={props.title ?? (iconOnly && typeof children === 'string' ? children : undefined)} className={`button button-${variant} button-${size} ${iconOnly ? 'button-icon-only' : ''} ${className}`} disabled={disabled || loading}>{loading ? <LoaderCircle size={17} className="spin" aria-hidden="true"/> : Icon ? <Icon size={iconOnly ? 20 : 17} aria-hidden="true"/> : null}{iconOnly ? <span className="sr-only">{children}</span> : children}</button>; }
 export function IconButton({ label, icon: Icon, className = '', type = 'button', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & {
     label: string;
     icon: LucideIcon;
@@ -45,11 +47,12 @@ export function EmptyState({ icon: Icon, title, description, action }: {
     action?: ReactNode;
 }) { return <div className="empty-state"><span className="empty-icon"><Icon size={27}/></span><h3>{title}</h3>{description && <p>{description}</p>}{action}</div>; }
 const modalStack: string[] = [];
-export function Modal({ title, onClose, children, footer, wide = false, className = '' }: {
+export function Modal({ title, onClose, children, footer, headerActions, wide = false, className = '' }: {
     title: string;
     onClose: () => void;
     children: ReactNode;
     footer?: ReactNode;
+    headerActions?: ReactNode;
     wide?: boolean;
     className?: string;
 }) {
@@ -78,7 +81,7 @@ export function Modal({ title, onClose, children, footer, wide = false, classNam
     } }; document.addEventListener('keydown', onKey); return () => { cancelAnimationFrame(frame); modalStack.splice(modalStack.indexOf(id), 1); if (!modalStack.length)
         document.body.style.overflow = ''; document.removeEventListener('keydown', onKey); previous?.focus(); }; }, [id]);
     return createPortal(<div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget)
-        onClose(); }}><div ref={box} role="dialog" aria-modal="true" aria-labelledby={id} tabIndex={-1} className={`modal ${wide ? 'modal-wide' : ''} ${className}`}><div className="modal-header"><h2 id={id}>{title}</h2><IconButton label={t("닫기")} icon={X} onClick={onClose}/></div><div className="modal-body">{children}</div>{footer && <div className="modal-footer">{footer}</div>}</div></div>, document.body);
+        onClose(); }}><div ref={box} role="dialog" aria-modal="true" aria-labelledby={id} tabIndex={-1} className={`modal ${wide ? 'modal-wide' : ''} ${className}`}><div className="modal-header"><h2 id={id}>{title}</h2><div className="modal-header-actions">{headerActions}<IconButton label={t("닫기")} icon={X} onClick={onClose}/></div></div><div className="modal-body">{children}</div>{footer && <div className="modal-footer">{footer}</div>}</div></div>, document.body);
 }
 type ToastFn = (message: string, tone?: 'success' | 'error') => void;
 const ToastContext = createContext<ToastFn>(() => { });

@@ -1,7 +1,7 @@
 import { getLocale } from "../lib/i18n";
 import { useI18n } from "../lib/preferences";
 import { useEffect, useState } from 'react';
-import { Check, LoaderCircle, MessageSquare, RefreshCw, Send } from 'lucide-react';
+import { Check, LoaderCircle, MessageSquare, RefreshCw, Send, X } from 'lucide-react';
 import { useApp } from '../lib/store';
 import type { MoimEvent } from '../lib/types';
 import { errorMessage } from '../lib/utils';
@@ -45,7 +45,7 @@ export function EventSms({ event, onClose }: {
     finally {
         setSending(false);
     } }
-    return <Modal title={t("일정 문자 알림")} onClose={() => !sending && onClose()} footer={<><Button variant="secondary" disabled={sending} onClick={onClose}>{t("닫기")}</Button><Button icon={Send} loading={sending} disabled={app.isDemo || !app.isAdmin || loading || !preview?.enabled || !preview.readyCount} onClick={() => void send()}>{preview?.readyCount ? t("{0}건 유료 발송", { "0": preview.readyCount }) : t("문자 보내기")}</Button></>}><div className="event-sms"><div className="event-sms-title"><MessageSquare size={22}/><div><strong>{event.title}</strong><span>{event.date} · {event.start}–{event.end}</span></div><Badge>LMS</Badge></div>
+    return <Modal title={t("일정 문자 알림")} onClose={() => !sending && onClose()} footer={<><Button icon={X} iconOnly variant="secondary" disabled={sending} onClick={onClose}>{t("닫기")}</Button><Button icon={Send} loading={sending} disabled={app.isDemo || !app.isAdmin || loading || !preview?.enabled || !preview.readyCount} onClick={() => void send()}>{preview?.readyCount ? t("{0}건 유료 발송", { "0": preview.readyCount }) : t("문자 보내기")}</Button></>}><div className="event-sms"><div className="event-sms-title"><MessageSquare size={22}/><div><strong>{event.title}</strong><span>{event.date} · {event.start}–{event.end}</span></div><Badge>LMS</Badge></div>
   {app.isDemo ? <p className="event-sms-notice">{t("데모에서는 문자를 보내지 않아요.")}</p> : !app.isAdmin ? <p className="event-sms-notice">{t("관리자만 문자를 보낼 수 있어요.")}</p> : <>
    {loading && <p className="event-sms-loading"><LoaderCircle size={18} className="spin"/>{t("발송 대상을 확인하는 중이에요.")}</p>}
    {error && <p className="event-sms-error" role="alert">{error}</p>}

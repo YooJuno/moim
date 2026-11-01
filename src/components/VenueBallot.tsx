@@ -1,6 +1,6 @@
 import { useI18n } from "../lib/preferences";
 import { useEffect, useState } from 'react';
-import { Check, CheckCircle2, Info, MapPin, Pencil, Plus, RotateCcw, Trash2, Trophy, Utensils, X } from 'lucide-react';
+import { Check, CheckCircle2, Info, MapPin, Pencil, Plus, RotateCcw, Trash2, Trophy, Utensils, X, Save } from 'lucide-react';
 import { useApp } from '../lib/store';
 import type { BallotOption, EventBallot, MoimEvent } from '../lib/types';
 import { errorMessage, uid } from '../lib/utils';
@@ -82,7 +82,7 @@ export function VenueBallot({ event }: {
       {canManage && !confirmed && <div className="venue-ballot-tools"><Button variant="ghost" size="sm" icon={Pencil} disabled={busy !== null} onClick={() => setEditing(ballot)}>{t("후보 수정")}</Button><Button variant="ghost" size="sm" icon={open ? CheckCircle2 : RotateCcw} loading={busy === 'status'} disabled={busy !== null} onClick={() => void changeStatus()}>{open ? t("투표 마감") : t("다시 열기")}</Button><IconButton label={t("장소 투표 삭제")} icon={Trash2} disabled={busy !== null} onClick={() => setDeleting(true)}/></div>}
     </>}
     {editing && <VenueEditor event={event} ballot={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)}/>}
-    {deleting && <Modal title={t("장소 투표를 삭제할까요?")} onClose={() => !busy && setDeleting(false)} footer={<><Button variant="secondary" disabled={!!busy} onClick={() => setDeleting(false)}>{t("취소")}</Button><Button variant="danger" loading={busy === 'delete'} onClick={() => void remove()}>{t("삭제")}</Button></>}><p className="muted">{t("장소 후보와 투표 기록이 삭제돼요.")}</p></Modal>}
+    {deleting && <Modal title={t("장소 투표를 삭제할까요?")} onClose={() => !busy && setDeleting(false)} footer={<><Button icon={X} iconOnly variant="secondary" disabled={!!busy} onClick={() => setDeleting(false)}>{t("취소")}</Button><Button icon={Trash2} iconOnly variant="danger" loading={busy === 'delete'} onClick={() => void remove()}>{t("삭제")}</Button></>}><p className="muted">{t("장소 후보와 투표 기록이 삭제돼요.")}</p></Modal>}
     {confirming && ballot && <VenueConfirmation ballot={ballot} onClose={() => setConfirming(false)}/>}
   </section>;
 }
@@ -118,7 +118,7 @@ function VenueEditor({ event, ballot, onClose }: {
     finally {
         setSaving(false);
     } }
-    return <Modal title={ballot ? t("장소 후보 수정") : t("장소 투표 만들기")} onClose={() => !saving && onClose()} wide footer={<><Button variant="secondary" disabled={saving} onClick={onClose}>{t("취소")}</Button><Button type="submit" form="venue-editor" loading={saving}>{ballot ? t("저장") : t("투표 만들기")}</Button></>}><form id="venue-editor" className="venue-editor" onSubmit={save}>
+    return <Modal title={ballot ? t("장소 후보 수정") : t("장소 투표 만들기")} onClose={() => !saving && onClose()} wide footer={<><Button icon={X} iconOnly variant="secondary" disabled={saving} onClick={onClose}>{t("취소")}</Button><Button icon={Save} iconOnly type="submit" form="venue-editor" loading={saving}>{ballot ? t("저장") : t("투표 만들기")}</Button></>}><form id="venue-editor" className="venue-editor" onSubmit={save}>
     <div className="venue-editor-options">{options.map((option, index) => <div key={option.id} className="venue-editor-option"><div className="venue-editor-option-heading"><strong><span>{index + 1}</span>{t("장소 후보")}</strong><IconButton label={t("후보 {0} 삭제", { "0": index + 1 })} icon={X} disabled={options.length <= 2 || saving} onClick={() => setOptions(current => current.filter(item => item.id !== option.id))}/></div><Field label={t("장소 이름")} required><input value={option.label} onChange={e => edit(option.id, 'label', e.target.value)} placeholder={t("장소 이름")} maxLength={100} required/></Field><AddressField value={option.detail ?? ''} onChange={value => edit(option.id, 'detail', value)} searchName={option.label} onPlaceSelect={result => { if (!option.label.trim()) edit(option.id, 'label', result.name.slice(0, 100)); }} disabled={saving}/><Field label={t("메뉴")}><input value={option.menu ?? ''} onChange={e => edit(option.id, 'menu', e.target.value)} placeholder={t("대표 메뉴 또는 준비할 음식")} maxLength={200}/></Field></div>)}</div>
     <Button variant="secondary" icon={Plus} disabled={options.length >= 30 || saving} onClick={() => setOptions(current => [...current, { id: uid(), label: '', detail: '', menu: '' }])}>{t("후보 추가")}<span className="venue-editor-count">{options.length}/30</span></Button>{ballot && <p className="venue-editor-note">{t("삭제한 후보의 응답은 집계에서 제외돼요. 기존 후보의 응답은 유지돼요.")}</p>}
   </form></Modal>;
@@ -148,5 +148,5 @@ function VenueConfirmation({ ballot, onClose }: {
     finally {
         setSaving(false);
     } }
-    return <Modal title={t("장소 확정")} onClose={() => !saving && onClose()} footer={<><Button variant="secondary" disabled={saving} onClick={onClose}>{t("취소")}</Button><Button icon={Check} loading={saving} disabled={!option} onClick={() => void confirm()}>{t("장소 확정")}</Button></>}><div className="stack"><Field label={t("확정할 장소")}><select value={selected} onChange={e => setSelected(e.target.value)}>{ranked.map(item => <option key={item.id} value={item.id}>{item.label} · {count(item.id)}{t("표")}</option>)}</select></Field>{option && <div className="venue-confirm-preview"><MapPin size={22}/><div><strong>{option.label}</strong>{option.detail && <span>{option.detail}</span>}{option.menu && <small>{option.menu}</small>}</div></div>}<p className="venue-editor-note">{t("모임 일정의 장소에 반영되고 투표가 마감돼요.")}</p></div></Modal>;
+    return <Modal title={t("장소 확정")} onClose={() => !saving && onClose()} footer={<><Button icon={X} iconOnly variant="secondary" disabled={saving} onClick={onClose}>{t("취소")}</Button><Button icon={Check} loading={saving} disabled={!option} onClick={() => void confirm()}>{t("장소 확정")}</Button></>}><div className="stack"><Field label={t("확정할 장소")}><select value={selected} onChange={e => setSelected(e.target.value)}>{ranked.map(item => <option key={item.id} value={item.id}>{item.label} · {count(item.id)}{t("표")}</option>)}</select></Field>{option && <div className="venue-confirm-preview"><MapPin size={22}/><div><strong>{option.label}</strong>{option.detail && <span>{option.detail}</span>}{option.menu && <small>{option.menu}</small>}</div></div>}<p className="venue-editor-note">{t("모임 일정의 장소에 반영되고 투표가 마감돼요.")}</p></div></Modal>;
 }

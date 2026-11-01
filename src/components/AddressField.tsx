@@ -1,6 +1,6 @@
 import { useI18n } from "../lib/preferences";
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, LoaderCircle, MapPin, Search } from 'lucide-react';
+import { ArrowUpRight, LoaderCircle, MapPin, Search, X } from 'lucide-react';
 import { errorMessage } from '../lib/utils';
 import { formatPostcodeAddress, loadAddressSearch } from '../lib/address-search';
 import { isPlaceSearchReady, searchPlaces } from '../lib/place-search';
@@ -73,7 +73,7 @@ function PlaceSearch({ initialValue, maxLength, includePlaceName, onClose, onSel
         onSelect(value, place);
     };
     return <>
-      <Modal title={t('장소 검색')} onClose={onClose} footer={<Button variant="secondary" onClick={onClose}>{t('닫기')}</Button>}>
+      <Modal title={t('장소 검색')} onClose={onClose} footer={<Button icon={X} iconOnly variant="secondary" onClick={onClose}>{t('닫기')}</Button>}>
         <form className="place-search-form" onSubmit={event => { event.preventDefault(); void search(); }}>
           <Field label={t('장소 이름 또는 주소')}><input autoFocus value={query} aria-label={t('장소 이름 또는 주소')} onChange={event => { pending.current?.abort(); setLoading(false); setResults(null); setError(null); setQuery(event.target.value); }} maxLength={120} placeholder={t('농구장, 식당 이름으로 검색')}/></Field>
           {ready && <Button type="submit" icon={Search} loading={loading} disabled={!query.trim()}>{t('검색')}</Button>}

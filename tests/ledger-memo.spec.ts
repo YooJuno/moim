@@ -16,6 +16,7 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
       const memo = ' =SUM(1,2), "대관료"\n현장 결제 · 다음 달 정산';
       await page.goto('/ledger');
       // Legacy entries without a memo still render and open normally.
+      await page.getByRole('button', { name: '전체 보기', exact: true }).click();
       const legacy = page.locator('.ledger-row').first();
       await legacy.getByRole('button', { name: /수정$/ }).click();
       await expect(page.getByRole('dialog').getByLabel('비고', { exact: true })).toHaveValue('');

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Copy, Landmark } from 'lucide-react';
+import { Copy, Landmark, X } from 'lucide-react';
 import { useApp } from '../lib/store';
 import { useI18n } from '../lib/preferences';
 import { Button, Modal, useToast } from './ui';
@@ -40,10 +40,10 @@ export function GroupBankAccount() {
       <h2><Landmark size={17}/>{t('모임 계좌')}</h2>
       <button type="button" onClick={() => void copy()} aria-label={t('모임 계좌번호 복사')}>
         <span className="group-bank-name">{settings.bankName}</span><strong>{account}</strong>
-        <span className="group-bank-copy"><Copy size={14}/>{t('복사')}</span>
+        <span className="group-bank-copy"><Copy size={18} aria-hidden="true"/></span>
       </button>
     </section>
-    {manual && <Modal title={t('모임 계좌')} onClose={() => setManual(false)} footer={<Button variant="secondary" onClick={() => setManual(false)}>{t('닫기')}</Button>}>
+    {manual && <Modal title={t('모임 계좌')} onClose={() => setManual(false)} footer={<Button icon={X} iconOnly variant="secondary" onClick={() => setManual(false)}>{t('닫기')}</Button>}>
       <p className="group-bank-manual-name">{settings.bankName}</p>
       <input aria-label={t('계좌번호')} value={account} readOnly onFocus={event => event.target.select()} onClick={event => event.currentTarget.select()}/>
     </Modal>}

@@ -22,3 +22,6 @@
     font-size: 11px;
   }
 }
+
+.ledger-edit { display: inline-flex; align-items: center; justify-content: center; justify-self: end; width: 32px; height: 32px; padding: 0; border-radius: 8px; }
+.ledger-edit:hover { color: var(--blue); background: var(--surface-edf3ff); }
