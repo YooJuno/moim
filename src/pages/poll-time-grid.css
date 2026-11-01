@@ -39,6 +39,14 @@
 .poll-detail-modal .poll-time-table tbody th strong { font-size: 12px; font-variant-numeric: tabular-nums; }
 .poll-detail-modal .poll-time-table tbody th span { font-size: 10px; }
 
+.poll-detail-modal .poll-time-table thead.has-day-toggles th { height: 88px; }
+.poll-day-toggle { display: flex; align-items: center; justify-content: center; gap: 3px; width: 100%; max-width: 80px; min-height: 32px; margin: 6px auto 0; padding: 4px; border: 1px solid var(--surface-e1e7f0); border-radius: 6px; background: var(--surface-ffffff); color: var(--text-6b7684); font: inherit; font-size: 11px; font-weight: 600; white-space: nowrap; cursor: pointer; touch-action: manipulation; }
+.poll-day-toggle[aria-pressed="mixed"] { border-color: var(--blue); background: var(--surface-edf3ff); color: var(--blue); }
+.poll-day-toggle[aria-pressed="true"] { border-color: var(--blue); background: var(--blue); color: #fff; }
+.poll-day-toggle:hover:not(:disabled) { border-color: var(--blue); }
+.poll-day-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.poll-day-toggle:disabled { opacity: .5; cursor: wait; }
+
 .poll-detail-modal .poll-time-cell {
   min-height: 44px;
   height: 44px;
@@ -85,6 +93,7 @@
   .poll-detail-modal .poll-time-cell > strong { font-size: 13px; }
   .poll-detail-modal .poll-time-table thead th strong { font-size: 12px; }
   .poll-detail-modal .poll-time-table thead th span { font-size: 10px; }
+  .poll-day-toggle { min-height: 36px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1031,4 +1031,6 @@ export const messagesEn: Record<string, string> = {
   '사진을 처리하지 못했어요. 다른 사진을 선택해 주세요.': 'Could not process the photo. Choose another photo.',
   '사진을 저장할 크기로 줄이지 못했어요. 다른 사진을 선택해 주세요.': 'Could not resize the photo for upload. Choose another photo.',
   '영수증 사진을 저장할 크기로 줄이지 못했어요. 다른 사진을 선택해 주세요.': 'Could not resize the receipt photo for upload. Choose another photo.',
+  '종일': 'All day',
+  '{0} 종일': '{0}, all day',
 };

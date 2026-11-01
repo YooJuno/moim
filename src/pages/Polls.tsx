@@ -166,6 +166,18 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
     useEffect(() => { if (!interactive || saving || busy || shareOpen)
         finishDrag(true); }, [interactive, saving, busy, shareOpen]);
     const toggleSlot = (id: string) => { setUnavailable(false); setSelected(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]); };
+    const toggleDay = (ids: string[]) => {
+        finishDrag(true);
+        setUnavailable(false);
+        setSelected(current => {
+            const chosen = new Set(current);
+            if (ids.every(id => chosen.has(id))) {
+                const day = new Set(ids);
+                return current.filter(id => !day.has(id));
+            }
+            return [...new Set([...current, ...ids])];
+        });
+    };
     const activateDrag = (owner:HTMLButtonElement,pointerId:number,id:string,row:number,column:number,x:number,y:number) => {
         const selecting = !selected.includes(id);
         dragState.current = { pointerId, selecting, row, column, visited: new Set([id]) };
@@ -289,7 +301,14 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
     {showParticipants && <div className="poll-participant-list">{votes.map(vote => { const member = app.members.find(m => m.id === vote.memberId); return <div className="poll-participant-row" key={vote.id}><Avatar member={member} name={member?.name ?? t("멤버")} size={30}/><strong>{member?.name ?? t("멤버")}</strong><span>{vote.slotIds.filter(id => poll.slotIds.includes(id)).length ? t("참여 완료") : vote.slotIds.length ? t("후보 변경 \u00B7 재응답 필요") : t("가능한 시간 없음")}</span></div>; })}{waiting.map(member => <div className="poll-participant-row" key={member.id}><Avatar member={member} size={30}/><strong>{member.name}</strong><span className="muted">{t("미응답")}</span></div>)}</div>}
     <AvailabilityResults poll={poll} votes={votes} onConfirm={onConfirm} disabled={busy || saving}/>
     <div className="section-head poll-grid-heading"><div><h3>{interactive ? t("시간 선택") : t("투표 결과")}</h3><p className="muted">{interactive ? <><span className="poll-pointer-hint">{t("드래그로 선택")}</span><span className="poll-touch-hint">{t("꾹 눌러 여러 칸 선택")}</span></> : t("{0}명이 응답했어요.", { "0": votes.length })}</p></div><div className="poll-grid-controls"><span className="poll-grid-legend"><i />{t("가능 인원")}</span></div></div>
-    <div ref={grid} className="poll-time-scroll"><table className="poll-time-table"><thead><tr><th scope="col">{t("시간")}</th>{dates.map(date => <th scope="col" key={date} className={getHoliday(date) || new Date(`${date}T12:00:00`).getDay() === 0 ? 'poll-table-holiday' : new Date(`${date}T12:00:00`).getDay() === 6 ? 'poll-table-saturday' : ''}><strong>{shortDate(date)}</strong><span>{formatDate(date, { weekday: 'short' })}{getHoliday(date) && ` · ${t(getHoliday(date) || "")}`}</span></th>)}</tr></thead><tbody>{times.map((time, rowIndex) => {
+    <div ref={grid} className="poll-time-scroll"><table className="poll-time-table"><thead className={interactive ? 'has-day-toggles' : undefined}><tr><th scope="col">{t("시간")}</th>{dates.map(date => {
+            const ids = poll.slots.filter(slot => slot.date === date).map(slot => slot.id);
+            const chosen = ids.filter(id => selected.includes(id)).length;
+            const all = chosen === ids.length;
+            return <th scope="col" key={date} className={getHoliday(date) || new Date(`${date}T12:00:00`).getDay() === 0 ? 'poll-table-holiday' : new Date(`${date}T12:00:00`).getDay() === 6 ? 'poll-table-saturday' : ''}><strong>{shortDate(date)}</strong><span>{formatDate(date, { weekday: 'short' })}{getHoliday(date) && ` · ${t(getHoliday(date) || "")}`}</span>
+              {interactive && <button type="button" className={`poll-day-toggle ${all ? 'button-primary' : ''}`} data-date={date} disabled={saving || busy} aria-pressed={all ? true : chosen ? 'mixed' : false} aria-label={t("{0} 종일", {"0":formatDate(date, {year:'numeric',month:'long',day:'numeric'})})} onClick={() => toggleDay(ids)}>{all && <Check size={12} aria-hidden="true"/>}{t("종일")}</button>}
+            </th>;
+        })}</tr></thead><tbody>{times.map((time, rowIndex) => {
             const [start, end] = time.split('|');
             return <tr key={time}><th scope="row"><strong>{start}</strong><span>{end}</span></th>{dates.map((date, columnIndex) => {
                     const slot = poll.slots.find(s => s.date === date && s.start === start && s.end === end);
