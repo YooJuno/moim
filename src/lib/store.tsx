@@ -11,7 +11,7 @@ import { clearDemoAttachments, deleteDemoAttachment, readDemoAttachment, saveDem
 import type { AppContextValue, AppData, CalendarLink, EventBallot, Member, MoimEvent, Poll, Post, PostAttachment, Receipt, Rsvp, SavedPlace } from './types';
 import { assemblePostAttachment, MAX_POST_FILE_CHUNKS, POST_FILE_CHUNK_BYTES, preparePostAttachment, validatePostAttachments, validatePostFiles } from './attachments';
 import type { PostFileManifest } from './attachments';
-import { preparePostPhoto, prepareReceipt } from './receipt';
+import { MAX_POST_PHOTOS, preparePostPhoto, prepareReceipt } from './image-upload';
 import { errorMessage, uid } from './utils';
 import { observeAuthSession, signInWithGoogle } from './google-auth';
 import { reportError } from './telemetry';
@@ -279,7 +279,6 @@ export function AppProvider({children}: {children: ReactNode}) {
     async saveReceipt(entryId,file) {
       const actor=active();if(!['leader','treasurer'].includes(actor.role))throw new Error('관리자와 회계 담당만 영수증을 관리할 수 있어요.');
       if(isDemo && !dataRef.current.ledger.some(entry=>entry.id===entryId))throw new Error('회계 내역을 찾을 수 없어요.');
-      if(file && (file.size>5*1024*1024 || !['image/jpeg','image/png','image/webp'].includes(file.type)))throw new Error('JPG, PNG, WebP 영수증 사진을 5MB 이하로 올려주세요.');
       const prepared=file ? await prepareReceipt(file):null;
       if(prepared && (!prepared.fileName || prepared.fileName.length>200 || prepared.imageURL.length>700000 || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(prepared.imageURL)))throw new Error('영수증 이미지 크기와 형식을 확인해 주세요.');
       const receipt:Receipt|null=prepared ? {entryId,...prepared,uploadedBy:actor.id,updatedAt:new Date().toISOString()}:null;
@@ -557,14 +556,19 @@ export function AppProvider({children}: {children: ReactNode}) {
       if(isDemo) {if(!dataRef.current.events.some(item=>item.id===eventId))throw new Error('일정을 찾을 수 없어요.');applyDemo({...dataRef.current,rsvps:replace(dataRef.current.rsvps,rsvp)});} else {const batch=writeBatch(database());batch.set(doc(database(),'rsvps',rsvp.id),rsvp);queueCalendarSync(batch,eventId,actor.id);await batch.commit();kickKakaoCalendarSync(eventId);}
     },
     async uploadImages(files) {
-      const actor=active(); if(files.length>8) throw new Error('사진은 최대 8장까지 올릴 수 있어요.');
-      if(files.some(file=>!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size>5*1024*1024)) throw new Error('JPG, PNG, WebP, GIF 사진을 장당 5MB 이하로 올려주세요.');
+      const actor=active(); if(files.length>MAX_POST_PHOTOS) throw new Error('사진은 최대 6장까지 올릴 수 있어요.');
       const generation=imageGeneration.current;
-      return await Promise.all(files.map(async file=>{const id=uid();let path:string;let blob:Blob=file;
-        if(isDemo){await saveDemoImage(id,file);path=`demo-image:${id}`;}
-        else{const prepared=await preparePostPhoto(file);if(prepared.imageURL.length>700000 || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(prepared.imageURL))throw new Error('사진을 저장할 수 있는 크기로 줄여 주세요.');await setDoc(doc(database(),'photos',id),{id,imageURL:prepared.imageURL,uploadedBy:actor.id,createdAt:new Date().toISOString()});blob=await (await fetch(prepared.imageURL)).blob();path=`photo:${id}`;}
-        if(generation!==imageGeneration.current)throw new Error('로그인 상태가 변경됐어요. 다시 시도해 주세요.');const url=URL.createObjectURL(blob);imageCache.current.set(path,url);reverseImages.current.set(url,path);setImageUrls(previous=>({...previous,[path]:url}));return url;
-      }));
+      const urls:string[]=[];
+      // Decode one phone photo at a time to keep mobile memory use bounded.
+      for(const file of files){const id=uid();let path:string;
+        const prepared=await preparePostPhoto(file);if(prepared.imageURL.length>700000 || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(prepared.imageURL))throw new Error('사진을 저장할 수 있는 크기로 줄여 주세요.');
+        if(generation!==imageGeneration.current)throw new Error('로그인 상태가 변경됐어요. 다시 시도해 주세요.');
+        const blob=await (await fetch(prepared.imageURL)).blob();
+        if(isDemo){await saveDemoImage(id,blob);path=`demo-image:${id}`;}
+        else{await setDoc(doc(database(),'photos',id),{id,imageURL:prepared.imageURL,uploadedBy:actor.id,createdAt:new Date().toISOString()});path=`photo:${id}`;}
+        if(generation!==imageGeneration.current)throw new Error('로그인 상태가 변경됐어요. 다시 시도해 주세요.');const url=URL.createObjectURL(blob);imageCache.current.set(path,url);reverseImages.current.set(url,path);setImageUrls(previous=>({...previous,[path]:url}));urls.push(url);
+      }
+      return urls;
     },
     resetDemo() { if(!isDemo) return; const next=createDemoData();applyDemo(next);void clearDemoAttachments().catch(()=>{});setDemoSignedIn(true);setError(null); },
   }),[data,user,loading,isAdmin,canParticipate,canCreatePoll,error,imageUrls,self,settingsReady,bylawsReady]);

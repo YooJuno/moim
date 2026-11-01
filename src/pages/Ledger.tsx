@@ -5,6 +5,7 @@ import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Download, Image
 import { useApp } from '../lib/store';
 import { BankImport } from '../components/BankImport';
 import { GroupBankAccount } from '../components/GroupBankAccount';
+import { validatePhotoFile } from '../lib/image-upload';
 import type { LedgerEntry, Receipt } from '../lib/types';
 import { errorMessage, formatDate, memberName, today, uid } from '../lib/utils';
 import { Badge, Button, EmptyState, Field, IconButton, Modal, PageHeader, useToast } from '../components/ui';
@@ -49,9 +50,7 @@ export function Ledger() {
     {receiptEntry && <ViewReceiptModal entry={receiptEntry} onClose={() => setReceiptEntry(null)}/>}
   </div>;
 }
-function validateReceiptFile(file: File) { if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type))
-    throw new Error('JPG, PNG, WebP 사진을 선택해 주세요.'); if (file.size > 5 * 1024 * 1024)
-    throw new Error('영수증 사진은 5MB 이하로 선택해 주세요.'); }
+function validateReceiptFile(file: File) { validatePhotoFile(file, true); }
 function LedgerEditor({ entry, onClose }: {
     entry?: LedgerEntry;
     onClose: () => void;
@@ -155,7 +154,7 @@ function LedgerEditor({ entry, onClose }: {
     <div className="ledger-receipt-field"><div className="ledger-receipt-field-heading"><span>{t("영수증 사진")}</span><Button iconOnly variant="secondary" size="sm" icon={ImagePlus} disabled={saving} onClick={() => receiptInput.current?.click()}>{preview ? t("사진 변경") : t("사진 첨부")}</Button></div><input ref={receiptInput} type="file" aria-label={t("영수증 사진")} accept="image/jpeg,image/png,image/webp" hidden onChange={e => chooseReceipt(e.target.files?.[0])}/>
       {receiptLoading && !receiptFile && !receiptRemoved && <div className="ledger-receipt-loading"><LoaderCircle size={17} className="spin"/>{t("영수증 불러오는 중")}</div>}
       {preview && <div className="ledger-receipt-draft"><img src={preview} alt={t("영수증 미리보기")}/><IconButton label={t("첨부 영수증 삭제")} icon={X} disabled={saving} onClick={() => { setReceiptFile(null); setReceiptRemoved(true); setReceiptSaveError(false); }}/><span>{receiptFile?.name ?? receipt?.fileName}</span></div>}
-      {receiptRemoved && <p className="ledger-receipt-note">{t("저장하면 영수증이 삭제돼요.")}</p>}{!preview && !receiptLoading && !receiptRemoved && <p className="ledger-receipt-note">{t("JPG, PNG, WebP \u00B7 최대 5MB")}</p>}
+      {receiptRemoved && <p className="ledger-receipt-note">{t("저장하면 영수증이 삭제돼요.")}</p>}{!preview && !receiptLoading && !receiptRemoved && <p className="ledger-receipt-note">{t("JPG, PNG, WebP \u00B7 최대 20MB")}</p>}
       {receiptLoadError && !receiptFile && !receiptRemoved && <p className="ledger-receipt-error" role="alert">{receiptLoadError}{" "}{t("기존 영수증은 유지돼요.")}</p>}
       {receiptSaveError && <p className="ledger-receipt-error" role="alert">{t("내역은 저장됐어요. 영수증을 다시 저장해 주세요.")}</p>}
     </div>
