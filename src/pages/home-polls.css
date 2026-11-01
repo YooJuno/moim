@@ -1,3 +1,10 @@
+.home-polls-section { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 22px; }
+.home-polls-section > .section-head { grid-column: 1 / -1; margin-bottom: 0; }
+.home-polls-section > .home-poll { min-width: 0; margin-top: 0; }
+.home-polls-section > .small-empty { grid-column: 1 / -1; }
+@media (max-width: 760px) {
+  .home-polls-section { grid-template-columns: 1fr; gap: 12px; margin-bottom: 16px; }
+}
 .home-vote-alert { margin-bottom: 22px; padding: 21px 24px 6px; border-color: var(--surface-e2edff); }
 .home-vote-alert-heading { display: flex; align-items: center; gap: 9px; color: #246bfd; }
 .home-vote-alert-heading h2 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text-4e5968); font-size: 14px; }
