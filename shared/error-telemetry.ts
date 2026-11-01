@@ -7,7 +7,7 @@ export const TELEMETRY_CONTEXTS = [
   'social-auth','server-request',
 ] as const;
 export const TELEMETRY_UI_ROUTES = ['/','/login','/polls','/calendar','/board','/members','/places','/rules','/ledger','/profile','/settings','/auth/callback','/invite','unknown'] as const;
-export const TELEMETRY_SERVER_ROUTES = ['/config','/places/search','/oauth/start','/oauth/callback','/oauth/link','/oauth/exchange','/account/providers','/calendar/add','/sms/preview','/sms/send','unknown'] as const;
+export const TELEMETRY_SERVER_ROUTES = ['/config','/places/search','/oauth/start','/oauth/callback','/oauth/link','/oauth/exchange','/account/providers','/calendar/add','/calendar/sync','/account/calendar','/sms/preview','/sms/send','unknown'] as const;
 export const TELEMETRY_ROUTES = [...TELEMETRY_UI_ROUTES,...TELEMETRY_SERVER_ROUTES] as const;
 export const TELEMETRY_BROWSERS = ['kakao','chrome','safari','firefox','edge','samsung','other'] as const;
 export const TELEMETRY_DEVICES = ['mobile','desktop'] as const;
@@ -33,7 +33,7 @@ export const TELEMETRY_SERVER_CODES = [
   'invalid_exchange', 'expired_exchange', 'origin_mismatch', 'invalid_verifier', 'link_user_mismatch',
   'invalid_calendar_request', 'kakao_calendar_not_available', 'kakao_calendar_not_configured', 'active_membership_required', 'event_attendance_required',
   'kakao_calendar_consent_required', 'kakao_reconnect_required', 'kakao_time_requires_five_minutes',
-  'calendar_sync_in_progress', 'calendar_sync_needs_reconciliation', 'calendar_sync_conflict',
+  'calendar_automatic_failed', 'calendar_automatic_partial_failure', 'calendar_automatic_retry_pending', 'calendar_sync_in_progress', 'calendar_sync_needs_reconciliation', 'calendar_sync_conflict',
   'origin_required', 'use_authenticated_link_start', 'not_found',
   'invalid_encoding', 'invalid_encryption_key', 'unsupported_token_version', 'token_decryption_failed',
   'provider_authorization_failed', 'provider_identity_failed', 'kakao_calendar_failed',

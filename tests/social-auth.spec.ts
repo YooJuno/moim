@@ -13,7 +13,9 @@ function callbackMock(fail=false){return `
  export async function exchangeSocialCallback(params){window.__exchangeCalls=(window.__exchangeCalls||0)+1;window.__callbackQuery=window.location.search;await new Promise(resolve=>setTimeout(resolve,80));${fail?"throw new Error('로그인 요청이 만료됐어요. 다시 시작해 주세요.');":"return {uid:'demo-me',provider:params.get('provider'),intent:params.get('intent')};"}}
  export async function getAccountProviders(){return {google:true,kakao:false,naver:false,calendar:{kakao:false}};}
  export async function startSocialAuth(){throw new Error('not used');}
- export async function linkGoogleAccount(){throw new Error('not used');}
+ export function kickKakaoCalendarSync(){}
+export async function linkGoogleAccount(){throw new Error('not used');}
+ export async function setKakaoCalendarAutomatic(){throw new Error('not used');}
  export async function addToKakaoCalendar(){throw new Error('not used');}
  `;}
 

@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { CalendarPlus, Check, LoaderCircle } from 'lucide-react';
 import { useApp } from '../lib/store';
 import type { MoimEvent } from '../lib/types';
-import { addToKakaoCalendar, getAccountProviders, startSocialAuth, useAuthProviderConfig } from '../lib/social-auth';
+import { setKakaoCalendarAutomatic, getAccountProviders, startSocialAuth, useAuthProviderConfig } from '../lib/social-auth';
 import { errorMessage, formatDate } from '../lib/utils';
 import { Button, Modal, useToast } from './ui';
 export function KakaoCalendarButton({ event }: {
@@ -37,7 +37,7 @@ function KakaoCalendarDialog({ event, onClose }: {
 }) {
     const { t } = useI18n();
     const toast = useToast();
-    const [ready, setReady] = useState<boolean | null>(null);
+    const [ready, setReady] = useState<{consented:boolean;automatic:boolean}|null>(null);
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
     const [revision, setRevision] = useState(0);
@@ -46,7 +46,7 @@ function KakaoCalendarDialog({ event, onClose }: {
         setReady(null);
         setError('');
         void getAccountProviders().then(result => { if (active)
-            setReady(result.calendar.kakao); }).catch(problem => { if (active)
+            setReady({consented:result.calendar.kakao,automatic:result.calendar.automatic===true}); }).catch(problem => { if (active)
             setError(errorMessage(problem)); });
         return () => { active = false; };
     }, [revision]);
@@ -56,12 +56,12 @@ function KakaoCalendarDialog({ event, onClose }: {
         setBusy(true);
         setError('');
         try {
-            if (!ready) {
-                await startSocialAuth('kakao', 'link', { calendar: true, eventId: event.id });
+            if (!ready.consented) {
+                await startSocialAuth('kakao', 'link', { calendar: true, automatic: true, eventId: event.id });
                 return;
             }
-            const result = await addToKakaoCalendar(event.id);
-            toast(result.alreadySynced ? '이미 캘린더에 반영된 일정이에요.' : '내 카카오 캘린더에 반영했어요.');
+            await setKakaoCalendarAutomatic(!ready.automatic, event.id);
+            toast(ready.automatic ? '캘린더 자동 반영을 껐어요.' : '참여 일정이 자동으로 반영돼요.');
             onClose();
         }
         catch (problem) {
@@ -71,5 +71,5 @@ function KakaoCalendarDialog({ event, onClose }: {
             setBusy(false);
         }
     }
-    return <Modal title={t("카카오 캘린더에 추가")} onClose={() => !busy && onClose()} footer={<><Button variant="secondary" disabled={busy} onClick={onClose}>{t("닫기")}</Button>{error && ready === null ? <Button onClick={() => setRevision(value => value + 1)}>{t("다시 확인")}</Button> : <Button icon={ready ? Check : CalendarPlus} loading={busy} disabled={ready === null} onClick={() => void save()}>{ready ? t("내 캘린더에 반영") : t("캘린더 연결")}</Button>}</>}><div className="stack">{ready === null && !error ? <div className="row muted"><LoaderCircle size={18} className="spin"/>{t("연결 확인 중")}</div> : <><strong>{event.title}</strong><p>{formatDate(event.date)} · {event.start}–{event.end}<br />{event.location}</p><p className="muted">{ready ? t("내 카카오 캘린더에 이 일정을 추가하거나 변경사항을 반영해요.") : t("카카오 계정 연결과 캘린더 접근 동의가 필요해요. 연결 후 이 일정으로 돌아와 추가할 수 있어요.")}</p></>}{error && <p className="auth-error" role="alert">{error}</p>}</div></Modal>;
+    return <Modal title={t("카카오 캘린더 연결")} onClose={() => !busy && onClose()} footer={<><Button variant="secondary" disabled={busy} onClick={onClose}>{t("닫기")}</Button>{error && ready === null ? <Button onClick={() => setRevision(value => value + 1)}>{t("다시 확인")}</Button> : <Button variant={ready?.automatic ? "secondary" : "primary"} icon={ready?.automatic ? Check : CalendarPlus} loading={busy} disabled={ready === null} onClick={() => void save()}>{ready?.automatic ? t("자동 반영 끄기") : t("자동 반영 연결")}</Button>}</>}><div className="stack">{ready === null && !error ? <div className="row muted"><LoaderCircle size={18} className="spin"/>{t("연결 확인 중")}</div> : <><strong>{event.title}</strong><p>{formatDate(event.date)} · {event.start}–{event.end}<br />{event.location}</p>{ready?.automatic && <strong className="text-success">{t("자동 반영 연결됨")}</strong>}<p className="muted">{t("한 번 연결하면 참여 일정의 확정·변경이 카카오 캘린더에 자동 반영돼요.")}</p><p className="muted">{t("불참으로 바꾸거나 일정이 삭제되면 캘린더에서도 삭제돼요.")}</p></>}{error && <p className="auth-error" role="alert">{error}</p>}</div></Modal>;
 }

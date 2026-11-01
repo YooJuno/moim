@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link2 } from 'lucide-react';
 import { useApp } from '../lib/store';
 import { auth } from '../lib/firebase';
-import { getAccountProviders, linkGoogleAccount, startSocialAuth, useAuthProviderConfig } from '../lib/social-auth';
+import { getAccountProviders, setKakaoCalendarAutomatic, linkGoogleAccount, startSocialAuth, useAuthProviderConfig } from '../lib/social-auth';
 import type { AccountProviders, SocialProvider } from '../lib/social-auth';
 import { errorMessage } from '../lib/utils';
 import { Badge, Button, useToast } from './ui';
@@ -16,7 +16,7 @@ export function AccountConnections() {
     const [providers, setProviders] = useState<AccountProviders | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [busy, setBusy] = useState<'google' | SocialProvider | null>(null);
+    const [busy, setBusy] = useState<'google' | SocialProvider | 'calendar' | null>(null);
     const [revision, setRevision] = useState(0);
     const [google, setGoogle] = useState(() => !!auth?.currentUser?.providerData.some(provider => provider.providerId === 'google.com'));
     const refresh = useCallback(() => { setRevision(value => value + 1); }, []);
@@ -46,9 +46,24 @@ export function AccountConnections() {
         if (provider === 'google')
             setBusy(null);
     } }
+    async function toggleCalendar() {
+        if(busy || !providers)return;
+        setBusy('calendar');
+        try {
+            if(!providers.calendar.automatic && !providers.calendar.kakao) {
+                await startSocialAuth('kakao','link',{calendar:true,automatic:true});
+                return;
+            }
+            await setKakaoCalendarAutomatic(!providers.calendar.automatic);
+            toast(providers.calendar.automatic ? '캘린더 자동 반영을 껐어요.' : '참여 일정이 자동으로 반영돼요.');
+            refresh();
+        } catch(problem) { toast(errorMessage(problem),'error'); }
+        finally {setBusy(null);}
+    }
     const googleEmail = auth?.currentUser?.providerData.find(provider => provider.providerId === 'google.com')?.email;
     return <div className="account-connections"><div className="account-connection"><span className="account-provider-icon google">G</span><div><strong>Google</strong>{googleEmail && <small>{googleEmail}</small>}</div>{app.isDemo ? <Badge tone="gray">{t("데모")}</Badge> : google ? <Badge tone="green">{t("연결됨")}</Badge> : <Button size="sm" variant="secondary" icon={Link2} loading={busy === 'google'} disabled={!!busy} onClick={() => void connect('google')}>{t("연결")}</Button>}</div>
     {!app.isDemo && config.enabled && (['kakao', 'naver'] as const).filter(provider => config.providers[provider]).map(provider => <div className="account-connection" key={provider}><span className={`account-provider-icon ${provider}`}>{provider === 'kakao' ? <KakaoMark /> : 'N'}</span><div><strong>{provider === 'kakao' ? t("카카오") : t("네이버")}</strong></div>{loading ? <Badge tone="gray">{t("확인 중")}</Badge> : providers?.[provider] ? <Badge tone="green">{t("연결됨")}</Badge> : error ? <Badge tone="gray">{t("확인 필요")}</Badge> : <Button size="sm" variant="secondary" icon={Link2} loading={busy === provider} disabled={!!busy || !providers} onClick={() => void connect(provider)}>{t("연결")}</Button>}</div>)}
+    {!app.isDemo && app.canParticipate && config.calendar.kakao && providers?.calendar.available && <div className="account-connection"><span className="account-provider-icon kakao"><KakaoMark/></span><div><strong>{t("참여 일정 자동 반영")}</strong><small>{t("카카오 캘린더")}</small></div><Button size="sm" variant="secondary" loading={busy==='calendar'} disabled={!!busy} onClick={()=>void toggleCalendar()}>{providers.calendar.automatic ? t("연결 해제") : t("연결")}</Button></div>}
     {!app.isDemo && config.enabled && <p className="account-connection-note">{t("기존 계정은 로그인 후 연결해 주세요.")}</p>}{error && <div className="account-connection-error"><p role="alert">{error}</p><Button variant="ghost" size="sm" onClick={refresh} disabled={loading}>{t("다시 확인")}</Button></div>}
   </div>;
 }

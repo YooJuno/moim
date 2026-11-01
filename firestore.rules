@@ -287,6 +287,24 @@ service cloud.firestore {
             && (!('calendarLink' in resource.data) || resource.data.calendarLink.ownerId == request.auth.uid)));
       allow delete: if admin();
     }
+    match /calendarSyncRequests/{requestId} {
+      function validRequest() {
+        let data = request.resource.data;
+        return data.keys().hasOnly(['id','eventId','requestedBy','status','requestedAt'])
+          && data.keys().hasAll(['id','eventId','requestedBy','status','requestedAt'])
+          && data.id == requestId && data.eventId is string && data.eventId.matches('^[A-Za-z0-9:_-]{1,128}$')
+          && requestId == data.eventId + '_' + request.auth.uid && data.requestedBy == request.auth.uid
+          && data.status == 'pending' && data.requestedAt == request.time
+          && ((admin() && (existsAfter(/databases/$(database)/documents/events/$(data.eventId))
+              || exists(/databases/$(database)/documents/events/$(data.eventId))))
+            || (existsAfter(/databases/$(database)/documents/events/$(data.eventId))
+              && getAfter(/databases/$(database)/documents/rsvps/$(data.eventId + '_' + request.auth.uid)).data.memberId == request.auth.uid));
+      }
+      allow create: if active() && validRequest();
+      allow update: if active() && validRequest() && request.resource.data.eventId == resource.data.eventId
+        && request.resource.data.requestedBy == resource.data.requestedBy;
+      allow read, delete: if false;
+    }
     match /rsvps/{rsvpId} {
       allow read: if readable();
       allow create, update: if active()

@@ -2,14 +2,15 @@ import { useEffect, useState } from 'react';
 import { GoogleAuthProvider, linkWithPopup, signInWithCustomToken, signOut } from 'firebase/auth';
 import { auth } from './firebase';
 import { getAuthAPIURL } from './api-url';
+import { reportError } from './telemetry';
 export { getAuthAPIURL } from './api-url';
 
 export type SocialProvider='kakao'|'naver';
 export type SocialIntent='signin'|'link';
 export interface AuthProviderConfig {providers:{kakao:boolean;naver:boolean};calendar:{kakao:boolean}}
-export interface AccountProviders {google:boolean;kakao:boolean;naver:boolean;calendar:{kakao:boolean;available?:boolean}}
+export interface AccountProviders {google:boolean;kakao:boolean;naver:boolean;calendar:{kakao:boolean;available?:boolean;automatic?:boolean}}
 export interface SocialAuthResult {uid:string;provider:SocialProvider;intent:SocialIntent;calendarEventId?:string}
-interface Attempt {version:1;provider:SocialProvider;intent:SocialIntent;verifier:string;createdAt:number;origin:string;apiURL:string;uid?:string;calendarEventId?:string}
+interface Attempt {version:1;provider:SocialProvider;intent:SocialIntent;verifier:string;createdAt:number;origin:string;apiURL:string;uid?:string;calendarEventId?:string;automatic?:boolean}
 export const SOCIAL_ATTEMPT_KEY='moim-social-auth:v1';
 const ATTEMPT_MAX_AGE=10*60*1000;
 const emptyConfig=():AuthProviderConfig=>({providers:{kakao:false,naver:false},calendar:{kakao:false}});
@@ -43,19 +44,19 @@ export async function createSocialProof(){if(!globalThis.crypto?.getRandomValues
 function removeAttempt(verifier?:string){try{if(!verifier){window.sessionStorage.removeItem(SOCIAL_ATTEMPT_KEY);return;}const stored=window.sessionStorage.getItem(SOCIAL_ATTEMPT_KEY);if(stored&&JSON.parse(stored).verifier===verifier)window.sessionStorage.removeItem(SOCIAL_ATTEMPT_KEY);}catch{/* No session state remains usable after an invalid attempt. */}}
 function authorizationURL(value:unknown,provider:SocialProvider){if(typeof value!=='string')throw new Error('로그인 주소를 확인하지 못했어요.');const url=new URL(value);const host=provider==='kakao'?'kauth.kakao.com':'nid.naver.com';if(url.protocol!=='https:'||url.hostname!==host||url.username||url.password||url.port)throw new Error('로그인 주소를 확인하지 못했어요.');return url.href;}
 
-export async function startSocialAuth(provider:SocialProvider,intent:SocialIntent='signin',options:{calendar?:boolean;eventId?:string}={}):Promise<void>{
+export async function startSocialAuth(provider:SocialProvider,intent:SocialIntent='signin',options:{calendar?:boolean;eventId?:string;automatic?:boolean}={}):Promise<void>{
   if(!isProvider(provider)||!isIntent(intent))throw new Error('로그인 방식을 확인해 주세요.');
-  if(options.calendar&&(provider!=='kakao'||intent!=='link'))throw new Error('로그인 후 카카오 캘린더를 연결해 주세요.');
+  if((options.calendar&&(provider!=='kakao'||intent!=='link'))||(options.automatic&&!options.calendar))throw new Error('로그인 후 카카오 캘린더를 연결해 주세요.');
   if(options.eventId!==undefined&&(!options.calendar||!/^[A-Za-z0-9:_-]{1,128}$/.test(options.eventId)))throw new Error('모임 일정을 확인해 주세요.');
   const apiURL=getAuthAPIURL();const config=await fetchAuthProviderConfig();if(!apiURL||!config?.providers[provider]||!auth)throw new Error('지금은 이 로그인 방식을 사용할 수 없어요.');
   if(options.calendar&&!config.calendar.kakao)throw new Error('지금은 카카오 캘린더를 사용할 수 없어요.');
   if(intent==='link')await auth.authStateReady();const user=auth.currentUser;if(intent==='link'&&!user)throw new Error('먼저 기존 계정으로 로그인해 주세요.');
-  const proof=await createSocialProof();const attempt:Attempt={version:1,provider,intent,verifier:proof.verifier,createdAt:Date.now(),origin:window.location.origin,apiURL,...(intent==='link'&&user?{uid:user.uid}:{}),...(options.calendar&&options.eventId?{calendarEventId:options.eventId}:{})};
+  const proof=await createSocialProof();const attempt:Attempt={version:1,provider,intent,verifier:proof.verifier,createdAt:Date.now(),origin:window.location.origin,apiURL,...(intent==='link'&&user?{uid:user.uid}:{}),...(options.calendar&&options.eventId?{calendarEventId:options.eventId}:{}),...(options.automatic?{automatic:true}:{})};
   try{window.sessionStorage.setItem(SOCIAL_ATTEMPT_KEY,JSON.stringify(attempt));}catch{throw new Error('이 브라우저에서 로그인 요청을 저장하지 못했어요. 브라우저 설정을 확인해 주세요.');}
   try{
     if(intent==='signin'){const url=new URL(`oauth/${provider}/start`,apiURL);url.searchParams.set('challenge',proof.challenge);url.searchParams.set('returnOrigin',attempt.origin);url.searchParams.set('intent','signin');window.location.assign(url.href);return;}
     if(auth.currentUser?.uid!==user!.uid)throw new Error('로그인 계정이 변경됐어요. 다시 연결해 주세요.');
-    const token=await user!.getIdToken();const response=await requestJSON(`/oauth/${provider}/link/start`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({challenge:proof.challenge,returnOrigin:attempt.origin,...(options.calendar?{calendar:true}:{})})},apiURL);
+    const token=await user!.getIdToken();const response=await requestJSON(`/oauth/${provider}/link/start`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({challenge:proof.challenge,returnOrigin:attempt.origin,...(options.calendar?{calendar:true}:{}),...(options.automatic?{automatic:true,...(options.eventId?{eventId:options.eventId}:{})}:{})})},apiURL);
     if(!object(response))throw new Error('로그인 주소를 확인하지 못했어요.');window.location.assign(authorizationURL(response.authorizationUrl,provider));
   }catch(error){removeAttempt(proof.verifier);throw error;}
 }
@@ -65,7 +66,7 @@ function takeAttempt(params:URLSearchParams):Attempt{
   if(!raw)throw new Error('이 브라우저에서 시작한 로그인 요청이 없어요. 다시 시작해 주세요.');
   let attempt:unknown;try{attempt=JSON.parse(raw);}catch{throw new Error('로그인 요청을 확인하지 못했어요. 다시 시작해 주세요.');}
   const provider=params.get('provider'),intent=params.get('intent');
-  if(!object(attempt)||attempt.version!==1||!isProvider(attempt.provider)||!isIntent(attempt.intent)||typeof attempt.verifier!=='string'||!/^[A-Za-z0-9_-]{43,128}$/.test(attempt.verifier)||typeof attempt.createdAt!=='number'||attempt.origin!==window.location.origin||attempt.apiURL!==getAuthAPIURL()||provider!==attempt.provider||intent!==attempt.intent||params.getAll('provider').length!==1||params.getAll('intent').length!==1||(attempt.intent==='link'&&!validUID(attempt.uid))||(attempt.calendarEventId!==undefined&&(attempt.provider!=='kakao'||attempt.intent!=='link'||typeof attempt.calendarEventId!=='string'||!/^[A-Za-z0-9:_-]{1,128}$/.test(attempt.calendarEventId))))throw new Error('로그인 요청이 일치하지 않아요. 다시 시작해 주세요.');
+  if(!object(attempt)||attempt.version!==1||!isProvider(attempt.provider)||!isIntent(attempt.intent)||typeof attempt.verifier!=='string'||!/^[A-Za-z0-9_-]{43,128}$/.test(attempt.verifier)||typeof attempt.createdAt!=='number'||attempt.origin!==window.location.origin||attempt.apiURL!==getAuthAPIURL()||provider!==attempt.provider||intent!==attempt.intent||params.getAll('provider').length!==1||params.getAll('intent').length!==1||(attempt.intent==='link'&&!validUID(attempt.uid))||(attempt.automatic!==undefined&&(attempt.automatic!==true||attempt.provider!=='kakao'||attempt.intent!=='link'))||(attempt.calendarEventId!==undefined&&(attempt.provider!=='kakao'||attempt.intent!=='link'||typeof attempt.calendarEventId!=='string'||!/^[A-Za-z0-9:_-]{1,128}$/.test(attempt.calendarEventId))))throw new Error('로그인 요청이 일치하지 않아요. 다시 시작해 주세요.');
   if(Date.now()-attempt.createdAt>ATTEMPT_MAX_AGE||attempt.createdAt>Date.now()+60000)throw new Error('로그인 요청이 만료됐어요. 다시 시작해 주세요.');
   return attempt as unknown as Attempt;
 }
@@ -78,14 +79,14 @@ export async function exchangeSocialCallback(params:URLSearchParams):Promise<Soc
   if(attempt.intent==='link'){const user=auth.currentUser;if(!user||user.uid!==attempt.uid)throw new Error('연결을 시작한 계정으로 다시 로그인해 주세요.');headers.Authorization=`Bearer ${await user.getIdToken()}`;}
   const data=await requestJSON('/oauth/exchange',{method:'POST',headers,body:JSON.stringify({code,verifier:attempt.verifier})},attempt.apiURL);
   if(!object(data)||data.provider!==attempt.provider||data.intent!==attempt.intent||!validUID(data.uid))throw new Error('로그인 계정을 확인하지 못했어요. 다시 시작해 주세요.');
-  if(attempt.intent==='link'){if(data.linked!==true||data.uid!==attempt.uid||auth.currentUser?.uid!==attempt.uid)throw new Error('연결할 계정이 일치하지 않아요. 기존 계정으로 다시 로그인해 주세요.');return {uid:data.uid,provider:attempt.provider,intent:'link',...(attempt.calendarEventId?{calendarEventId:attempt.calendarEventId}:{})};}
+  if(attempt.intent==='link'){if(data.linked!==true||data.uid!==attempt.uid||auth.currentUser?.uid!==attempt.uid)throw new Error('연결할 계정이 일치하지 않아요. 기존 계정으로 다시 로그인해 주세요.');if(attempt.automatic&&attempt.calendarEventId)kickKakaoCalendarSync(attempt.calendarEventId);return {uid:data.uid,provider:attempt.provider,intent:'link',...(attempt.calendarEventId?{calendarEventId:attempt.calendarEventId}:{})};}
   if(typeof data.firebaseCustomToken!=='string'||!data.firebaseCustomToken||data.firebaseCustomToken.length>16384)throw new Error('로그인 응답을 확인하지 못했어요. 다시 시작해 주세요.');
   const credential=await signInWithCustomToken(auth,data.firebaseCustomToken);if(credential.user.uid!==data.uid){await signOut(auth);throw new Error('로그인 계정이 일치하지 않아요. 다시 시작해 주세요.');}
   return {uid:data.uid,provider:attempt.provider,intent:'signin'};
 }
 
 export async function getAccountProviders():Promise<AccountProviders>{
-  if(!auth)throw new Error('로그인이 필요해요.');await auth.authStateReady();const user=auth.currentUser;if(!user)throw new Error('로그인이 필요해요.');const data=await requestJSON('/account/providers',{headers:{Authorization:`Bearer ${await user.getIdToken()}`}});if(!object(data)||!object(data.calendar))throw new Error('계정 연결 상태를 확인하지 못했어요.');if(auth.currentUser?.uid!==user.uid)throw new Error('로그인 계정이 변경됐어요.');return {google:data.google===true,kakao:data.kakao===true,naver:data.naver===true,calendar:{kakao:data.calendar.kakao===true,...(typeof data.calendar.available==='boolean'?{available:data.calendar.available}:{})}};
+  if(!auth)throw new Error('로그인이 필요해요.');await auth.authStateReady();const user=auth.currentUser;if(!user)throw new Error('로그인이 필요해요.');const data=await requestJSON('/account/providers',{headers:{Authorization:`Bearer ${await user.getIdToken()}`}});if(!object(data)||!object(data.calendar))throw new Error('계정 연결 상태를 확인하지 못했어요.');if(auth.currentUser?.uid!==user.uid)throw new Error('로그인 계정이 변경됐어요.');return {google:data.google===true,kakao:data.kakao===true,naver:data.naver===true,calendar:{kakao:data.calendar.kakao===true,...(typeof data.calendar.available==='boolean'?{available:data.calendar.available}:{}),automatic:data.calendar.automatic===true}};
 }
 export async function linkGoogleAccount(expectedUID:string):Promise<void>{
   if(!auth)throw new Error('먼저 기존 계정으로 로그인해 주세요.');await auth.authStateReady();const user=auth.currentUser;if(!user||user.uid!==expectedUID)throw new Error('먼저 기존 계정으로 로그인해 주세요.');const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});
@@ -103,4 +104,33 @@ export async function addToKakaoCalendar(eventId:string):Promise<KakaoCalendarAd
   if(auth.currentUser?.uid!==user.uid)throw new Error('로그인 계정이 변경됐어요. 다시 시도해 주세요.');
   if(!object(data)||data.added!==true||typeof data.alreadySynced!=='boolean'||data.eventId!==eventId||typeof data.kakaoEventId!=='string'||!data.kakaoEventId||data.kakaoEventId.length>200)throw new Error('캘린더 추가 결과를 확인하지 못했어요. 다시 확인해 주세요.');
   return {added:true,alreadySynced:data.alreadySynced,eventId,kakaoEventId:data.kakaoEventId};
+}
+
+export interface KakaoSyncProgress {pending:boolean;busy:boolean;synced:number;skipped:number;failed:number}
+async function calendarRequest(path:string,value?:unknown):Promise<unknown>{
+  if(!auth||!getAuthAPIURL())throw new Error('지금은 카카오 캘린더를 사용할 수 없어요.');
+  await auth.authStateReady();const user=auth.currentUser;if(!user)throw new Error('먼저 로그인해 주세요.');
+  const token=await user.getIdToken();if(auth.currentUser?.uid!==user.uid)throw new Error('로그인 계정이 변경됐어요.');
+  const result=await requestJSON(path,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},...(value!==undefined?{body:JSON.stringify(value)}:{})},getAuthAPIURL(),true);
+  if(auth.currentUser?.uid!==user.uid)throw new Error('로그인 계정이 변경됐어요.');return result;
+}
+export async function flushKakaoCalendar(eventId:string):Promise<KakaoSyncProgress>{
+  if(!/^[A-Za-z0-9:_-]{1,128}$/.test(eventId))throw new Error('모임 일정을 확인해 주세요.');
+  let result:KakaoSyncProgress={pending:false,busy:false,synced:0,skipped:0,failed:0};
+  for(let attempt=0;attempt<8;attempt++){
+    const data=await calendarRequest(`/calendar/kakao/events/${encodeURIComponent(eventId)}/sync`);
+    if(!object(data)||typeof data.pending!=='boolean'||typeof data.busy!=='boolean'||!['synced','skipped','failed'].every(key=>typeof data[key]==='number'&&Number.isFinite(data[key])))throw new Error('캘린더 반영 상태를 확인하지 못했어요.');
+    result=data as unknown as KakaoSyncProgress;if(!result.pending||result.busy)break;
+  }
+  return result;
+}
+export function kickKakaoCalendarSync(eventId:string):void{
+  if(!getAuthAPIURL())return;
+  void flushKakaoCalendar(eventId).then(result=>{if(result.failed)reportError(new Error('calendar_automatic_partial_failure'));}).catch(()=>reportError(new Error('calendar_automatic_retry_pending')));
+}
+export async function setKakaoCalendarAutomatic(enabled:boolean,eventId?:string):Promise<void>{
+  if(eventId!==undefined&&!/^[A-Za-z0-9:_-]{1,128}$/.test(eventId))throw new Error('모임 일정을 확인해 주세요.');
+  const result=await calendarRequest('/account/calendar/automatic',{enabled,...(eventId?{eventId}:{})});
+  if(!object(result)||result.enabled!==enabled)throw new Error('캘린더 연결 설정을 저장하지 못했어요.');
+  if(enabled&&eventId)kickKakaoCalendarSync(eventId);
 }

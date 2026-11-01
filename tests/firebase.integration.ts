@@ -297,6 +297,7 @@ test('real Firebase provider saves and edits posts and polls, closes, reopens an
     expect(vote.slotIds).toEqual([poll.slotIds[0]]);
     const event=(await getDoc(doc(db,'events',poll.eventId))).data()!;
     expect(event.pollId).toBe(pollId);expect(event.location).toBe('서울숲 테스트 장소');
+    const queued=(await getDoc(doc(db,'calendarSyncRequests',`${event.id}_${leaderId}`))).data()!;expect(queued).toMatchObject({eventId:event.id,requestedBy:leaderId,status:'pending'});expect(queued.requestedAt.toMillis()).toBeGreaterThan(0);
     expect(poll.deadline).toBeNull();expect(poll.deadlineAt).toBeNull();
   });
   // Seed only emulator metadata: no Google API request or real invitation is made.

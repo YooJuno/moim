@@ -14,6 +14,7 @@ export interface Mutation {path:string;data?:Record<string,unknown>;remove?:bool
 export interface Store {
  get<T=Record<string,unknown>>(path:string):Promise<StoredDocument<T>|null>;
  commit(writes:Mutation[]):Promise<void>;
+ getMany?(paths:string[]):Promise<Map<string,StoredDocument<Record<string,unknown>>|null>>;
  query?<T=Record<string,unknown>>(collection:string,field:string,value:string):Promise<StoredDocument<T>[]>;
  recentErrors?<T=Record<string,unknown>>(limit:number,since:string):Promise<StoredDocument<T>[]>;
 }
@@ -26,6 +27,7 @@ export interface Dependencies {
  createUser:(uid:string,name:string)=>Promise<void>;
  customToken:(uid:string)=>Promise<string>;
  providerExchange:(provider:Provider,code:string,state:string,redirectUri:string)=>Promise<ProviderIdentity>;
+ calendarDelete?:(token:string,eventId:string)=>Promise<void>;
  calendarCall?:(token:string,eventId:string|null,payload:Record<string,unknown>)=>Promise<string>;
  refreshKakao?:(refreshToken:string)=>Promise<{accessToken:string;refreshToken?:string;expiresAt:number;scopes?:string[]}>;
  sendSms?:(messages:{id:string;to:string;text:string}[])=>Promise<import('./sms-provider').SmsProviderResult[]>;

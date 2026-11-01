@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import type { RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { Bytes, collection, deleteDoc, deleteField, doc, getDoc, getDocs, query, setDoc, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { Bytes, collection, deleteDoc, deleteField, doc, getDoc, getDocs, query, setDoc, serverTimestamp, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
 
 const enabled=Boolean(process.env.FIRESTORE_EMULATOR_HOST);
 let environment: RulesTestEnvironment;
@@ -561,4 +561,21 @@ describe.skipIf(!enabled)('Firebase access boundaries',()=>{
     await assertFails(getDoc(doc(db,'postFiles',removedPostFile.id)));
     await assertSucceeds(removeFile(db,removedPostFile.id));
   });
+  it('atomically queues an admin event create, edit or deletion without exposing private sync state',async()=>{
+    const db=client('leader');const request=(id:string)=>({id:`${id}_leader`,eventId:id,requestedBy:'leader',status:'pending',requestedAt:serverTimestamp()});
+    let batch=writeBatch(db);batch.set(doc(db,'events','queued'),event('queued'));batch.set(doc(db,'calendarSyncRequests','queued_leader'),request('queued'));await assertSucceeds(batch.commit());
+    batch=writeBatch(db);batch.update(doc(db,'events','queued'),{location:'변경 주소'});batch.set(doc(db,'calendarSyncRequests','queued_leader'),request('queued'));await assertSucceeds(batch.commit());
+    batch=writeBatch(db);batch.delete(doc(db,'events','queued'));batch.set(doc(db,'calendarSyncRequests','queued_leader'),request('queued'));await assertSucceeds(batch.commit());
+    for(const path of ['calendarSyncRequests/queued_leader','authCalendarSettings/leader','authCalendarJobs/queued_leader'])await assertFails(getDoc(doc(db,path)));
+    await assertFails(setDoc(doc(db,'authCalendarSettings','leader'),{enabled:true}));
+  });
+  it('queues only an active member own attendance change with a trusted timestamp',async()=>{
+    for(const [uid,allowed] of [['member',true],['pending',false]] as const){const db=client(uid),id=`e1_${uid}`,batch=writeBatch(db);batch.set(doc(db,'rsvps',id),{id,eventId:'e1',memberId:uid,status:'notGoing',updatedAt:now});batch.set(doc(db,'calendarSyncRequests',id),{id,eventId:'e1',requestedBy:uid,status:'pending',requestedAt:serverTimestamp()});await (allowed?assertSucceeds(batch.commit()):assertFails(batch.commit()));}
+    const db=client('member'),valid={id:'e1_member',eventId:'e1',requestedBy:'member',status:'pending',requestedAt:serverTimestamp()};
+    await assertFails(setDoc(doc(db,'calendarSyncRequests','e1_member'),{...valid,requestedAt:Timestamp.now()}));
+    await assertFails(setDoc(doc(db,'calendarSyncRequests','e1_leader'),{...valid,id:'e1_leader',requestedBy:'leader'}));
+    await assertFails(setDoc(doc(db,'calendarSyncRequests','e1_member'),{...valid,recipients:['leader']}));
+    await assertFails(setDoc(doc(client('creator'),'calendarSyncRequests','e1_creator'),{...valid,id:'e1_creator',requestedBy:'creator'}));
+  });
+
 });

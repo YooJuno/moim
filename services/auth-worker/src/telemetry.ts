@@ -31,6 +31,8 @@ export function telemetryRoute(path:string):TelemetryRoute {
   if(/^\/oauth\/(kakao|naver)\/start$/.test(path))return '/oauth/start';
   if(/^\/oauth\/(kakao|naver)\/callback$/.test(path))return '/oauth/callback';
   if(/^\/oauth\/(kakao|naver)\/link\/start$/.test(path))return '/oauth/link';
+  if(path==='/account/calendar/automatic')return '/account/calendar';
+  if(/^\/calendar\/kakao\/events\/[^/]+\/sync$/.test(path))return '/calendar/sync';
   if(/^\/calendar\/kakao\/events\/[^/]+\/add$/.test(path))return '/calendar/add';
   if(/^\/notifications\/sms\/events\/[^/]+\/preview$/.test(path))return '/sms/preview';
   if(/^\/notifications\/sms\/events\/[^/]+\/send$/.test(path))return '/sms/send';

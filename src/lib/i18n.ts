@@ -6,6 +6,16 @@ export function setLanguage(language:Language){currentLanguage=language==='en'?'
 export const localeFor=(language:Language)=>language==='en'?'en-US':'ko-KR';
 export const getLocale=()=>localeFor(currentLanguage);
 const english:Record<string,string>={
+  "카카오 캘린더 연결": "Connect Kakao Calendar",
+  "자동 반영 끄기": "Turn off automatic sync",
+  "자동 반영 연결": "Enable automatic sync",
+  "자동 반영 연결됨": "Automatic sync connected",
+  "참여 일정 자동 반영": "Sync attending events",
+  "한 번 연결하면 참여 일정의 확정·변경이 카카오 캘린더에 자동 반영돼요.": "Connect once to automatically sync confirmed events and changes to Kakao Calendar.",
+  "불참으로 바꾸거나 일정이 삭제되면 캘린더에서도 삭제돼요.": "Declining or deleting an event also removes it from your calendar.",
+  "캘린더 자동 반영을 껐어요.": "Automatic calendar sync is off.",
+  "참여 일정이 자동으로 반영돼요.": "Your attending events will sync automatically.",
+
   '생일 선택':'Choose birthday','달력 열기':'Open calendar','생일 지우기':'Clear birthday','월 선택':'Birth month','일 선택':'Birth day','생일 날짜':'Birthday date','지우기':'Clear','선택':'Select','이전 달':'Previous month','다음 달':'Next month','내 정보':'My profile','프로필':'Profile','이름':'Name','전화번호':'Phone number','거주 지역':'Area','생일':'Birthday','직책':'Position','직책 없음':'No position','회장':'President','부회장':'Vice president','총무':'Treasurer','관리자':'Administrator','일반':'Member','멤버':'Members','회계 담당':'Accountant','회계담당':'Accountant',
   '월-일 · 생일은 모임 캘린더에 표시돼요.':'MM-DD · Birthdays appear on the group calendar.','전화번호와 거주 지역은 본인과 관리자만 볼 수 있어요.':'Only you and administrators can view your phone number and area.','연락처와 거주 지역은 본인과 관리자만 볼 수 있어요.':'Only you and administrators can view your contact details and area.',
   '계정':'Account','연결':'Connect','연결됨':'Connected','확인 중':'Checking','확인 필요':'Check connection','카카오':'Kakao','네이버':'Naver','데모':'Demo','기존 계정은 로그인 후 연결해 주세요.':'Sign in to your existing account before connecting another login.','다시 확인':'Check again',

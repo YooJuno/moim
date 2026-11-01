@@ -4,7 +4,7 @@ import { webcrypto } from 'node:crypto';
 const sdk=vi.hoisted(()=>({auth:{currentUser:null as null|{uid:string;getIdToken:ReturnType<typeof vi.fn>},authStateReady:vi.fn()},signin:vi.fn(),signout:vi.fn(),link:vi.fn()}));
 vi.mock('../src/lib/firebase',()=>({auth:sdk.auth}));
 vi.mock('firebase/auth',()=>({GoogleAuthProvider:class{setCustomParameters(){}},linkWithPopup:sdk.link,signInWithCustomToken:sdk.signin,signOut:sdk.signout}));
-import { addToKakaoCalendar, createSocialProof, exchangeSocialCallback, fetchAuthProviderConfig, getAccountProviders, getAuthAPIURL, linkGoogleAccount, SOCIAL_ATTEMPT_KEY, startSocialAuth } from '../src/lib/social-auth';
+import { addToKakaoCalendar, createSocialProof, exchangeSocialCallback, fetchAuthProviderConfig, getAccountProviders, flushKakaoCalendar, setKakaoCalendarAutomatic, getAuthAPIURL, linkGoogleAccount, SOCIAL_ATTEMPT_KEY, startSocialAuth } from '../src/lib/social-auth';
 
 class MemoryStorage implements Storage {
   private values=new Map<string,string>();get length(){return this.values.size;}clear(){this.values.clear();}getItem(key:string){return this.values.get(key)??null;}key(index:number){return [...this.values.keys()][index]??null;}removeItem(key:string){this.values.delete(key);}setItem(key:string,value:string){this.values.set(key,String(value));}
@@ -56,7 +56,7 @@ describe('explicit calendar connection context',()=>{
  });
  it('retains the authenticated calendar availability response',async()=>{
   signedIn();fetcher.mockResolvedValueOnce(json({google:true,kakao:false,naver:false,calendar:{kakao:false,available:false}}));
-  expect((await getAccountProviders()).calendar).toEqual({kakao:false,available:false});
+  expect((await getAccountProviders()).calendar).toEqual({kakao:false,available:false,automatic:false});
  });
 });
 describe('one-use callback exchange',()=>{
@@ -70,7 +70,7 @@ describe('one-use callback exchange',()=>{
 });
 
 describe('account connections',()=>{
-  it('loads connected providers with the current Firebase token',async()=>{signedIn();fetcher.mockResolvedValueOnce(json({google:true,kakao:true,naver:false,calendar:{kakao:false}}));expect(await getAccountProviders()).toEqual({google:true,kakao:true,naver:false,calendar:{kakao:false}});expect(fetcher.mock.calls[0][1].headers.Authorization).toBe('Bearer firebase-id-token');});
+  it('loads connected providers with the current Firebase token',async()=>{signedIn();fetcher.mockResolvedValueOnce(json({google:true,kakao:true,naver:false,calendar:{kakao:false}}));expect(await getAccountProviders()).toEqual({google:true,kakao:true,naver:false,calendar:{kakao:false,automatic:false}});expect(fetcher.mock.calls[0][1].headers.Authorization).toBe('Bearer firebase-id-token');});
   it('does not automatically merge a Google credential already used by another account',async()=>{signedIn();sdk.link.mockRejectedValue(Object.assign(new Error('conflict'),{code:'auth/credential-already-in-use'}));await expect(linkGoogleAccount('existing-uid')).rejects.toThrow('다른 계정');expect(sdk.auth.currentUser?.uid).toBe('existing-uid');expect(sdk.signin).not.toHaveBeenCalled();expect(sdk.signout).not.toHaveBeenCalled();});
 });
 
@@ -78,4 +78,22 @@ describe('account connections',()=>{
 describe('explicit Kakao calendar addition',()=>{
   it('posts only when called with the current Firebase token and rejects a changed UID before posting',async()=>{const user=signedIn();expect(fetcher).not.toHaveBeenCalled();fetcher.mockResolvedValueOnce(json({added:true,alreadySynced:false,eventId:'event-one',kakaoEventId:'kakao-one'}));expect(await addToKakaoCalendar('event-one')).toMatchObject({added:true,eventId:'event-one'});expect(fetcher).toHaveBeenCalledTimes(1);expect(String(fetcher.mock.calls[0][0])).toBe(`${base}calendar/kakao/events/event-one/add`);expect(fetcher.mock.calls[0][1]).toMatchObject({method:'POST',headers:{Authorization:'Bearer firebase-id-token'}});user.getIdToken.mockImplementationOnce(async()=>{sdk.auth.currentUser={uid:'other-uid',getIdToken:vi.fn()};return 'old-token';});await expect(addToKakaoCalendar('event-one')).rejects.toThrow('변경');expect(fetcher).toHaveBeenCalledTimes(1);});
   it('reports calendar consent errors without treating them as account merge conflicts',async()=>{signedIn();fetcher.mockResolvedValueOnce(json({error:'kakao_calendar_consent_required'},409));await expect(addToKakaoCalendar('event-one')).rejects.toThrow('캘린더 사용에 동의');});
+});
+
+describe('automatic calendar connection',()=>{
+ it('sends an explicit one-time automatic choice and authenticated event context',async()=>{
+  signedIn();fetcher.mockResolvedValueOnce(json({...config,calendar:{kakao:true}})).mockResolvedValueOnce(json({authorizationUrl:'https://kauth.kakao.com/oauth/authorize?state=synthetic'}));
+  await startSocialAuth('kakao','link',{calendar:true,automatic:true,eventId:'event-one'});
+  expect(JSON.parse(fetcher.mock.calls[1][1]!.body as string)).toMatchObject({calendar:true,automatic:true,eventId:'event-one'});
+  expect(JSON.parse(storage.getItem(SOCIAL_ATTEMPT_KEY)!)).toMatchObject({automatic:true,uid:'existing-uid'});
+ });
+ it('enables future automatic sync only through the authenticated settings endpoint',async()=>{
+  signedIn();fetcher.mockResolvedValueOnce(json({enabled:true}));await setKakaoCalendarAutomatic(true);
+  expect(String(fetcher.mock.calls[0][0])).toBe(`${base}account/calendar/automatic`);
+  expect(fetcher.mock.calls[0][1]).toMatchObject({method:'POST',headers:{Authorization:'Bearer firebase-id-token'},body:JSON.stringify({enabled:true})});
+ });
+ it('drains pending batches and stops when another worker owns the operation',async()=>{
+  signedIn();fetcher.mockResolvedValueOnce(json({pending:true,busy:false,synced:6,skipped:0,failed:0})).mockResolvedValueOnce(json({pending:true,busy:true,synced:6,skipped:0,failed:0}));
+  expect((await flushKakaoCalendar('event-one')).busy).toBe(true);expect(fetcher).toHaveBeenCalledTimes(2);
+ });
 });

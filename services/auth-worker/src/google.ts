@@ -25,6 +25,15 @@ export class FirestoreStore implements Store {
  private root(){return `projects/${this.env.FIREBASE_PROJECT_ID}/databases/(default)/documents`;}
  private path(path:string){if(!/^[A-Za-z0-9_-]+\/[A-Za-z0-9_:.-]+$/.test(path))throw new HttpError(400,'invalid_document_path');return `${this.root()}/${path}`;}
  async get<T=Record<string,unknown>>(path:string):Promise<StoredDocument<T>|null>{const response=await fetch(`https://firestore.googleapis.com/v1/${this.path(path)}`,{headers:{Authorization:`Bearer ${await serviceToken(this.env)}`}});if(response.status===404)return null;if(!response.ok)throw new HttpError(503,'database_unavailable');const value=await response.json() as {fields:Record<string,unknown>;updateTime:string};return {data:documentFrom(value.fields) as T,version:value.updateTime};}
+ async getMany(paths:string[]):Promise<Map<string,StoredDocument<Record<string,unknown>>|null>> {
+  const unique=[...new Set(paths)];if(unique.length>100)throw new HttpError(400,'invalid_query');if(!unique.length)return new Map();
+  const response=await fetch(`https://firestore.googleapis.com/v1/${this.root()}:batchGet`,{method:'POST',headers:{Authorization:`Bearer ${await serviceToken(this.env)}`,'Content-Type':'application/json'},body:JSON.stringify({documents:unique.map(path=>this.path(path))})});
+  if(!response.ok)throw new HttpError(503,'database_unavailable');
+  const result=await response.json() as {found?:{name:string;fields?:Record<string,unknown>;updateTime:string};missing?:string}[];
+  const output=new Map<string,StoredDocument<Record<string,unknown>>|null>(unique.map(path=>[path,null]));
+  for(const row of result)if(row.found){const path=row.found.name.slice(this.root().length+1);if(output.has(path))output.set(path,{data:documentFrom(row.found.fields??{}),version:row.found.updateTime});}
+  return output;
+ }
  async query<T=Record<string,unknown>>(collection:string,field:string,value:string):Promise<StoredDocument<T>[]> {
   if(!/^[A-Za-z0-9_-]+$/.test(collection)||!/^[A-Za-z0-9_]+$/.test(field))throw new HttpError(400,'invalid_query');
   const response=await fetch(`https://firestore.googleapis.com/v1/${this.root()}:runQuery`,{method:'POST',headers:{Authorization:`Bearer ${await serviceToken(this.env)}`,'Content-Type':'application/json'},body:JSON.stringify({structuredQuery:{from:[{collectionId:collection}],where:{fieldFilter:{field:{fieldPath:field},op:'EQUAL',value:{stringValue:value}}},limit:201}})});
