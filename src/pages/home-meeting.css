@@ -1,0 +1,38 @@
+.home-page .next-meeting {
+  padding: 26px 28px;
+  min-height: 0;
+  background: var(--surface-ffffff);
+  border: 1px solid var(--surface-edf0f4);
+  color: var(--text-4e5968);
+}
+.home-page .next-meeting::after { display: none; }
+.home-page .next-meeting-copy { max-width: 100%; min-width: 0; }
+.home-page .hero-eyebrow { color: var(--text-8b95a1); font-size: 12px; gap: 8px; }
+.home-page .hero-eyebrow > svg { color: #246bfd; }
+.home-page .hero-dday { margin-left: auto; padding: 4px 8px; background: var(--surface-edf3ff); color: #246bfd; font-size: 11px; }
+.home-page .next-meeting h2 { max-width: none; margin: 18px 0 0; font-size: 24px; line-height: 1.4; color: var(--text-4e5968); overflow-wrap: anywhere; }
+.home-page .hero-meta { margin-top: 18px; gap: 12px; color: var(--text-4e5968); font-size: 14px; line-height: 1.5; }
+.home-page .hero-meta > span { align-items: flex-start; gap: 9px; min-width: 0; }
+.home-page .hero-meta > span > svg { flex-shrink: 0; color: var(--text-8b95a1); margin-top: 2px; opacity: 1; }
+.home-page .hero-meta strong { font-weight: 500; overflow-wrap: anywhere; }
+.home-page .hero-location-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.home-page .hero-location-copy small { color: var(--text-8b95a1); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.home-page .hero-location-links { margin-left: 26px; }
+.home-page .hero-location-links .map-links { margin-top: 8px; gap: 16px; }
+.home-page .hero-location-links .map-links > button { min-height: 32px; color: var(--text-4e6fa4); font-size: 12px; border: 0; background: transparent; padding: 4px 0; }
+.home-page .hero-location-links .map-links > button:hover { color: #246bfd; }
+.home-page .hero-bottom { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--surface-edf0f4); justify-content: space-between; gap: 12px; }
+.home-page .hero-link { color: #fff; background: #246bfd; padding: 10px 14px; min-height: 40px; border-radius: 9px; font-size: 12px; gap: 12px; flex-shrink: 0; }
+.home-page .hero-link:hover { background: #1b5ae0; }
+.home-page .next-meeting h2 + .hero-link { margin-top: 24px; align-self: flex-start; }
+.home-page .hero-attendees { color: var(--text-8b95a1); font-size: 11px; gap: 8px; }
+.home-page .hero-attendees .avatar { border-color: var(--surface-ffffff); }
+@media(max-width:760px) {
+  .home-page .next-meeting { padding: 22px; }
+  .home-page .next-meeting h2 { font-size: 23px; }
+  .home-page .hero-meta { margin-top: 16px; font-size: 13px; }
+  .home-page .hero-eyebrow { font-size: 11px; }
+}
+
+html[data-theme="dark"] .home-page .hero-dday { color: #95bdff; }
+html[data-theme="dark"] .home-page .hero-eyebrow > svg { color: #95bdff; }

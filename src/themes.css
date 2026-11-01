@@ -848,7 +848,7 @@
 html[data-theme="dark"] body{background:var(--bg);color:var(--text)}
 html[data-theme="dark"] input[type=date],html[data-theme="dark"] input[type=time],html[data-theme="dark"] input[type=datetime-local]{color-scheme:dark}
 html[data-theme="dark"] .button-primary{background:#3376f5;color:#fff}html[data-theme="dark"] .button-primary:hover:not(:disabled){background:#4685ff}
-html[data-theme="dark"] .next-meeting{background:#215fd2}html[data-theme="dark"] .hero-link,html[data-theme="dark"] .hero-meta,html[data-theme="dark"] .hero-attendees{color:#e3ecff}
+
 html[data-theme="dark"] .modal-overlay{background:#0009}html[data-theme="dark"] .toast{color:#fff}
 html[data-theme="dark"] .login-google-button{color:var(--text);border-color:var(--line)}
 html[data-theme="dark"] .social-login-kakao{background:#fee500;color:#191919}html[data-theme="dark"] .social-login-naver{background:#03c75a;color:white}

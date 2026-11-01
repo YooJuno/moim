@@ -60,11 +60,11 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
       await popup.close();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await page.goto('/');
-      await expect(page.locator('.hero-meta')).toContainText(`${placeName}${separator}${address}`);
+      await expect(page.locator('.hero-location-copy strong')).toHaveText(placeName);
+      await expect(page.locator('.hero-location-copy small')).toHaveText(address);
       const hero = page.locator('.hero-location-links');
       for (const button of await hero.getByRole('button').all()) {
         await expect(button).toBeVisible();
-        await expect(button).toHaveCSS('color', 'rgb(255, 255, 255)');
       }
       await expect(hero.getByRole('button')).toHaveCount(2);
       await hero.getByRole('button', { name: '지도 보기', exact: true }).click();
