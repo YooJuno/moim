@@ -6,6 +6,10 @@ export function setLanguage(language:Language){currentLanguage=language==='en'?'
 export const localeFor=(language:Language)=>language==='en'?'en-US':'ko-KR';
 export const getLocale=()=>localeFor(currentLanguage);
 const english:Record<string,string>={
+  "로그인 · 캘린더": "Login · Calendar",
+  "로그인 · 캘린더 자동 반영": "Login · Automatic calendar sync",
+  "탭해서 선택 · 꾹 눌러 여러 칸 선택": "Tap to select · Hold and drag to select multiple slots",
+  "드래그해서 여러 시간을 선택할 수 있어요.": "Drag to select multiple time slots.",
   "카카오 캘린더 연결": "Connect Kakao Calendar",
   "자동 반영 끄기": "Turn off automatic sync",
   "자동 반영 연결": "Enable automatic sync",

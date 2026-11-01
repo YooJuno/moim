@@ -290,20 +290,39 @@ test('mobile calendar selection and shared-time form fit a 390px screen', async 
   await expect(page.locator('.calendar-agenda')).toContainText('커피 한 잔, 함께해요');
 });
 
-test('mobile drag mode uses a touch gesture and normal taps resume after switching it off', async ({ page }) => {
+test('touch scrolling cancels the hold timer without selecting any slots',async({page})=>{
+  await createHourlyPoll(page,'스크롤과 길게 누르기');
+  const pollId=await page.evaluate(()=>{
+    const data=JSON.parse(localStorage.getItem('moim-demo-v1')!),poll=data.polls.find((poll:{title:string})=>poll.title==='스크롤과 길게 누르기');
+    poll.slots=Array.from({length:12},(_,day)=>Array.from({length:16},(_,hour)=>({id:`long-${day}-${hour}`,date:`2026-11-${String(day+1).padStart(2,'0')}`,start:`${String(hour+8).padStart(2,'0')}:00`,end:`${String(hour+9).padStart(2,'0')}:00`}))).flat();poll.slotIds=poll.slots.map((slot:{id:string})=>slot.id);localStorage.setItem('moim-demo-v1',JSON.stringify(data));return poll.id;
+  });
+  await page.goto(`/polls?poll=${pollId}`);const grid=page.getByRole('dialog').locator('.poll-time-scroll');await expect(grid.locator('.poll-time-cell')).toHaveCount(192);
+  const session=await page.context().newCDPSession(page),bounds=await grid.boundingBox();if(!bounds)throw Error('No grid');
+  const x=bounds.x+bounds.width*.7,y=bounds.y+bounds.height*.7;
+  for(const horizontal of [false,true]){
+    await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:1}]});
+    for(let i=1;i<=6;i++)await session.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-(horizontal?i*20:0),y:y-(horizontal?0:i*20),id:1}]});
+    await page.waitForTimeout(400);await session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    await expect.poll(()=>grid.evaluate((element,horizontal)=>horizontal?element.scrollLeft:element.scrollTop,horizontal)).toBeGreaterThan(0);
+    await expect(grid.locator('.is-selected')).toHaveCount(0);
+  }
+  await session.detach();
+});
+
+test('mobile hold starts drag selection and normal taps resume on release', async ({ page }) => {
   await createHourlyPoll(page, '모바일 드래그 일정');
   const dialog = page.getByRole('dialog');
-  await dialog.getByRole('button', { name:'드래그 선택', exact:true }).tap();
+  await expect(dialog.getByRole('button', { name:'드래그 선택', exact:true })).toHaveCount(0);
   const cells = dialog.locator('.poll-time-cell');
   const first = await cells.first().boundingBox(); const last = await cells.last().boundingBox();
   if (!first || !last) throw new Error('투표 시간을 찾을 수 없어요.');
   const session = await page.context().newCDPSession(page);
   const x = first.x + first.width / 2; const startY = first.y + first.height / 2; const endY = last.y + last.height / 2;
   await session.send('Input.dispatchTouchEvent', { type:'touchStart', touchPoints:[{ x,y:startY,id:1 }] });
+  await page.waitForTimeout(400);
   for (let step = 1; step <= 8; step++) await session.send('Input.dispatchTouchEvent', { type:'touchMove', touchPoints:[{ x,y:startY + (endY - startY) * step / 8,id:1 }] });
   await session.send('Input.dispatchTouchEvent', { type:'touchEnd', touchPoints:[] });
   await expect(dialog.locator('.poll-time-cell.is-selected')).toHaveCount(3);
-  await dialog.getByRole('button', { name:'드래그 선택', exact:true }).tap();
   await cells.first().tap();
   await expect(dialog.locator('.poll-time-cell.is-selected')).toHaveCount(2);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

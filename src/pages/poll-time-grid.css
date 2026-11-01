@@ -87,3 +87,10 @@
 @media (prefers-reduced-motion: reduce) {
   .poll-detail-modal .poll-time-cell { transition: none; }
 }
+
+.poll-time-cell { -webkit-touch-callout: none; }
+.poll-touch-hint { display: none; }
+@media (pointer: coarse) {
+  .poll-pointer-hint { display: none; }
+  .poll-touch-hint { display: inline; }
+}

@@ -19,7 +19,7 @@ export function ProfileMenu() {
         if (!open)
             return;
         container.current?.querySelector<HTMLAnchorElement>('[role="menuitem"]')?.focus();
-        const outside = (event: PointerEvent) => { if (!container.current?.contains(event.target as Node))
+        const outside = (event: Event) => { if (!container.current?.contains(event.target as Node))
             setOpen(false); };
         const keyboard = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
@@ -39,9 +39,10 @@ export function ProfileMenu() {
             items[next].focus();
         };
         document.addEventListener('pointerdown', outside);
+        document.addEventListener('focusin', outside);
         container.current?.addEventListener('keydown', keyboard);
         const element = container.current;
-        return () => { document.removeEventListener('pointerdown', outside); element?.removeEventListener('keydown', keyboard); };
+        return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('focusin', outside); element?.removeEventListener('keydown', keyboard); };
     }, [open]);
     async function logout() {
         if (busy)
@@ -58,8 +59,7 @@ export function ProfileMenu() {
             setBusy(false);
         }
     }
-    return <div className="profile-menu-container" ref={container} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node))
-        setOpen(false); }}><button ref={trigger} type="button" className="top-avatar profile-menu-trigger" data-tour="profile" aria-label={t("내 프로필")} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? 'profile-menu' : undefined} onClick={() => setOpen(value => !value)} onKeyDown={event => { if (event.key === 'ArrowDown') {
+    return <div className="profile-menu-container" ref={container}><button ref={trigger} type="button" className="top-avatar profile-menu-trigger" data-tour="profile" aria-label={t("내 프로필")} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? 'profile-menu' : undefined} onClick={() => setOpen(value => !value)} onKeyDown={event => { if (event.key === 'ArrowDown') {
         event.preventDefault();
         setOpen(true);
     } }}><Avatar member={app.user ?? undefined} size={33}/></button>{open && <div id="profile-menu" className="profile-menu" role="menu" aria-label={t("계정 메뉴")}><Link role="menuitem" to="/profile" onClick={() => setOpen(false)}><UserRound size={17}/>{t("내 정보")}</Link><button type="button" role="menuitem" disabled={busy} onClick={() => void logout()}><LogOut size={17}/>{t("로그아웃")}</button></div>}</div>;

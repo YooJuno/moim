@@ -27,6 +27,7 @@ export function AccountConnections() {
         setError(errorMessage(problem));
     } }).finally(() => { if (active)
         setLoading(false); }); return () => { active = false; }; }, [app.isDemo, app.user?.id, config.enabled, revision]);
+    const calendarAvailable = !app.isDemo && app.canParticipate && config.calendar.kakao && providers?.calendar.available === true;
     async function connect(provider: 'google' | SocialProvider) { if (busy || !app.user)
         return; setBusy(provider); try {
         if (provider === 'google') {
@@ -36,7 +37,7 @@ export function AccountConnections() {
             refresh();
         }
         else
-            await startSocialAuth(provider, 'link');
+            await startSocialAuth(provider, 'link', provider === 'kakao' && calendarAvailable ? {calendar:true,automatic:true} : {});
     }
     catch (problem) {
         toast(errorMessage(problem), 'error');
@@ -46,24 +47,26 @@ export function AccountConnections() {
         if (provider === 'google')
             setBusy(null);
     } }
-    async function toggleCalendar() {
+    async function toggleCalendar(enabled:boolean) {
         if(busy || !providers)return;
         setBusy('calendar');
         try {
-            if(!providers.calendar.automatic && !providers.calendar.kakao) {
+            if(enabled && !providers.calendar.kakao) {
                 await startSocialAuth('kakao','link',{calendar:true,automatic:true});
                 return;
             }
-            await setKakaoCalendarAutomatic(!providers.calendar.automatic);
-            toast(providers.calendar.automatic ? '캘린더 자동 반영을 껐어요.' : '참여 일정이 자동으로 반영돼요.');
+            await setKakaoCalendarAutomatic(enabled);
+            toast(enabled ? '참여 일정이 자동으로 반영돼요.' : '캘린더 자동 반영을 껐어요.');
             refresh();
         } catch(problem) { toast(errorMessage(problem),'error'); }
         finally {setBusy(null);}
     }
     const googleEmail = auth?.currentUser?.providerData.find(provider => provider.providerId === 'google.com')?.email;
     return <div className="account-connections"><div className="account-connection"><span className="account-provider-icon google">G</span><div><strong>Google</strong>{googleEmail && <small>{googleEmail}</small>}</div>{app.isDemo ? <Badge tone="gray">{t("데모")}</Badge> : google ? <Badge tone="green">{t("연결됨")}</Badge> : <Button size="sm" variant="secondary" icon={Link2} loading={busy === 'google'} disabled={!!busy} onClick={() => void connect('google')}>{t("연결")}</Button>}</div>
-    {!app.isDemo && config.enabled && (['kakao', 'naver'] as const).filter(provider => config.providers[provider]).map(provider => <div className="account-connection" key={provider}><span className={`account-provider-icon ${provider}`}>{provider === 'kakao' ? <KakaoMark /> : 'N'}</span><div><strong>{provider === 'kakao' ? t("카카오") : t("네이버")}</strong></div>{loading ? <Badge tone="gray">{t("확인 중")}</Badge> : providers?.[provider] ? <Badge tone="green">{t("연결됨")}</Badge> : error ? <Badge tone="gray">{t("확인 필요")}</Badge> : <Button size="sm" variant="secondary" icon={Link2} loading={busy === provider} disabled={!!busy || !providers} onClick={() => void connect(provider)}>{t("연결")}</Button>}</div>)}
-    {!app.isDemo && app.canParticipate && config.calendar.kakao && providers?.calendar.available && <div className="account-connection"><span className="account-provider-icon kakao"><KakaoMark/></span><div><strong>{t("참여 일정 자동 반영")}</strong><small>{t("카카오 캘린더")}</small></div><Button size="sm" variant="secondary" loading={busy==='calendar'} disabled={!!busy} onClick={()=>void toggleCalendar()}>{providers.calendar.automatic ? t("연결 해제") : t("연결")}</Button></div>}
+    {!app.isDemo && config.enabled && (['kakao', 'naver'] as const).filter(provider => config.providers[provider]).map(provider => <div className="account-provider" key={provider}>
+      <div className="account-connection"><span className={`account-provider-icon ${provider}`}>{provider === 'kakao' ? <KakaoMark /> : 'N'}</span><div><strong>{provider === 'kakao' ? t("카카오") : t("네이버")}</strong>{provider==='kakao' && calendarAvailable && <small>{t(providers?.kakao ? "로그인 · 캘린더" : "로그인 · 캘린더 자동 반영")}</small>}</div>{loading ? <Badge tone="gray">{t("확인 중")}</Badge> : providers?.[provider] ? <Badge tone="green">{t("연결됨")}</Badge> : error ? <Badge tone="gray">{t("확인 필요")}</Badge> : <Button size="sm" variant="secondary" icon={Link2} loading={busy === provider} disabled={!!busy || !providers} onClick={() => void connect(provider)}>{t("연결")}</Button>}</div>
+      {provider==='kakao' && calendarAvailable && providers?.kakao && <label className="account-calendar-option"><span>{t("참여 일정 자동 반영")}</span><input type="checkbox" role="switch" checked={providers.calendar.kakao && providers.calendar.automatic===true} disabled={!!busy || loading} onChange={event=>void toggleCalendar(event.target.checked)}/></label>}
+    </div>)}
     {!app.isDemo && config.enabled && <p className="account-connection-note">{t("기존 계정은 로그인 후 연결해 주세요.")}</p>}{error && <div className="account-connection-error"><p role="alert">{error}</p><Button variant="ghost" size="sm" onClick={refresh} disabled={loading}>{t("다시 확인")}</Button></div>}
   </div>;
 }

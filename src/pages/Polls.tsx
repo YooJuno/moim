@@ -2,7 +2,7 @@ import { translate } from "../lib/i18n";
 import { useI18n } from "../lib/preferences";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowRight, BarChart3, CalendarCheck, Check, CheckCheck, ChevronRight, Clock3, ListChecks, MousePointer2, Pencil, Plus, Trash2, Trophy, Users, X } from 'lucide-react';
+import { ArrowRight, BarChart3, CalendarCheck, Check, CheckCheck, ChevronRight, Clock3, ListChecks, Pencil, Plus, Trash2, Trophy, Users, X } from 'lucide-react';
 import { useApp } from '../lib/store';
 import type { Poll, PollSlot, Vote } from '../lib/types';
 import { errorMessage, formatDate, formatTime, memberName, shortDate, slotLabel, today, uid } from '../lib/utils';
@@ -126,7 +126,8 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
     const [unavailable, setUnavailable] = useState(!!ownVote && ownVote.slotIds.length === 0);
     const [saving, setSaving] = useState(false);
     const [showParticipants, setShowParticipants] = useState(false);
-    const [touchDrag, setTouchDrag] = useState(false);
+    const grid = useRef<HTMLDivElement>(null);
+    const touchPress = useRef<{pointerId:number;owner:HTMLButtonElement;id:string;row:number;column:number;x:number;y:number;timer:ReturnType<typeof setTimeout>}|null>(null);
     const dragState = useRef<{
         pointerId: number;
         selecting: boolean;
@@ -145,6 +146,8 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
     const interactive = open && app.canParticipate;
     const manageable = canManage(poll, app.user?.id, app.isAdmin, app.canCreatePoll) && poll.status !== 'confirmed';
     const finishDrag = (cancel = false) => {
+        if(touchPress.current)clearTimeout(touchPress.current.timer);
+        touchPress.current=null;
         const state = dragState.current;
         const owner = dragOwner.current;
         dragState.current = null;
@@ -158,49 +161,69 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
     useEffect(() => { if (!interactive || saving || busy)
         finishDrag(true); }, [interactive, saving, busy]);
     const toggleSlot = (id: string) => { setUnavailable(false); setSelected(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]); };
-    const beginDrag = (event: React.PointerEvent<HTMLButtonElement>, id: string, row: number, column: number) => {
-        if (event.pointerType === 'touch' && !touchDrag) {
-            suppressClick.current = false;
-            return;
-        }
-        if (!interactive || saving || busy || (event.pointerType === 'mouse' && event.button !== 0))
-            return;
-        event.preventDefault();
+    const activateDrag = (owner:HTMLButtonElement,pointerId:number,id:string,row:number,column:number) => {
         const selecting = !selected.includes(id);
-        dragState.current = { pointerId: event.pointerId, selecting, row, column, visited: new Set([id]) };
-        dragOwner.current = event.currentTarget;
+        dragState.current = { pointerId, selecting, row, column, visited: new Set([id]) };
+        dragOwner.current = owner;
         suppressClick.current = true;
-        try {
-            event.currentTarget.setPointerCapture(event.pointerId);
-        }
+        try { owner.setPointerCapture(pointerId); }
         catch { /* Synthetic pointer events have no active capture target. */ }
         setUnavailable(false);
         setSelected(current => selecting ? [...new Set([...current, id])] : current.filter(value => value !== id));
     };
-    const moveDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
-        const state = dragState.current;
-        if (!state || state.pointerId !== event.pointerId || !interactive || saving || busy)
+    const beginDrag = (event: React.PointerEvent<HTMLButtonElement>, id: string, row: number, column: number) => {
+        if (!interactive || saving || busy || (event.pointerType === 'mouse' && event.button !== 0))return;
+        finishDrag(true);
+        if(event.pointerType==='touch') {
+            const press={pointerId:event.pointerId,owner:event.currentTarget,id,row,column,x:event.clientX,y:event.clientY,timer:setTimeout(()=>{
+                if(touchPress.current!==press)return;
+                touchPress.current=null;
+                activateDrag(press.owner,press.pointerId,press.id,press.row,press.column);
+            },350)};
+            touchPress.current=press;
             return;
-        event.preventDefault();
-        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLButtonElement>('[data-slot-id]');
-        if (!target || !event.currentTarget.closest('.poll-time-table')?.contains(target))
-            return;
-        const targetRow = Number(target.dataset.slotRow);
-        const targetColumn = Number(target.dataset.slotColumn);
-        const nextIds: string[] = [];
-        for (let row = Math.min(state.row, targetRow); row <= Math.max(state.row, targetRow); row++) {
-            const [start, end] = times[row].split('|');
-            for (let column = Math.min(state.column, targetColumn); column <= Math.max(state.column, targetColumn); column++) {
-                const id = poll.slots.find(slot => slot.date === dates[column] && slot.start === start && slot.end === end)?.id;
-                if (id && !state.visited.has(id)) {
-                    state.visited.add(id);
-                    nextIds.push(id);
-                }
+        }
+        event.preventDefault();activateDrag(event.currentTarget,event.pointerId,id,row,column);
+    };
+    const paintAt = (x:number,y:number) => {
+        const state=dragState.current;if(!state)return;
+        const target=document.elementFromPoint(x,y)?.closest<HTMLButtonElement>('[data-slot-id]');
+        if (!target || !grid.current?.contains(target))return;
+        const targetRow=Number(target.dataset.slotRow),targetColumn=Number(target.dataset.slotColumn);
+        const nextIds:string[]=[];
+        for(let row=Math.min(state.row,targetRow);row<=Math.max(state.row,targetRow);row++){
+            const [start,end]=times[row].split('|');
+            for(let column=Math.min(state.column,targetColumn);column<=Math.max(state.column,targetColumn);column++){
+                const id=poll.slots.find(slot=>slot.date===dates[column]&&slot.start===start&&slot.end===end)?.id;
+                if(id&&!state.visited.has(id)){state.visited.add(id);nextIds.push(id);}
             }
         }
-        if (nextIds.length)
-            setSelected(current => state.selecting ? [...new Set([...current, ...nextIds])] : current.filter(id => !nextIds.includes(id)));
+        if(nextIds.length)setSelected(current=>state.selecting?[...new Set([...current,...nextIds])]:current.filter(id=>!nextIds.includes(id)));
     };
+    const moveDrag = (event:React.PointerEvent<HTMLButtonElement>) => {
+        const press=touchPress.current;
+        if(press&&Math.hypot(event.clientX-press.x,event.clientY-press.y)>10)finishDrag(true);
+        if(!dragState.current||dragState.current.pointerId!==event.pointerId||!interactive||saving||busy)return;
+        event.preventDefault();paintAt(event.clientX,event.clientY);
+    };
+    useEffect(()=>{
+        const element=grid.current;if(!element||!interactive||saving||busy)return;
+        // A non-passive listener keeps native scrolling available until the hold activates.
+        const move=(event:TouchEvent)=>{
+            if(event.touches.length!==1){finishDrag(true);return;}
+            const touch=event.touches[0],press=touchPress.current;
+            if(press&&Math.hypot(touch.clientX-press.x,touch.clientY-press.y)>10)finishDrag(true);
+            if(!dragState.current)return;
+            if(event.cancelable)event.preventDefault();
+            paintAt(touch.clientX,touch.clientY);
+        };
+        const start=(event:TouchEvent)=>{if(event.touches.length!==1)finishDrag(true);};
+        const cancel=()=>finishDrag(true);
+        element.addEventListener('touchstart',start,{passive:true});
+        element.addEventListener('touchmove',move,{passive:false});
+        element.addEventListener('touchcancel',cancel);
+        return()=>{element.removeEventListener('touchstart',start);element.removeEventListener('touchmove',move);element.removeEventListener('touchcancel',cancel);};
+    },[interactive,saving,busy,poll.id,poll.slots]);
     const participantIds = new Set(votes.map(v => v.memberId));
     const waiting = app.members.filter(m => m.status === 'active' && !participantIds.has(m.id));
     const save = async () => { setSaving(true); try {
@@ -218,8 +241,8 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
     {poll.description && <p className="poll-detail-description">{poll.description}</p>}
     {interactive && ownVote?.slotIds.some(id => !poll.slotIds.includes(id)) && <p className="poll-vote-changed">{t("후보 시간이 변경됐어요. 선택을 확인하고 다시 저장해 주세요.")}</p>}
     {poll.status === 'confirmed' && poll.eventId && <a className="poll-confirmed-link" href={`/calendar?event=${encodeURIComponent(poll.eventId)}`}><CalendarCheck size={20}/><span>{t("확정된 일정 확인하기")}</span><ChevronRight size={17}/></a>}
-    <div className="section-head poll-grid-heading"><div><h3>{interactive ? t("가능한 시간을 골라 주세요") : t("투표 결과")}</h3><p className="muted">{interactive ? t("여러 시간을 선택할 수 있어요.") : t("{0}명이 응답했어요.", { "0": votes.length })}</p></div><div className="poll-grid-controls"><span className="poll-grid-legend"><i />{t("가능 인원")}</span>{interactive && <button type="button" className={`poll-drag-toggle ${touchDrag ? 'active' : ''}`} aria-pressed={touchDrag} disabled={saving || busy} onClick={() => setTouchDrag(!touchDrag)}><MousePointer2 size={13}/>{t("드래그 선택")}</button>}</div></div>
-    <div className={`poll-time-scroll ${touchDrag ? 'touch-drag-enabled' : ''}`}><table className="poll-time-table"><thead><tr><th scope="col">{t("시간")}</th>{dates.map(date => <th scope="col" key={date} className={getHoliday(date) || new Date(`${date}T12:00:00`).getDay() === 0 ? 'poll-table-holiday' : new Date(`${date}T12:00:00`).getDay() === 6 ? 'poll-table-saturday' : ''}><strong>{shortDate(date)}</strong><span>{formatDate(date, { weekday: 'short' })}{getHoliday(date) && ` · ${t(getHoliday(date) || "")}`}</span></th>)}</tr></thead><tbody>{times.map((time, rowIndex) => {
+    <div className="section-head poll-grid-heading"><div><h3>{interactive ? t("가능한 시간을 골라 주세요") : t("투표 결과")}</h3><p className="muted">{interactive ? <><span className="poll-pointer-hint">{t("드래그해서 여러 시간을 선택할 수 있어요.")}</span><span className="poll-touch-hint">{t("탭해서 선택 · 꾹 눌러 여러 칸 선택")}</span></> : t("{0}명이 응답했어요.", { "0": votes.length })}</p></div><div className="poll-grid-controls"><span className="poll-grid-legend"><i />{t("가능 인원")}</span></div></div>
+    <div ref={grid} className="poll-time-scroll"><table className="poll-time-table"><thead><tr><th scope="col">{t("시간")}</th>{dates.map(date => <th scope="col" key={date} className={getHoliday(date) || new Date(`${date}T12:00:00`).getDay() === 0 ? 'poll-table-holiday' : new Date(`${date}T12:00:00`).getDay() === 6 ? 'poll-table-saturday' : ''}><strong>{shortDate(date)}</strong><span>{formatDate(date, { weekday: 'short' })}{getHoliday(date) && ` · ${t(getHoliday(date) || "")}`}</span></th>)}</tr></thead><tbody>{times.map((time, rowIndex) => {
             const [start, end] = time.split('|');
             return <tr key={time}><th scope="row"><strong>{start}</strong><span>{end}</span></th>{dates.map((date, columnIndex) => {
                     const slot = poll.slots.find(s => s.date === date && s.start === start && s.end === end);
@@ -227,7 +250,7 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
                         return <td key={date}><div className="poll-slot-missing">—</div></td>;
                     const count = counts.find(c => c.slot.id === slot.id)?.count ?? 0;
                     const chosen = selected.includes(slot.id);
-                    return <td key={date}><button className={`poll-time-cell ${chosen ? 'is-selected' : ''} ${count > 0 && count === topCount ? 'is-best' : ''}`} style={{ '--slot-intensity': count ? Math.max(.05, count / Math.max(votes.length, 1) * .17) : 0 } as React.CSSProperties} disabled={!interactive || saving || busy} data-slot-id={slot.id} data-slot-row={rowIndex} data-slot-column={columnIndex} onPointerDown={event => beginDrag(event, slot.id, rowIndex, columnIndex)} onPointerMove={moveDrag} onPointerUp={() => finishDrag()} onPointerCancel={() => finishDrag(true)} onLostPointerCapture={() => { if (dragState.current)
+                    return <td key={date}><button className={`poll-time-cell ${chosen ? 'is-selected' : ''} ${count > 0 && count === topCount ? 'is-best' : ''}`} style={{ '--slot-intensity': count ? Math.max(.05, count / Math.max(votes.length, 1) * .17) : 0 } as React.CSSProperties} disabled={!interactive || saving || busy} onContextMenu={event=>{if(interactive)event.preventDefault();}} data-slot-id={slot.id} data-slot-row={rowIndex} data-slot-column={columnIndex} onPointerDown={event => beginDrag(event, slot.id, rowIndex, columnIndex)} onPointerMove={moveDrag} onPointerUp={() => finishDrag()} onPointerCancel={() => finishDrag(true)} onLostPointerCapture={() => { if (dragState.current || touchPress.current)
                         finishDrag(true); }} onClick={event => { if (event.detail === 0) {
                         toggleSlot(slot.id);
                         return;
