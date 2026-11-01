@@ -4,7 +4,7 @@ export type MemberStatus = 'active' | 'pending' | 'rejected';
 export interface Member { removedAt?: string; removedBy?: string; id: string; name: string; email: string; photoURL?: string; isRoster?: boolean; position?: string; birthday?: string; role: Role; status: MemberStatus; canCreatePoll: boolean; joinedAt: string }
 export interface UserPreferences { language: 'ko' | 'en'; theme: 'system' | 'light' | 'dark' }
 export interface Profile { id: string; phone: string; area: string; birthday?: string; language?: UserPreferences['language']; theme?: UserPreferences['theme'] }
-export interface Settings { name: string; description: string; photoURL?: string; smsEnabled?: boolean; smsAutoOnConfirm?: boolean }
+export interface Settings { name: string; description: string; photoURL?: string; bankName?: string; bankAccount?: string; smsEnabled?: boolean; smsAutoOnConfirm?: boolean }
 export type Category = 'notice' | 'chat' | 'info' | 'gallery';
 export interface PostAttachment { id: string; name: string; size: number; mimeType: string }
 export interface Post { id: string; category: Category; title: string; body: string; authorId: string; createdAt: string; updatedAt: string; images: string[]; attachments?: PostAttachment[]; pinned: boolean; likedBy: string[] }

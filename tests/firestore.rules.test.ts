@@ -61,6 +61,16 @@ describe.skipIf(!enabled)('Firebase access boundaries',()=>{
     await assertSucceeds(getDoc(doc(client('pending'),'members','pending')));
     await assertSucceeds(getDoc(doc(client('pending'),'profiles','pending')));
   });
+  it('only administrators can configure a valid group bank account',async()=>{
+    const ref=doc(client('leader'),'settings','club');
+    await assertSucceeds(updateDoc(ref,{bankName:'카카오뱅크',bankAccount:'3333000012345'}));
+    await assertSucceeds(getDoc(doc(client('pending'),'settings','club')));
+    for(const id of ['member','treasurer','pending'])await assertFails(updateDoc(doc(client(id),'settings','club'),{bankAccount:'3333000098765'}));
+    for(const bankAccount of ['123','not-an-account','1'.repeat(31)])await assertFails(updateDoc(ref,{bankAccount}));
+    await assertFails(updateDoc(ref,{bankName:''}));
+    await assertFails(updateDoc(ref,{bankName:'a'.repeat(41)}));
+    await assertSucceeds(updateDoc(ref,{bankName:deleteField(),bankAccount:deleteField()}));
+  });
   it('creates new Google users only as pending members without privileges',async()=>{
     const db=client('new');
     await assertFails(setDoc(doc(db,'members','new'),member('new','leader')));

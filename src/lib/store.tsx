@@ -211,7 +211,12 @@ export function AppProvider({children}: {children: ReactNode}) {
       if(!base.name || base.name.length>40 || base.description.length>140)throw new Error('모임 이름은 1–40자, 소개는 140자 이내로 입력해 주세요.');
       if(base.photoURL && (base.photoURL.length>180000 || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(base.photoURL)))throw new Error('모임 사진은 JPG, PNG, WebP 형식의 작은 이미지로 올려주세요.');
       if((settings.smsEnabled!==undefined && typeof settings.smsEnabled!=='boolean') || (settings.smsAutoOnConfirm!==undefined && typeof settings.smsAutoOnConfirm!=='boolean'))throw new Error('문자 알림 설정을 확인해 주세요.');
-      const build=(current?:AppData['settings'])=>({...base,smsEnabled:settings.smsEnabled ?? current?.smsEnabled ?? false,smsAutoOnConfirm:settings.smsAutoOnConfirm ?? current?.smsAutoOnConfirm ?? false});
+      const build=(current?:AppData['settings'])=>{
+        const bankName=(settings.bankName ?? current?.bankName ?? '').trim();
+        const bankAccount=(settings.bankAccount ?? current?.bankAccount ?? '').replace(/[\s-]/g,'');
+        if(bankName.length>40 || ((bankName || bankAccount) && (!bankName || !/^[0-9]{8,30}$/.test(bankAccount))))throw new Error('은행과 계좌번호를 확인해 주세요.');
+        return {...base,...(bankAccount ? {bankName,bankAccount}:{}),smsEnabled:settings.smsEnabled ?? current?.smsEnabled ?? false,smsAutoOnConfirm:settings.smsAutoOnConfirm ?? current?.smsAutoOnConfirm ?? false};
+      };
       if(isDemo)applyDemo({...dataRef.current,settings:build(dataRef.current.settings)});
       else await runTransaction(database(),async transaction=>{const settingsRef=doc(database(),'settings','club');const snapshot=await transaction.get(settingsRef);transaction.set(settingsRef,build(snapshot.exists() ? snapshot.data() as AppData['settings']:undefined));});
     },

@@ -6,6 +6,14 @@ export function setLanguage(language:Language){currentLanguage=language==='en'?'
 export const localeFor=(language:Language)=>language==='en'?'en-US':'ko-KR';
 export const getLocale=()=>localeFor(currentLanguage);
 const english:Record<string,string>={
+  '모임 계좌': 'Group bank account',
+  '복사': 'Copy',
+  '은행': 'Bank',
+  '예) 카카오뱅크': 'e.g. KakaoBank',
+  '모임 계좌번호': 'Group account number',
+  '모임 계좌번호 복사': 'Copy group account number',
+  '모임 계좌번호를 복사했어요.': 'Group account number copied.',
+  '은행과 계좌번호를 확인해 주세요.': 'Check the bank and account number.',
   '엑셀 가져오기': 'Import Excel',
   '거래내역 엑셀': 'Transaction workbook',
   '엑셀 비밀번호': 'Workbook password',

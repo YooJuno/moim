@@ -1,0 +1,16 @@
+.group-bank-account { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; margin-bottom: 18px; }
+.group-bank-account h2 { display: flex; align-items: center; gap: 8px; flex-shrink: 0; color: var(--text-4e5968); font-size: 13px; font-weight: 550; }
+.group-bank-account h2 > svg { color: var(--text-8b95a1); }
+.group-bank-account > button { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 12px; min-height: 36px; padding: 4px 0; border: 0; background: transparent; color: var(--text-4e5968); cursor: pointer; }
+.group-bank-name { color: var(--text-8b95a1); font-size: 12px; }
+.group-bank-account strong { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.group-bank-copy { display: inline-flex; align-items: center; gap: 5px; margin-left: 4px; color: var(--blue); font-size: 11px; }
+.group-bank-account > button:hover strong { color: var(--blue); }
+.group-bank-manual-name { margin-bottom: 14px; color: var(--text-8b95a1); font-size: 13px; }
+@media (max-width: 600px) {
+  .group-bank-account { align-items: flex-start; flex-direction: column; gap: 10px; padding: 17px 19px; }
+  .group-bank-account > button { justify-content: flex-start; width: 100%; gap: 7px 10px; }
+  .group-bank-name { font-size: 11px; }
+  .group-bank-account strong { font-size: 14px; }
+  .group-bank-copy { margin-left: auto; }
+}

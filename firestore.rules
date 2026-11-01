@@ -215,10 +215,14 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow read: if readable();
       allow create, update: if admin() && settingId == 'club'
-        && request.resource.data.keys().hasOnly(['name','description','photoURL','smsEnabled','smsAutoOnConfirm'])
+        && request.resource.data.keys().hasOnly(['name','description','photoURL','bankName','bankAccount','smsEnabled','smsAutoOnConfirm'])
         && request.resource.data.keys().hasAll(['name','description'])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 40
         && request.resource.data.description is string && request.resource.data.description.size() <= 140
+        && (!('bankName' in request.resource.data) || (request.resource.data.bankName is string && request.resource.data.bankName.size() <= 40))
+        && (!('bankAccount' in request.resource.data) || (request.resource.data.bankAccount is string
+          && request.resource.data.bankAccount.matches('^([0-9]{8,30})?$')
+          && (request.resource.data.bankAccount == '' || ('bankName' in request.resource.data && request.resource.data.bankName.size() > 0))))
         && (!('smsEnabled' in request.resource.data) || request.resource.data.smsEnabled is bool)
         && (!('smsAutoOnConfirm' in request.resource.data) || request.resource.data.smsAutoOnConfirm is bool)
         && (!('photoURL' in request.resource.data) || (request.resource.data.photoURL is string && request.resource.data.photoURL.size() <= 180000
