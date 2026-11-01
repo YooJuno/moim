@@ -27,7 +27,7 @@ export function RegistrationSetup() {
   async function save(event: React.FormEvent) {
     event.preventDefault();
     if (!app.user || !profile || busy) return;
-    if (needsMemberName(name)) { toast('본인 이름을 입력해 주세요.', 'error'); return; }
+    if (needsMemberName(name)) { toast('이름을 입력해 주세요.', 'error'); return; }
     if (!validSignupPhone(phone)) { toast('전화번호를 확인해 주세요.', 'error'); return; }
     if (!registrationComplete(name, { phone, area, birthday })) { toast('이름·전화번호·거주 지역·생일을 모두 입력해 주세요.', 'error'); return; }
     setBusy(true);
@@ -43,7 +43,7 @@ export function RegistrationSetup() {
       {!profile && <p role="status" className="muted">{t('개인정보 불러오는 중')}</p>}
       {app.error && <p role="alert" className="auth-error">{t(app.error)}</p>}
       <fieldset className="member-profile-fields stack" disabled={!profile || busy}>
-        <Field label={t('이름')} required><input value={name} onChange={event => setName(event.target.value)} maxLength={30} autoComplete="name" placeholder={t('본인 이름')} required autoFocus/></Field>
+        <Field label={t('이름')} required><input value={name} onChange={event => setName(event.target.value)} maxLength={30} autoComplete="name" placeholder={t('이름')} required autoFocus/></Field>
         <Field label={t('전화번호')} required><input type="tel" inputMode="tel" value={phone} onChange={event => setPhone(event.target.value)} maxLength={30} autoComplete="tel" placeholder="010-0000-0000" required/></Field>
         <Field label={t('거주 지역')} required><input value={area} onChange={event => setArea(event.target.value)} maxLength={100} autoComplete="address-level2" placeholder={t('서울 중랑구')} required/></Field>
         <BirthdayField value={birthday} required onChange={value => { dirty.current = true; setBirthday(value); }}/>

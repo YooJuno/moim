@@ -19,7 +19,7 @@ for (const status of ['active', 'pending']) {
     await expect(page.getByRole('textbox', { name: '이름' })).toHaveValue('');
     await page.getByRole('textbox', { name: '이름' }).fill('새 멤버');
     await page.getByRole('button', { name: '저장하고 계속', exact: true }).click();
-    await expect(page.getByText('본인 이름을 입력해 주세요.', { exact: true })).toBeVisible();
+    await expect(page.getByText('이름을 입력해 주세요.', { exact: true })).toBeVisible();
     await page.getByRole('textbox', { name: '이름' }).fill('  방정혁  ');
     await page.getByRole('button', { name: '저장하고 계속', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveAccessibleName('다음 모임, 언제 만날까요?');
