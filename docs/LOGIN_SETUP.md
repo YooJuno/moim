@@ -43,7 +43,7 @@ Cloudflare는 기본으로 Workers Free를 제공합니다. 현재 무료 한도
 4. **앱 > 플랫폼 키 > REST API 키 > 클라이언트 시크릿**에서 시크릿을 확인합니다. 서버의 `KAKAO_CLIENT_SECRET`에 등록합니다. 현재 카카오 문서는 새 REST API 키의 Client Secret이 기본 활성화된다고 안내하며, 이 서버도 시크릿을 사용합니다.
 5. **카카오 로그인 > 동의항목 > 개인정보**에서 필요한 항목을 설정합니다. 닉네임을 이름 입력의 초기값으로 쓰려면 닉네임 항목을 설정합니다. 이메일·전화번호·생일을 로그인 필수 항목으로 추가할 필요는 없습니다. 별도 권한이 필요한 개인정보는 심사를 거쳐야 합니다. [카카오 로그인 사용 설정·시크릿·동의항목](https://developers.kakao.com/docs/ko/kakaologin/prerequisite)
 
-현재 Worker는 REST OAuth로 사용자 정보를 확인하므로 이 절차에서 OpenID Connect 활성화는 요구하지 않습니다. 톡캘린더는 별도 권한이므로 우선 `KAKAO_CALENDAR_ENABLED=false`로 둡니다.
+현재 Worker는 REST OAuth로 사용자 정보를 확인하므로 이 절차에서 OpenID Connect 활성화는 요구하지 않습니다. 톡캘린더는 별도 동의와 사용 권한이 필요합니다. 현재 서비스에서는 `KAKAO_CALENDAR_ENABLED=true`, `KAKAO_CALENDAR_TEST_ONLY=true`와 비공개 테스트 계정 목록으로 본인 연결 테스트만 허용합니다. [톡캘린더 설정과 검수](KAKAO_CALENDAR_SETUP.md)를 참고하세요.
 
 ## 3. 네이버 앱 설정
 

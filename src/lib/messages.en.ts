@@ -1023,4 +1023,7 @@ export const messagesEn: Record<string, string> = {
   '회칙 불러오는 중': 'Loading rules',
   '회칙을 불러오는 중이에요. 잠시 후 다시 시도해 주세요.': 'Rules are still loading. Please try again shortly.',
   '모임 정보를 불러오는 중이에요. 잠시 후 다시 시도해 주세요.': 'Group information is still loading. Please try again shortly.',
+  '로그인 후 카카오 캘린더를 연결해 주세요.': 'Sign in before connecting Kakao Calendar.',
+  '톡캘린더는 현재 연결 테스트 중이에요.': 'Kakao Calendar is currently being tested.',
+  '카카오 계정 연결과 캘린더 접근 동의가 필요해요. 연결 후 이 일정으로 돌아와 추가할 수 있어요.': 'Connect Kakao and allow calendar access. You will return to this event to add it.',
 };

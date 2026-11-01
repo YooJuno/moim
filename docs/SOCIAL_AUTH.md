@@ -1,6 +1,6 @@
 # 카카오·네이버 로그인 연결
 
-2026-11-01 기준 카카오 로그인은 운영에서 활성화했습니다. 카카오 REST API 키·Client Secret은 Worker Secret에 저장하며 레포와 브라우저 코드에는 포함하지 않습니다. 네이버 로그인과 톡캘린더는 아직 비활성화 상태입니다. `VITE_AUTH_API_URL`이 없거나 서비스의 `/config`에 제공자가 비활성으로 표시되면 해당 로그인 버튼은 나오지 않습니다. 기존 Google 로그인은 그대로 사용할 수 있습니다.
+2026-11-01 기준 카카오 로그인은 운영에서 활성화했습니다. 카카오 REST API 키·Client Secret은 Worker Secret에 저장하며 레포와 브라우저 코드에는 포함하지 않습니다. 네이버 로그인은 비활성화 상태이며, 톡캘린더는 지정 계정의 연결 테스트만 허용합니다. [톡캘린더 설정과 검수](KAKAO_CALENDAR_SETUP.md)를 참고하세요. `VITE_AUTH_API_URL`이 없거나 서비스의 `/config`에 제공자가 비활성으로 표시되면 해당 로그인 버튼은 나오지 않습니다. 기존 Google 로그인은 그대로 사용할 수 있습니다.
 
 ## 등록 순서
 
@@ -32,7 +32,7 @@ Kakao JavaScript 키는 기존 카카오톡 공유용 설정입니다. 카카오
 
 ## 운영 확인
 
-- `/config`의 `providers.kakao=true`, `providers.naver=false`, `calendar.kakao=false`를 확인했습니다.
+- `/config`의 `providers.kakao=true`, `providers.naver=false`, `calendar.kakao=true`를 확인했습니다. 캘린더 실제 사용 범위는 인증된 `/account/providers`의 `calendar.available`과 서버의 테스트 계정 제한으로 다시 확인합니다.
 - 운영 로그인 화면의 카카오 버튼을 PC와 카카오톡 모바일 환경에서 확인했습니다.
 - 카카오 계정 로그인 화면 진입까지 확인했으며, 실제 계정의 동의·연결 완료는 사용자가 직접 진행합니다.
 - 기존 Google 사용자는 먼저 Google로 로그인한 뒤 **내 정보 → 계정 → 카카오 연결**을 진행합니다.

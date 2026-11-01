@@ -35,6 +35,30 @@ describe('starting authorization',()=>{
   it('does not show a disabled provider as available to the starter',async()=>{fetcher.mockResolvedValueOnce(json({...config,providers:{kakao:false,naver:false}}));await expect(startSocialAuth('naver')).rejects.toThrow('사용할 수 없어요');expect(assign).not.toHaveBeenCalled();expect(storage.length).toBe(0);});
 });
 
+describe('explicit calendar connection context',()=>{
+ it('requests calendar consent only from explicit signed-in Kakao connection and retains the event locally',async()=>{
+  signedIn();fetcher.mockResolvedValueOnce(json({...config,calendar:{kakao:true}})).mockResolvedValueOnce(json({authorizationUrl:'https://kauth.kakao.com/oauth/authorize?scope=talk_calendar'}));
+  await startSocialAuth('kakao','link',{calendar:true,eventId:'event-one'});
+  expect(JSON.parse(fetcher.mock.calls[1][1].body)).toMatchObject({calendar:true,returnOrigin:origin});
+  expect(JSON.parse(storage.getItem(SOCIAL_ATTEMPT_KEY)!)).toMatchObject({intent:'link',uid:'existing-uid',calendarEventId:'event-one'});
+  expect(JSON.parse(fetcher.mock.calls[1][1].body).eventId).toBeUndefined();
+ });
+ it('rejects calendar scope on ordinary sign-in, other providers or disabled configuration',async()=>{
+  await expect(startSocialAuth('kakao','signin',{calendar:true})).rejects.toThrow('로그인 후');
+  await expect(startSocialAuth('naver','link',{calendar:true})).rejects.toThrow('로그인 후');expect(fetcher).not.toHaveBeenCalled();
+  signedIn();fetcher.mockResolvedValueOnce(json(config));await expect(startSocialAuth('kakao','link',{calendar:true})).rejects.toThrow('캘린더를 사용할 수');
+  expect(assign).not.toHaveBeenCalled();expect(storage.length).toBe(0);
+ });
+ it('returns to the same event only from a verified saved link attempt',async()=>{
+  attempt('link',{calendarEventId:'event-one'});signedIn();fetcher.mockResolvedValueOnce(json({linked:true,uid:'existing-uid',provider:'kakao',intent:'link'}));
+  expect(await exchangeSocialCallback(callback('kakao','link'))).toMatchObject({uid:'existing-uid',calendarEventId:'event-one'});expect(sdk.signin).not.toHaveBeenCalled();
+  attempt('link',{calendarEventId:'//foreign.test/path'});await expect(exchangeSocialCallback(callback('kakao','link'))).rejects.toThrow('일치하지');expect(fetcher).toHaveBeenCalledTimes(1);
+ });
+ it('retains the authenticated calendar availability response',async()=>{
+  signedIn();fetcher.mockResolvedValueOnce(json({google:true,kakao:false,naver:false,calendar:{kakao:false,available:false}}));
+  expect((await getAccountProviders()).calendar).toEqual({kakao:false,available:false});
+ });
+});
 describe('one-use callback exchange',()=>{
   it('exchanges the stored verifier exactly once and signs in with the returned custom token',async()=>{const stored=attempt();fetcher.mockResolvedValueOnce(json({uid:'social-uid',provider:'kakao',intent:'signin',firebaseCustomToken:'one-use-firebase-custom-token'}));sdk.signin.mockResolvedValue({user:{uid:'social-uid'}});expect(await exchangeSocialCallback(callback())).toEqual({uid:'social-uid',provider:'kakao',intent:'signin'});expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({code,verifier:stored.verifier});expect(sdk.signin).toHaveBeenCalledWith(sdk.auth,'one-use-firebase-custom-token');expect(storage.getItem(SOCIAL_ATTEMPT_KEY)).toBeNull();await expect(exchangeSocialCallback(callback())).rejects.toThrow('요청이 없어요');expect(fetcher).toHaveBeenCalledTimes(1);expect(sdk.signin).toHaveBeenCalledTimes(1);});
   it.each([{provider:'naver',intent:'signin'},{provider:'kakao',intent:'link'}])('rejects callback provider or intent mismatch before exchange: %j',async value=>{attempt();await expect(exchangeSocialCallback(callback(value.provider,value.intent))).rejects.toThrow('일치하지');expect(fetcher).not.toHaveBeenCalled();expect(sdk.signin).not.toHaveBeenCalled();});

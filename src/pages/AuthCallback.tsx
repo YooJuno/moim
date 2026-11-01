@@ -22,7 +22,7 @@ export function AuthCallback() {
         }
         let active = true;
         void request.current.then(result => { if (active)
-            navigate(result.intent === 'link' ? '/profile' : '/', { replace: true }); }).catch(problem => { if (active)
+            navigate(result.calendarEventId ? `/calendar?event=${encodeURIComponent(result.calendarEventId)}&kakao=1` : result.intent === 'link' ? '/profile' : '/', { replace: true }); }).catch(problem => { if (active)
             setError(errorMessage(problem)); });
         return () => { active = false; };
     }, [navigate]);

@@ -31,7 +31,7 @@ export const TELEMETRY_SERVER_CODES = [
   'firebase_account_disabled', 'account_link_busy', 'readable_membership_required', 'provider_not_configured',
   'invalid_state', 'invalid_or_expired_state', 'oauth_cancelled', 'oauth_failed', 'provider_code_missing', 'auth_not_configured',
   'invalid_exchange', 'expired_exchange', 'origin_mismatch', 'invalid_verifier', 'link_user_mismatch',
-  'kakao_calendar_not_configured', 'active_membership_required', 'event_attendance_required',
+  'invalid_calendar_request', 'kakao_calendar_not_available', 'kakao_calendar_not_configured', 'active_membership_required', 'event_attendance_required',
   'kakao_calendar_consent_required', 'kakao_reconnect_required', 'kakao_time_requires_five_minutes',
   'calendar_sync_in_progress', 'calendar_sync_needs_reconciliation', 'calendar_sync_conflict',
   'origin_required', 'use_authenticated_link_start', 'not_found',

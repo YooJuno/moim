@@ -1,0 +1,55 @@
+import {expect,test,type Page} from '@playwright/test';
+
+async function calendarMock(page:Page,options:{available?:boolean;consented?:boolean;callback?:boolean}={}){
+  const {available=true,consented=false,callback=false}=options;
+  await page.route('**/src/components/KakaoCalendar.tsx*',async route=>{
+    const response=await route.fetch();const source=await response.text();
+    expect(source).toContain('app.isDemo');
+    await route.fulfill({response,body:source.replaceAll('app.isDemo','false')});
+  });
+  await page.route('**/src/lib/social-auth.ts*',route=>route.fulfill({contentType:'text/javascript',body:`
+export function useAuthProviderConfig(){return {enabled:true,loading:false,providers:{kakao:true,naver:false},calendar:{kakao:true}};}
+export function getAuthAPIURL(){return null;}
+export async function getAccountProviders(){return {google:true,kakao:true,naver:false,calendar:{kakao:${consented},available:${available}}};}
+export async function startSocialAuth(provider,intent,options){window.__calendarConnection={provider,intent,options};}
+export async function addToKakaoCalendar(eventId){window.__calendarWrites=(window.__calendarWrites||0)+1;return {added:true,alreadySynced:false,eventId,kakaoEventId:'mock-external'};}
+export async function exchangeSocialCallback(){return {uid:'demo-me',provider:'kakao',intent:'link'${callback?",calendarEventId:'event-coffee'":''}};}
+export async function linkGoogleAccount(){}
+`}));
+}
+async function attend(page:Page){
+  await page.clock.setFixedTime(new Date('2026-10-24T12:00:00+09:00'));
+  await page.goto('/calendar?event=event-coffee');
+  await page.getByRole('dialog').getByRole('button',{name:'참여해요',exact:true}).click();
+  await expect(page.getByRole('dialog').getByText('참여 예정으로 등록했어요.',{exact:false})).toBeVisible();
+}
+
+for(const [name,viewport] of [['desktop',{width:1440,height:1000}],['mobile',{width:390,height:844}]] as const){
+ test(`calendar consent is requested only from its connection button ${name}`,async({page})=>{
+  await page.setViewportSize(viewport);await calendarMock(page);await attend(page);
+  await page.getByRole('dialog').getByRole('button',{name:'카카오 캘린더',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'카카오 캘린더에 추가',exact:true});
+  expect(await page.evaluate(()=>(window as any).__calendarConnection)).toBeUndefined();
+  await dialog.getByRole('button',{name:'캘린더 연결',exact:true}).click();
+  expect(await page.evaluate(()=>(window as any).__calendarConnection)).toEqual({provider:'kakao',intent:'link',options:{calendar:true,eventId:'event-coffee'}});
+  expect(await page.evaluate(()=>(window as any).__calendarWrites??0)).toBe(0);
+ });
+}
+
+test('test restrictions hide the calendar action from other approved attendees',async({page})=>{
+  await calendarMock(page,{available:false});await attend(page);
+  await expect(page.getByRole('button',{name:'카카오 캘린더',exact:true})).toHaveCount(0);
+  expect(await page.evaluate(()=>(window as any).__calendarWrites??0)).toBe(0);
+});
+
+test('calendar consent callback returns to the event and waits for an explicit add',async({page})=>{
+  await calendarMock(page,{consented:true,callback:true});await attend(page);
+  await page.goto(`/auth/callback?code=${'c'.repeat(43)}&provider=kakao&intent=link`);
+  await expect(page).toHaveURL(/\/calendar\?event=event-coffee$/);
+  const dialog=page.getByRole('dialog',{name:'카카오 캘린더에 추가',exact:true});
+  await expect(dialog.getByRole('button',{name:'내 캘린더에 반영',exact:true})).toBeEnabled();
+  expect(await page.evaluate(()=>(window as any).__calendarWrites??0)).toBe(0);
+  await dialog.getByRole('button',{name:'내 캘린더에 반영',exact:true}).click();
+  await expect(dialog).toHaveCount(0);expect(await page.evaluate(()=>(window as any).__calendarWrites)).toBe(1);
+  await expect(page.getByRole('dialog')).toHaveAccessibleName('커피 한 잔, 함께해요');
+});

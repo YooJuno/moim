@@ -1,6 +1,6 @@
 # 소셜 로그인·톡캘린더 Worker
 
-Firebase Hosting 프런트엔드에 연결하는 별도 Cloudflare Worker입니다. Firebase 요금제를 바꾸지 않고 카카오·네이버 OAuth의 비밀키 처리와 Firebase 커스텀 토큰 발급을 분리합니다. 운영 서버는 `https://moim-auth.moim-auth-worker.workers.dev`이며 Firebase 서버 인증과 SOLAPI Secret을 연결했습니다. 카카오 로그인 키는 Worker Secret에 등록해 운영에서 활성화했습니다. 네이버 로그인 키는 아직 등록하지 않았고 톡캘린더는 비활성화 상태입니다. 실제 문자는 발송하지 않았습니다.
+Firebase Hosting 프런트엔드에 연결하는 별도 Cloudflare Worker입니다. Firebase 요금제를 바꾸지 않고 카카오·네이버 OAuth의 비밀키 처리와 Firebase 커스텀 토큰 발급을 분리합니다. 운영 서버는 `https://moim-auth.moim-auth-worker.workers.dev`이며 Firebase 서버 인증과 SOLAPI Secret을 연결했습니다. 카카오 로그인 키는 Worker Secret에 등록해 운영에서 활성화했습니다. 네이버 로그인 키는 아직 등록하지 않았고 톡캘린더는 비공개로 지정한 계정의 연결 테스트만 허용합니다. 실제 문자는 발송하지 않았습니다.
 
 사용자 콘솔 설정: [로그인 설정 안내](../../docs/LOGIN_SETUP.md).
 
@@ -28,7 +28,8 @@ npm run build
 | `FIREBASE_PROJECT_ID` | Firebase 프로젝트 ID |
 | `AUTH_BASE_URL` | Worker의 공개 origin, 경로·마지막 `/` 제외 |
 | `ALLOWED_ORIGINS` | 프런트엔드 origin을 쉼표로 구분, 와일드카드 없음 |
-| `KAKAO_CALENDAR_ENABLED` | 기본 `false`; 톡캘린더 사용 권한과 사용자 동의 설정 후에만 `true` |
+| `KAKAO_CALENDAR_ENABLED` | `true`로 동작하며 검수 전에는 테스트 계정만 허용 |
+| `KAKAO_CALENDAR_TEST_ONLY` | 검수 전 `true`; 테스트 계정 목록이 없으면 사용 불가 |
 | `NAVER_SEARCH_ENABLED` | 기본 `false`; 검색용 키 연결과 현재 이용요금 확인 후 `true` |
 | `NAVER_SEARCH_API` | 신규 키는 `hub`(기본), 기존 개발자센터 키는 `legacy` |
 | `TELEMETRY_ENABLED` | `true`일 때 안전한 오류 필드만 최대 하루 200건·256개 슬롯으로 기록 |
@@ -43,6 +44,7 @@ npm run build
 | `STATE_SECRET` | 무작위 32바이트의 base64url 값 |
 | `TOKEN_ENCRYPTION_KEY` | 별도로 생성한 무작위 32바이트의 base64url 값 |
 | `KAKAO_REST_API_KEY`, `KAKAO_CLIENT_SECRET` | 카카오 REST 앱 설정 |
+| `KAKAO_CALENDAR_TEST_UIDS` | 검수 전 허용할 Firebase UID 목록. 쉼표로 구분, 공개하지 않음 |
 | `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` | 네이버 앱 설정 |
 | `NAVER_SEARCH_CLIENT_ID`, `NAVER_SEARCH_CLIENT_SECRET` | NAVER API HUB 장소 검색 키. OAuth 키와 별도로 저장 |
 
@@ -66,10 +68,10 @@ Worker가 돌아오는 프런트엔드 경로는 허용한 origin의 `/auth/call
 | `POST /telemetry/errors` | 허용된 Origin, 최대 4KiB의 허용된 오류 필드, 익명 허용 | `202 {accepted:true}`, 저장 오류가 기존 앱 동작에 영향을 주지 않음 |
 | `GET /telemetry/errors?limit=50` | Firebase Bearer 토큰, 현재 승인된 관리자 | `{enabled,errors}`, 최근 7일·최대 50개 |
 | `GET /oauth/:provider/start` | `challenge`, `returnOrigin`, 선택 `intent=signin` | 공급자 동의 화면으로 302 |
-| `POST /oauth/:provider/link/start` | Firebase Bearer 토큰, JSON `{challenge,returnOrigin}` | `{authorizationUrl}` |
+| `POST /oauth/:provider/link/start` | Firebase Bearer 토큰, JSON `{challenge,returnOrigin,calendar?}` | `{authorizationUrl}` |
 | `GET /oauth/:provider/callback` | 공급자의 `code`, `state` | 프런트엔드 `/auth/callback?code=...&provider=...&intent=...`로 302 |
 | `POST /oauth/exchange` | JSON `{code,verifier}`, 연결 시 현재 Firebase Bearer 토큰도 필요 | 로그인 `{firebaseCustomToken,uid,intent:'signin',provider}`, 연결 `{linked:true,uid,intent:'link',provider}` |
-| `GET /account/providers` | Firebase Bearer 토큰 | `{google,kakao,naver,calendar:{kakao}}` |
+| `GET /account/providers` | Firebase Bearer 토큰 | `{google,kakao,naver,calendar:{kakao,available}}` |
 | `POST /calendar/kakao/events/:eventId/add` | Firebase Bearer 토큰, 현재 승인된 참석자 | `{added,alreadySynced,eventId,kakaoEventId}` |
 
 프런트엔드는 32바이트 이상 무작위 verifier를 base64url로 만들고 `sessionStorage`에 보관한 뒤, `base64url(SHA256(verifier))`를 challenge로 전달합니다. 돌아온 provider·intent와 연결 대상 UID가 저장한 시도 정보와 같은지 확인한 뒤 교환합니다. 교환 JSON 외에 Firebase 커스텀 토큰이 전달되는 곳은 없습니다.
@@ -106,7 +108,9 @@ node --env-file=.dev.vars scripts/cleanup.mjs --apply
 
 ## 톡캘린더 범위
 
-카카오 `talk_calendar` 동의 내역을 확인한 사용자만 본인 캘린더에 일정을 추가할 수 있습니다. 서버가 앱의 활성 멤버 상태와 `going` 참석 응답을 확인합니다. 명단의 다른 사람에게 임의로 일정을 만들거나 초대하지 않습니다. 만료한 카카오 액세스 토큰은 서버에서 갱신하고, 같은 일정을 다시 반영할 때 저장한 외부 일정 ID를 사용합니다. 동일한 내용의 반복 요청은 외부 API를 다시 호출하지 않습니다.
+[설정·테스트·검수 순서](../../docs/KAKAO_CALENDAR_SETUP.md). 일반 로그인에는 캘린더 scope를 넣지 않고, 인증된 연결 시작의 `calendar:true` 요청에서만 추가합니다. 검수 전 허용 계정은 서버에서 확인하며 비공개 UID 목록을 반환하지 않습니다.
+
+설정된 테스트/운영 범위에 해당하며 카카오 `talk_calendar` 동의 내역을 확인한 사용자만 본인 캘린더에 일정을 추가할 수 있습니다. 서버가 앱의 활성 멤버 상태와 `going` 참석 응답을 확인합니다. 명단의 다른 사람에게 임의로 일정을 만들거나 초대하지 않습니다. 만료한 카카오 액세스 토큰은 서버에서 갱신하고, 같은 일정을 다시 반영할 때 저장한 외부 일정 ID를 사용합니다. 동일한 내용의 반복 요청은 외부 API를 다시 호출하지 않습니다.
 
 공식 일반 일정 생성 API에는 참석자 목록이나 비공개 일괄 초대 파라미터가 없습니다. 따라서 이 API는 참석자 각각의 **내 톡캘린더에 추가** 기능입니다. 공개 일정/구독 캘린더는 채널 권한을 포함한 별도 기능이며 여기에 구현하지 않았습니다.
 

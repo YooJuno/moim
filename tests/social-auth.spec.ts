@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 
 async function showLogin(page:Page){await page.goto('/profile');await page.getByRole('button',{name:'로그아웃',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'로그아웃',exact:true}).click();await expect(page.getByRole('heading',{name:'로그인',exact:true})).toBeVisible();}
 async function configuration(page:Page,status=200){
-  await page.route('**/src/lib/social-auth.ts*',async route=>{const response=await route.fetch();const body=await response.text();expect(body).toContain('import.meta.env.VITE_AUTH_API_URL');await route.fulfill({response,body:body.replaceAll('import.meta.env.VITE_AUTH_API_URL',JSON.stringify('https://auth.mock.test/'))});});
+  await page.route('**/src/lib/api-url.ts*',async route=>{const response=await route.fetch();const body=await response.text();expect(body).toContain('import.meta.env.VITE_AUTH_API_URL');await route.fulfill({response,body:body.replaceAll('import.meta.env.VITE_AUTH_API_URL',JSON.stringify('https://auth.mock.test/'))});});
   // Exercise provider availability while keeping the test's isolated demo identity.
   await page.route('**/src/pages/Login.tsx*',async route=>{const response=await route.fetch();const body=await response.text();expect(body).toContain('!isDemo && providerConfig.enabled');await route.fulfill({response,body:body.replace('!isDemo && providerConfig.enabled','providerConfig.enabled')});});
   await page.route('https://auth.mock.test/config',route=>route.fulfill({status,headers:{'Content-Type':'application/json','Access-Control-Allow-Origin':'http://localhost:5173'},body:JSON.stringify({providers:{kakao:true,naver:false},calendar:{kakao:false}})}));
