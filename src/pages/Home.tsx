@@ -44,10 +44,11 @@ export function Home() {
     <div className="home-dashboard">
       <section className="home-panel home-polls-panel" aria-label={t('진행 중인 투표')}>
         <div className="home-panel-heading">
-          <h2>{t('진행 중인 투표')}<span className="home-section-count">{openPolls.length}</span></h2>
+          <div className="home-poll-heading"><h2>{t('진행 중인 투표')}<span className="home-section-count">{openPolls.length}</span></h2>
+            {unansweredCount > 0 && <p className="home-poll-pending"><span aria-hidden="true"/>{t('응답할 투표')} {unansweredCount}</p>}
+          </div>
           <Link to="/polls" className="home-more">{t('전체 보기')}<ChevronRight size={14}/></Link>
         </div>
-        {unansweredCount > 0 && <p className="home-poll-pending"><span aria-hidden="true"/>{t('응답할 투표')} {unansweredCount}</p>}
         <div className="home-poll-list">
           {openPolls.slice(0, 3).map(poll => {
             const votes = app.votes.filter(vote => vote.pollId === poll.id && activeIds.has(vote.memberId));
