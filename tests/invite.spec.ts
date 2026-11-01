@@ -66,6 +66,8 @@ test('group invitation shares the current group and a clean root URL on mobile',
   await page.setViewportSize({ width:390,height:844 });
   await page.addInitScript(() => Object.defineProperty(navigator, 'share', { configurable:true, value:undefined }));
   await page.goto('/?token=must-not-be-shared#private');
+  await expect(page.locator('.topbar').getByRole('button',{name:'초대',exact:true})).toHaveCount(0);
+  await page.goto('/members?token=must-not-be-shared#private');
   await page.getByRole('button', { name:'초대', exact:true }).click();
   const dialog = page.getByRole('dialog', { name:'모임 초대', exact:true });
   await expect(dialog).toContainText('오후의 모임');

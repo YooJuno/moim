@@ -290,8 +290,18 @@ export function AppProvider({children}: {children: ReactNode}) {
       if(isDemo){const current=dataRef.current;const merged=merge(current.members.find(item=>item.id===rosterId),current.members.find(item=>item.id===userId),current.profiles.find(item=>item.id===rosterId),current.profiles.find(item=>item.id===userId));applyDemo({...current,members:replace(current.members.filter(item=>item.id!==rosterId),merged.member),profiles:replace(current.profiles.filter(item=>item.id!==rosterId),merged.profile)});}
       else await runTransaction(database(),async transaction=>{const sourceRef=doc(database(),'members',rosterId),targetRef=doc(database(),'members',userId),sourceProfileRef=doc(database(),'profiles',rosterId),targetProfileRef=doc(database(),'profiles',userId);const [source,target,sourceProfile,targetProfile]=await Promise.all([transaction.get(sourceRef),transaction.get(targetRef),transaction.get(sourceProfileRef),transaction.get(targetProfileRef)]);const merged=merge(source.exists() ? source.data() as Member:undefined,target.exists() ? target.data() as Member:undefined,sourceProfile.exists() ? sourceProfile.data() as AppData['profiles'][number]:undefined,targetProfile.exists() ? targetProfile.data() as AppData['profiles'][number]:undefined);transaction.set(targetRef,merged.member);transaction.set(targetProfileRef,merged.profile);transaction.delete(sourceRef);if(sourceProfile.exists())transaction.delete(sourceProfileRef);});
     },
+    async removeMember(id) {
+      const actor=admin();if(id===actor.id)throw new Error('본인 계정은 삭제할 수 없어요.');
+      const removedAt=new Date().toISOString();
+      const build=(member:Member|undefined):Member=>{
+        if(!member||member.removedAt)throw new Error('이미 삭제된 멤버예요.');
+        return {id:member.id,name:member.name,email:member.email,joinedAt:member.joinedAt,...(member.isRoster!==undefined?{isRoster:member.isRoster}:{}),role:'member',status:'rejected',canCreatePoll:false,removedAt,removedBy:actor.id};
+      };
+      if(isDemo){const current=dataRef.current,next=build(current.members.find(member=>member.id===id));applyDemo({...current,members:replace(current.members,next),profiles:replace(current.profiles,{id,phone:'',area:''})});}
+      else await runTransaction(database(),async transaction=>{const target=doc(database(),'members',id),snapshot=await transaction.get(target);const next=build(snapshot.exists()?snapshot.data() as Member:undefined);transaction.set(target,next);transaction.set(doc(database(),'profiles',id),{id,phone:'',area:''});});
+    },
     async updateMember(id,patch) {
-      const actor=admin(); const current=dataRef.current.members.find(member=>member.id===id); if(!current) throw new Error('멤버를 찾을 수 없어요.');
+      const actor=admin(); const current=dataRef.current.members.find(member=>member.id===id); if(!current || current.removedAt) throw new Error('멤버를 찾을 수 없어요.');
       if(id===actor.id && ((patch.role && patch.role!=='leader') || (patch.status && patch.status!=='active'))) throw new Error('본인의 관리자 권한은 해제할 수 없어요.');
       if(patch.position!==undefined && patch.position!==current.position && !canonicalPositions.includes(patch.position))throw new Error('직책은 회장, 부회장, 총무 중에서 선택해 주세요.');
       const next={...current,...patch};

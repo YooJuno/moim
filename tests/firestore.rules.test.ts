@@ -578,4 +578,18 @@ describe.skipIf(!enabled)('Firebase access boundaries',()=>{
     await assertFails(setDoc(doc(client('creator'),'calendarSyncRequests','e1_creator'),{...valid,id:'e1_creator',requestedBy:'creator'}));
   });
 
+  it('only an administrator can remove another member with atomic contact clearing',async()=>{
+    const removed={...member('member'),role:'member',status:'rejected',canCreatePoll:false,removedAt:now,removedBy:'leader'};
+    await assertFails(setDoc(doc(client('member'),'members','member'),removed));
+    const selfDb=client('leader'),selfBatch=writeBatch(selfDb);selfBatch.set(doc(selfDb,'members','leader'),{...member('leader','leader'),role:'member',status:'rejected',removedAt:now,removedBy:'leader'});selfBatch.set(doc(selfDb,'profiles','leader'),{id:'leader',phone:'',area:''});await assertFails(selfBatch.commit());
+    await assertFails(setDoc(doc(client('leader'),'members','member'),removed));
+    const db=client('leader'),batch=writeBatch(db);batch.set(doc(db,'members','member'),removed);batch.set(doc(db,'profiles','member'),{id:'member',phone:'',area:''});await assertSucceeds(batch.commit());
+    await assertFails(getDoc(doc(client('member'),'posts','p1')));
+    await assertFails(updateDoc(doc(client('member'),'members','member'),{name:'복귀'}));
+    await assertFails(updateDoc(doc(client('member'),'profiles','member'),{phone:'010-0000-0000'}));
+    await assertFails(updateDoc(doc(db,'members','member'),{status:'active'}));
+    await assertFails(setDoc(doc(db,'members','member'),member('member')));
+    await assertSucceeds(getDoc(doc(db,'posts','p1')));
+  });
+
 });

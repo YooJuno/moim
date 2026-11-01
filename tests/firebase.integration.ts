@@ -430,3 +430,11 @@ test('real Firebase account preferences preserve private contact and birthday fi
     expect(member).toMatchObject({role:'leader',canCreatePoll:true,birthday:'03-15'});expect(member.theme).toBeUndefined();expect(member.language).toBeUndefined();
   });
 });
+
+test('an administrator removes a real member and logging in again cannot restore membership',async({page})=>{
+ const email='removed-integration@example.com',id=await createAccount(email),now=new Date().toISOString();
+ await environment.withSecurityRulesDisabled(async context=>{const {setDoc}=await import('firebase/firestore'),db=context.firestore();await setDoc(doc(db,'members',id),{id,name:'삭제 검증 멤버',email,role:'member',status:'active',canCreatePoll:true,joinedAt:now});await setDoc(doc(db,'profiles',id),{id,phone:'010-0000-0000',area:'테스트 지역',birthday:'02-20'});});
+ await login(page,leaderEmail);await page.goto('/members');const row=page.locator('.member-row').filter({hasText:'삭제 검증 멤버'});await row.getByRole('button',{name:'삭제 검증 멤버 관리',exact:true}).click();const dialog=page.getByRole('dialog');await dialog.getByRole('button',{name:'멤버 삭제',exact:true}).click();await dialog.getByRole('button',{name:'삭제',exact:true}).click();await expect(row).toHaveCount(0);
+ await environment.withSecurityRulesDisabled(async context=>{const db=context.firestore();expect((await getDoc(doc(db,'members',id))).data()).toMatchObject({status:'rejected',role:'member',canCreatePoll:false,removedBy:leaderId});expect((await getDoc(doc(db,'profiles',id))).data()).toEqual({id,phone:'',area:''});});
+ await login(page,email);await expect(page.getByRole('heading',{name:'가입 승인 거절',exact:true})).toBeVisible();await expect(page.locator('.topbar')).toHaveCount(0);await page.reload();await expect(page.getByRole('heading',{name:'가입 승인 거절',exact:true})).toBeVisible();
+});

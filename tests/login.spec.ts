@@ -7,7 +7,7 @@ async function showLogin(page: Page) {
   await expect(page.getByRole('heading', { name:'로그인', exact:true })).toBeVisible();
 }
 
-test('login shows real feature images and concise controls, then returns to demo on explicit login', async ({ page }) => {
+test('login shows readable feature previews and concise controls, then returns to demo on explicit login', async ({ page }) => {
   await page.emulateMedia({ reducedMotion:'reduce' });
   await showLogin(page);
   await expect(page.getByText('우리 모임', { exact:true })).toHaveCount(0);
@@ -18,8 +18,9 @@ test('login shows real feature images and concise controls, then returns to demo
   for (const title of ['일정 투표','모임 일정','게시판','회계 장부']) {
     await page.getByRole('button', { name:`${title} 보기`, exact:true }).click();
     await expect(page.getByRole('heading', { name:title, exact:true })).toBeVisible();
-    await page.waitForFunction(() => { const image = document.querySelector<HTMLImageElement>('.login-preview img'); return image?.complete && image.naturalWidth > 0; });
-    expect(await page.locator('.login-preview img').getAttribute('alt')).toBeTruthy();
+    await expect(page.locator('.login-demo-app')).toBeVisible();
+    expect(await page.locator('.login-demo-app').getAttribute('aria-label')).toBeTruthy();
+    await expect(page.locator('.login-preview img')).toHaveCount(0);
   }
   await page.getByRole('button', { name:'이전 기능', exact:true }).click();
   await expect(page.getByRole('heading', { name:'게시판', exact:true })).toBeVisible();
@@ -58,13 +59,13 @@ test('feature rotation pauses on hover, manual pause and reduced motion', async 
 
 test.describe('mobile login', () => {
   test.use({ viewport:{ width:390,height:844 }, hasTouch:true, isMobile:true });
-  test('swiping changes feature images and keeps login controls inside the screen', async ({ page }) => {
+  test('swiping changes readable feature previews and keeps login controls inside the screen', async ({ page }) => {
     await page.emulateMedia({ reducedMotion:'reduce' });
     await showLogin(page);
     const stage = await page.locator('.login-preview-stage').boundingBox();
     const button = await page.getByRole('button', { name:'데모 둘러보기', exact:true }).boundingBox();
     if (!stage || !button) throw new Error('로그인 화면을 찾을 수 없어요.');
-    expect(button.y).toBeGreaterThan(stage.y + stage.height);
+    expect(button.y+button.height).toBeLessThan(stage.y);
     const session = await page.context().newCDPSession(page);
     const y = stage.y + stage.height / 2; const startX = stage.x + stage.width - 35; const endX = stage.x + 35;
     await session.send('Input.dispatchTouchEvent', { type:'touchStart', touchPoints:[{ x:startX,y,id:1 }] });

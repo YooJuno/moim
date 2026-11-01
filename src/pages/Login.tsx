@@ -6,6 +6,7 @@ import { startSocialAuth, useAuthProviderConfig } from '../lib/social-auth';
 import type { SocialProvider } from '../lib/social-auth';
 import { errorMessage } from '../lib/utils';
 import { KakaoMark } from '../components/AccountConnections';
+import { LoginPreview } from '../components/LoginPreview';
 import { ExternalBrowserLogin } from '../components/ExternalBrowserLogin';
 import { isKakaoInAppBrowser } from '../lib/external-browser';
 import '../components/social-auth.css';
@@ -87,7 +88,7 @@ export function LoginScreen({ onLogin, onChangeAccount, loading, isDemo, error }
         return; touch.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerUp={event => { const start = touch.current; touch.current = null; if (!start || start.pointerId !== event.pointerId)
         return; const dx = event.clientX - start.x; const dy = event.clientY - start.y; if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2)
         navigate(index + (dx < 0 ? 1 : -1)); }} onPointerCancel={() => { touch.current = null; }}>
-          <figure key={slide.id} className={`login-preview login-preview-${slide.id}`} role="group" aria-roledescription={t("슬라이드")} aria-label={`${index + 1} / ${slides.length}: ${t(slide.title)}`}><img src={`/onboarding/${slide.id}.png`} alt={t(slide.alt)} draggable={false}/></figure>
+          <figure key={slide.id} className={`login-preview login-preview-${slide.id}`} role="group" aria-roledescription={t("슬라이드")} aria-label={`${index + 1} / ${slides.length}: ${t(slide.title)}`}><LoginPreview feature={slide.id} label={t(slide.alt)}/></figure>
         </div>
         <div className="login-carousel-controls"><div className="login-slide-dots">{slides.map((item, position) => <button key={item.id} type="button" aria-label={t("{0} 보기", { "0": t(item.title) })} aria-pressed={index === position} onClick={() => navigate(position)}><span /></button>)}</div><span className="login-slide-position" aria-hidden="true">{index + 1} / {slides.length}</span><div className="login-slide-arrows">{!reducedMotion && <IconButton label={paused ? t("자동 넘김 재생") : t("자동 넘김 일시정지")} icon={paused ? Play : Pause} onClick={() => setPaused(!paused)} aria-pressed={paused}/>}<IconButton label={t("이전 기능")} icon={ChevronLeft} onClick={() => navigate(index - 1)}/><IconButton label={t("다음 기능")} icon={ChevronRight} onClick={() => navigate(index + 1)}/></div></div>
         <span className="sr-only" aria-live="polite" aria-atomic="true">{announcement}</span>

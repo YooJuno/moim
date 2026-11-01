@@ -1,11 +1,12 @@
 import { useI18n } from "../lib/preferences";
 import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronRight, Clock3, Link2, Search, ShieldCheck, SlidersHorizontal, UserPlus, Users, X } from 'lucide-react';
+import { Check, ChevronRight, Clock3, Link2, Search, ShieldCheck, SlidersHorizontal, Trash2, UserPlus, Users, X } from 'lucide-react';
 import { useApp } from '../lib/store';
 import type { Member, MemberStatus, Role } from '../lib/types';
 import { errorMessage, formatDate, roleLabels } from '../lib/utils';
 import { POSITIONS, isPosition, positionLabel, positionRank } from '../lib/positions';
 import { Avatar, Badge, Button, EmptyState, Field, Modal, PageHeader, useToast } from '../components/ui';
+import { InviteShare } from '../components/InviteShare';
 import { BirthdayField, birthdayLabel, isValidBirthday } from '../components/BirthdayField';
 import './community.css';
 export function Members() {
@@ -17,9 +18,10 @@ export function Members() {
     const [selected, setSelected] = useState<string | null>(null);
     const [busy, setBusy] = useState<string | null>(null);
     const [adding, setAdding] = useState(false);
+    const [inviteOpen,setInviteOpen]=useState(false);
     const active = app.members.filter(member => member.status === 'active');
     const pending = app.members.filter(member => member.status === 'pending');
-    const members = app.members.filter(member => member.status === (app.isAdmin ? tab : 'active') && member.name.toLocaleLowerCase().includes(search.toLocaleLowerCase())).sort((a, b) => positionRank(b.position) - positionRank(a.position) || a.name.localeCompare(b.name, 'ko'));
+    const members = app.members.filter(member => !member.removedAt && member.status === (app.isAdmin ? tab : 'active') && member.name.toLocaleLowerCase().includes(search.toLocaleLowerCase())).sort((a, b) => positionRank(b.position) - positionRank(a.position) || a.name.localeCompare(b.name, 'ko'));
     async function approve(member: Member) { setBusy(member.id); try {
         await app.updateMember(member.id, { status: 'active' });
         toast(t('{0} 님의 가입을 승인했어요.', {'0':member.name}));
@@ -31,7 +33,7 @@ export function Members() {
         setBusy(null);
     } }
     return <div className="page members-page">
-    <PageHeader title={t("멤버")} action={<div className="member-header-actions"><span className="member-total"><Users size={17}/><strong>{active.length}</strong>{t("명")}</span>{app.isAdmin && <Button icon={UserPlus} onClick={() => setAdding(true)}>{t("멤버 추가")}</Button>}</div>}/>
+    <PageHeader title={t("멤버")} action={<div className="member-header-actions"><span className="member-total"><Users size={17}/><strong>{active.length}</strong>{t("명")}</span><Button variant="ghost" size="sm" icon={UserPlus} data-tour="invite" onClick={()=>setInviteOpen(true)}>{t("초대")}</Button>{app.isAdmin && <Button icon={UserPlus} onClick={() => setAdding(true)}>{t("멤버 추가")}</Button>}</div>}/>
     <div className="member-summary-grid"><div className="card member-summary"><span className="member-summary-icon blue"><Users size={21}/></span><div><span>{t("전체 멤버")}</span><strong>{active.length}<small>{t("명")}</small></strong></div></div><div className="card member-summary"><span className="member-summary-icon violet"><ShieldCheck size={21}/></span><div><span>{t("운영진")}</span><strong>{active.filter(member => isPosition(member.position)).length}<small>{t("명")}</small></strong></div></div>{app.isAdmin && <button className="card member-summary member-pending-summary" onClick={() => setTab('pending')}><span className="member-summary-icon orange"><Clock3 size={21}/></span><div><span>{t("가입 대기")}</span><strong>{pending.length}<small>{t("명")}</small></strong></div><ChevronRight size={19}/></button>}</div>
     <div className="member-toolbar">{app.isAdmin ? <div className="tabs" aria-label={t("가입 상태")}><button className={`tab ${tab === 'active' ? 'active' : ''}`} onClick={() => setTab('active')}>{t("멤버")}</button><button className={`tab ${tab === 'pending' ? 'active' : ''}`} onClick={() => setTab('pending')}>{t("가입 대기")}{pending.length > 0 && <span className="member-tab-count">{pending.length}</span>}</button><button className={`tab ${tab === 'rejected' ? 'active' : ''}`} onClick={() => setTab('rejected')}>{t("승인 거절")}</button></div> : <strong>{t("멤버")}</strong>}<label className="community-search"><Search size={18}/><input type="search" placeholder={t("이름으로 검색")} aria-label={t("멤버 이름 검색")} value={search} onChange={e => setSearch(e.target.value)}/></label></div>
     <div className="card member-list"><div className={`member-list-head ${!app.isAdmin ? 'member-public-head' : ''}`}><span>{t("이름")}</span><span>{t("직책")}</span>{app.isAdmin && <span>{t("연락처 · 거주 지역")}</span>}<span>{tab === 'pending' ? t("가입 신청일") : t("등록일")}</span><span /></div>
@@ -48,7 +50,8 @@ export function Members() {
         })}
       {members.length === 0 && <EmptyState icon={tab === 'pending' ? Clock3 : Users} title={search ? t("검색 결과가 없어요") : tab === 'pending' ? t("가입 대기 중인 사람이 없어요") : tab === 'rejected' ? t("승인 거절한 사람이 없어요") : t("아직 멤버가 없어요")} description={search ? t("이름을 다시 확인해 주세요.") : undefined}/>}
     </div>
-    {selected && app.members.find(member => member.id === selected) && <MemberDetail key={selected} member={app.members.find(member => member.id === selected)!} onClose={() => setSelected(null)}/>}
+    {selected && app.members.find(member => member.id === selected && !member.removedAt) && <MemberDetail key={selected} member={app.members.find(member => member.id === selected)!} onClose={() => setSelected(null)}/>}
+    {inviteOpen && <InviteShare onClose={()=>setInviteOpen(false)}/>}
     {adding && <AddRosterMember onClose={() => setAdding(false)}/>}
   </div>;
 }
@@ -71,6 +74,7 @@ function MemberDetail({ member, onClose }: {
     const [canCreatePoll, setCanCreatePoll] = useState(member.canCreatePoll);
     const [saving, setSaving] = useState(false);
     const [confirmReject, setConfirmReject] = useState(false);
+    const [confirmRemove,setConfirmRemove]=useState(false);
     const [rosterId, setRosterId] = useState('');
     const dirty = useRef(false);
     const [hydratedId, setHydratedId] = useState(profile?.id ?? null);
@@ -119,6 +123,7 @@ function MemberDetail({ member, onClose }: {
     finally {
         setSaving(false);
     } }
+    async function remove(){if(saving)return;setSaving(true);try{await app.removeMember(member.id);toast('멤버를 삭제했어요.');onClose();}catch(error){toast(errorMessage(error),'error');}finally{setSaving(false);}}
     return <Modal title={app.isAdmin ? t("멤버 관리") : t("프로필")} onClose={() => !saving && onClose()} footer={editable ? <><Button variant="secondary" disabled={saving} onClick={onClose}>{t("닫기")}</Button><Button form="member-form" type="submit" loading={saving} disabled={!profileReady}>{t("저장")}</Button></> : undefined}>
     <div className="member-detail-avatar"><Avatar member={member} size={72}/><strong>{member.name}</strong><div className="member-detail-badges">{positionLabel(member) && <Badge tone={isPosition(member.position) || member.role === 'leader' ? 'blue' : 'gray'}>{t(positionLabel(member))}</Badge>}{member.isRoster && <Badge tone="orange">{t("미연결")}</Badge>}</div></div>
     {linking && <div className="member-link-section"><h3><Link2 size={16}/>{t("기존 명단 연결")}</h3><Field label={t("연결할 기존 멤버")}><select value={rosterId} onChange={e => setRosterId(e.target.value)} disabled={saving}><option value="">{t("명단에서 선택")}</option>{rosters.map(item => { const contact = app.profiles.find(value => value.id === item.id); return <option key={item.id} value={item.id}>{item.name}{item.position ? ` · ${t(item.position)}` : ''}{contact?.phone ? ` · ${contact.phone}` : ''}</option>; })}</select></Field><p>{t("선택한 명단의 정보를 이 Google 계정에 연결해요.")}</p><Button variant="secondary" size="sm" icon={Link2} disabled={!rosterId || saving} onClick={() => void link()}>{t("명단 연결하고 승인")}</Button></div>}
@@ -131,6 +136,7 @@ function MemberDetail({ member, onClose }: {
       {app.isAdmin && member.status !== 'active' && <div className="member-approval-actions"><Button variant="secondary" icon={X} disabled={saving} onClick={() => setConfirmReject(true)}>{t("승인 거절")}</Button><Button icon={Check} loading={saving} onClick={() => void status('active')}>{t("가입 승인")}</Button></div>}
       {confirmReject && <div className="community-confirm"><span>{t("가입 신청을 거절할까요?")}</span><Button size="sm" variant="secondary" onClick={() => setConfirmReject(false)}>{t("취소")}</Button><Button size="sm" variant="danger" loading={saving} onClick={() => void status('rejected')}>{t("거절")}</Button></div>}
     </fieldset></form> : <div className="member-public-detail">{positionLabel(member) && <div><Users size={18}/><span>{t(positionLabel(member))}</span></div>}<div><Check size={18}/><span>{t("{0} 등록", {"0":formatDate(member.joinedAt)})}</span></div></div>}
+    {app.isAdmin && !own && <div className="member-remove-section">{confirmRemove ? <div className="community-confirm"><span>{t("모임에서 삭제할까요? 접근 권한이 해제돼요.")}</span><Button size="sm" variant="secondary" disabled={saving} onClick={()=>setConfirmRemove(false)}>{t("취소")}</Button><Button size="sm" variant="danger" loading={saving} onClick={()=>void remove()}>{t("삭제")}</Button></div> : <Button variant="danger" size="sm" icon={Trash2} disabled={saving} onClick={()=>setConfirmRemove(true)}>{t("멤버 삭제")}</Button>}</div>}
     {editable && <p className="member-privacy"><ShieldCheck size={14}/>{t("연락처와 거주 지역은 본인과 관리자만 볼 수 있어요.")}</p>}
   </Modal>;
 }
