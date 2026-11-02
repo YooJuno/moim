@@ -36,11 +36,17 @@ async function prepareResults(page:Page, scenario:Scenario) {
 
 test.beforeEach(async ({page}) => { await page.clock.setFixedTime(new Date('2026-10-24T12:00:00+09:00')); });
 
-test('results appear above the grid with fixed people-first ordering and no filters or count badge', async ({page}) => {
+test('results start collapsed above the grid and open with fixed people-first ordering', async ({page}) => {
   await prepareResults(page,'example');
   const results = page.getByRole('region', {name:'가능한 시간대',exact:true});
   const rows = results.locator('.poll-availability-row');
-  await expect(rows).toHaveCount(3);
+  const toggle = results.getByRole('button', {name:'가능한 시간대',exact:true});
+  await expect(toggle).toHaveAttribute('aria-expanded','false');
+  await expect(rows).toHaveCount(0);
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(toggle).toHaveAttribute('aria-expanded','true');
+  await expect(rows.first()).toBeVisible();
   await expect(results.getByRole('combobox')).toHaveCount(0);
   await expect(results.locator('h3')).toHaveText('가능한 시간대');
   await expect(rows.nth(0)).toContainText('19:00–20:00');
@@ -57,6 +63,7 @@ test('results appear above the grid with fixed people-first ordering and no filt
 test('choosing a four-hour result keeps its full start and end when confirming a meeting', async ({page}) => {
   await page.setViewportSize({width:390,height:844});
   const pollId = await prepareResults(page,'long');
+  await page.getByRole('button',{name:'가능한 시간대',exact:true}).click();
   const row = page.getByRole('region',{name:'가능한 시간대',exact:true}).locator('.poll-availability-row').nth(1);
   await expect(row).toContainText('18:00–22:00');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -77,20 +84,30 @@ test('choosing a four-hour result keeps its full start and end when confirming a
 test('results retain solo availability when nobody overlaps', async ({page}) => {
   await prepareResults(page,'solo');
   const results = page.getByRole('region',{name:'가능한 시간대',exact:true});
+  await expect(results.locator('.poll-availability-row')).toHaveCount(0);
+  await results.getByRole('button',{name:'가능한 시간대',exact:true}).click();
   await expect(results.locator('.poll-availability-row')).toHaveCount(3);
   await expect(results.getByRole('combobox')).toHaveCount(0);
   for(const row of await results.locator('.poll-availability-row').all()) await expect(row).toContainText('1명 가능');
 });
 
-test('results show three compact windows and expand the rest in a bounded list', async ({page}) => {
+test('the whole results heading expands all windows in a bounded list and collapses them completely', async ({page}) => {
   await prepareResults(page,'many');
   const results = page.getByRole('region',{name:'가능한 시간대',exact:true});
-  await expect(results.locator('.poll-availability-row')).toHaveCount(3);
-  await results.getByRole('button',{name:/더 보기/}).click();
+  const toggle = results.getByRole('button',{name:'가능한 시간대',exact:true});
+  await expect(results.locator('.poll-availability-row')).toHaveCount(0);
+  expect((await toggle.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await toggle.click({position:{x:30,y:22}});
   await expect(results.locator('.poll-availability-row')).toHaveCount(21);
   expect((await results.locator('.poll-availability-list').boundingBox())!.height).toBeLessThanOrEqual(270);
-  await results.getByRole('button',{name:'결과 접기',exact:true}).click();
-  await expect(results.locator('.poll-availability-row')).toHaveCount(3);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded','false');
+  await expect(results.locator('.poll-availability-row')).toHaveCount(0);
+  await page.keyboard.press('Space');
+  await expect(results.locator('.poll-availability-row')).toHaveCount(21);
+  await page.reload();
+  await expect(toggle).toHaveAttribute('aria-expanded','false');
+  await expect(results.locator('.poll-availability-row')).toHaveCount(0);
 });
 
 test('the default confirmation uses the top ranked full range', async ({page}) => {

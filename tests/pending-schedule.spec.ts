@@ -38,6 +38,8 @@ for(const viewport of [{name:'desktop',width:1440,height:1000},{name:'mobile',wi
       await expect(page.getByRole('button',{name:'투표 만들기',exact:true})).toHaveCount(0);
       for(const name of ['선택 저장하기','선택 수정하기','가능한 시간이 없어요','드래그 선택','투표 수정','투표 삭제','투표 마감','일정 확정'])await expect(dialog.getByRole('button',{name,exact:true})).toHaveCount(0);
       const results=dialog.getByRole('region',{name:'가능한 시간대',exact:true});
+      await expect(results.locator('.poll-availability-row')).toHaveCount(0);
+      await results.getByRole('button',{name:'가능한 시간대',exact:true}).click();
       await expect(results.locator('.poll-availability-row').first()).toBeVisible();
       await expect(results.getByRole('combobox')).toHaveCount(0);
       await expect(results.locator('.poll-availability-range').first()).toHaveText(/\d{2}:\d{2}–\d{2}:\d{2}/);

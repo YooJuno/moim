@@ -2,7 +2,7 @@ import { translate } from "../lib/i18n";
 import { useI18n } from "../lib/preferences";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowRight, BarChart3, CalendarCheck, Check, ChevronDown, ChevronRight, ChevronUp, Clock3, ListChecks, LockKeyhole, Pencil, Plus, RotateCcw, Share2, Trash2, Trophy, Users, X, Save } from 'lucide-react';
+import { ArrowRight, BarChart3, CalendarCheck, Check, ChevronDown, ChevronRight, Clock3, ListChecks, LockKeyhole, Pencil, Plus, RotateCcw, Share2, Trash2, Trophy, Users, X, Save } from 'lucide-react';
 import { useApp } from '../lib/store';
 import type { Poll, PollSlot, Vote } from '../lib/types';
 import { errorMessage, formatDate, formatTime, memberName, shortDate, slotLabel, today, uid } from '../lib/utils';
@@ -303,10 +303,9 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
     <div className="section-head poll-grid-heading"><div><h3>{interactive ? t("시간 선택") : t("투표 결과")}</h3><p className="muted">{interactive ? <><span className="poll-pointer-hint">{t("드래그로 선택")}</span><span className="poll-touch-hint">{t("꾹 눌러 여러 칸 선택")}</span></> : t("{0}명이 응답했어요.", { "0": votes.length })}</p></div><div className="poll-grid-controls"><span className="poll-grid-legend"><i />{t("가능 인원")}</span></div></div>
     <div ref={grid} className="poll-time-scroll"><table className="poll-time-table"><thead className={interactive ? 'has-day-toggles' : undefined}><tr><th scope="col">{t("시간")}</th>{dates.map(date => {
             const ids = poll.slots.filter(slot => slot.date === date).map(slot => slot.id);
-            const chosen = ids.filter(id => selected.includes(id)).length;
-            const all = chosen === ids.length;
+            const all = ids.length > 0 && ids.every(id => selected.includes(id));
             return <th scope="col" key={date} className={getHoliday(date) || new Date(`${date}T12:00:00`).getDay() === 0 ? 'poll-table-holiday' : new Date(`${date}T12:00:00`).getDay() === 6 ? 'poll-table-saturday' : ''}><strong>{shortDate(date)}</strong><span>{formatDate(date, { weekday: 'short' })}{getHoliday(date) && ` · ${t(getHoliday(date) || "")}`}</span>
-              {interactive && <button type="button" className={`poll-day-toggle ${all ? 'button-primary' : ''}`} data-date={date} disabled={saving || busy} aria-pressed={all ? true : chosen ? 'mixed' : false} aria-label={t("{0} 종일", {"0":formatDate(date, {year:'numeric',month:'long',day:'numeric'})})} onClick={() => toggleDay(ids)}>{all && <Check size={12} aria-hidden="true"/>}{t("종일")}</button>}
+              {interactive && <button type="button" className={`poll-day-toggle ${all ? 'button-primary' : ''}`} data-date={date} disabled={saving || busy} aria-pressed={all} aria-label={t("{0} 종일", {"0":formatDate(date, {year:'numeric',month:'long',day:'numeric'})})} onClick={() => toggleDay(ids)}>{all && <Check size={12} aria-hidden="true"/>}{t("종일")}</button>}
             </th>;
         })}</tr></thead><tbody>{times.map((time, rowIndex) => {
             const [start, end] = time.split('|');
@@ -343,11 +342,9 @@ function AvailabilityResults({ poll, votes, onConfirm, disabled }: {
     useEffect(() => setExpanded(false), [poll.id]);
     const canConfirm = app.isAdmin && poll.status !== 'confirmed';
     return <section className="poll-availability" aria-label={t("가능한 시간대")}>
-      <div className="poll-availability-heading"><h3><Clock3 size={16}/>{t("가능한 시간대")}</h3>
-        {windows.length > 3 && <Button iconOnly variant="ghost" icon={expanded ? ChevronUp : ChevronDown} onClick={() => setExpanded(!expanded)} aria-expanded={expanded} aria-controls={`poll-results-${poll.id}`}>{expanded ? t("결과 접기") : t("더 보기")}</Button>}
-      </div>
-      {windows.length ? <div id={`poll-results-${poll.id}`} className={`poll-availability-list ${expanded ? 'is-expanded' : ''}`}>
-        {(expanded ? windows : windows.slice(0, 3)).map((window, index) => <article className={`poll-availability-row ${canConfirm ? 'can-confirm' : ''}`} key={JSON.stringify([window.date, window.start, window.end, window.memberIds])} data-date={window.date} data-start={window.start} data-end={window.end} data-duration={window.durationMinutes} data-member-count={window.memberIds.length}>
+      <div className="poll-availability-heading"><h3><button type="button" className="poll-availability-toggle" onClick={() => setExpanded(!expanded)} aria-expanded={expanded} aria-controls={`poll-results-${poll.id}`}><span><Clock3 size={16}/>{t("가능한 시간대")}</span><ChevronDown size={16} aria-hidden="true"/></button></h3></div>
+      <div id={`poll-results-${poll.id}`} hidden={!expanded}>{expanded && (windows.length ? <div className="poll-availability-list is-expanded">
+        {windows.map((window, index) => <article className={`poll-availability-row ${canConfirm ? 'can-confirm' : ''}`} key={JSON.stringify([window.date, window.start, window.end, window.memberIds])} data-date={window.date} data-start={window.start} data-end={window.end} data-duration={window.durationMinutes} data-member-count={window.memberIds.length}>
           <details className="poll-availability-members"><summary className="poll-availability-main">
             <span className={`poll-rank ${index === 0 ? 'first' : ''}`}>{index + 1}</span>
             <span className="poll-availability-time"><span className="poll-availability-date"><strong>{formatDate(window.date, {month:'long',day:'numeric',weekday:'short'})}</strong></span><strong className="poll-availability-range">{window.start}–{window.end}</strong></span>
@@ -355,7 +352,7 @@ function AvailabilityResults({ poll, votes, onConfirm, disabled }: {
           </summary><div>{window.memberIds.map(id => <span key={id}><Avatar member={app.members.find(member => member.id === id)} name={memberName(app.members, id)} size={25}/>{memberName(app.members, id)}</span>)}</div></details>
           {canConfirm && <Button iconOnly variant="ghost" icon={CalendarCheck} disabled={disabled} onClick={() => onConfirm(window)} aria-label={t("{0} {1}\u2013{2} 일정 확정", { "0": formatDate(window.date), "1": window.start, "2": window.end })}>{t("일정 확정")}</Button>}
         </article>)}
-      </div> : <p className="poll-availability-empty">{votes.length ? t("가능한 시간이 없어요") : t("아직 응답한 멤버가 없어요.")}</p>}
+      </div> : <p className="poll-availability-empty">{votes.length ? t("가능한 시간이 없어요") : t("아직 응답한 멤버가 없어요.")}</p>)}</div>
     </section>;
 }
 

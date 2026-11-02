@@ -41,7 +41,6 @@
 
 .poll-detail-modal .poll-time-table thead.has-day-toggles th { height: 88px; }
 .poll-day-toggle { display: flex; align-items: center; justify-content: center; gap: 3px; width: 100%; max-width: 80px; min-height: 32px; margin: 6px auto 0; padding: 4px; border: 1px solid var(--surface-e1e7f0); border-radius: 6px; background: var(--surface-ffffff); color: var(--text-6b7684); font: inherit; font-size: 11px; font-weight: 600; white-space: nowrap; cursor: pointer; touch-action: manipulation; }
-.poll-day-toggle[aria-pressed="mixed"] { border-color: var(--blue); background: var(--surface-edf3ff); color: var(--blue); }
 .poll-day-toggle[aria-pressed="true"] { border-color: var(--blue); background: var(--blue); color: #fff; }
 .poll-day-toggle:hover:not(:disabled) { border-color: var(--blue); }
 .poll-day-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
@@ -114,8 +113,14 @@
 .poll-detail-modal .poll-participant-toggle { margin: 0 0 8px; padding: 10px 0; min-height: 40px; color: var(--text-6b7684); }
 .poll-detail-modal .poll-participant-list { max-height: 200px; overflow-y: auto; margin-bottom: 12px; }
 .poll-availability { border: 1px solid var(--surface-e8edf5); border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
-.poll-availability-heading { display: flex; align-items: center; justify-content: space-between; min-height: 40px; padding: 0 10px 0 12px; background: var(--surface-f7f9fc); }
-.poll-availability-heading h3 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--text-4e5968); }
+.poll-availability-heading { background: var(--surface-f7f9fc); }
+.poll-availability-heading h3 { margin: 0; font-size: 13px; color: var(--text-4e5968); }
+.poll-availability-toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 44px; padding: 0 12px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; touch-action: manipulation; }
+.poll-availability-toggle > span { display: flex; align-items: center; gap: 6px; }
+.poll-availability-toggle > svg { color: var(--muted); transition: transform .15s; }
+.poll-availability-toggle[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.poll-availability-toggle:hover { background: var(--surface-edf3ff); }
+.poll-availability-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .poll-availability-list { border-top: 1px solid var(--surface-edf0f5); }
 .poll-availability-list.is-expanded { max-height: 270px; overflow-y: auto; overscroll-behavior: contain; }
 .poll-availability-row { position: relative; border-bottom: 1px solid var(--surface-edf0f5); }
