@@ -64,8 +64,8 @@ export async function startSocialAuth(provider:SocialProvider,intent:SocialInten
 }
 
 function takeAttempt(params:URLSearchParams):Attempt{
-  let raw:string|null;try{raw=window.sessionStorage.getItem(SOCIAL_ATTEMPT_KEY);}catch{throw new Error('이 브라우저의 로그인 요청을 확인하지 못했어요. 다시 시작해 주세요.');}removeAttempt();
-  if(!raw)throw new Error('이 브라우저에서 시작한 로그인 요청이 없어요. 다시 시작해 주세요.');
+  let raw:string|null;try{raw=window.sessionStorage.getItem(SOCIAL_ATTEMPT_KEY);}catch{throw Object.assign(new Error('이 브라우저의 로그인 요청을 확인하지 못했어요. 다시 시작해 주세요.'),{code:'auth/missing-initial-state'});}removeAttempt();
+  if(!raw)throw Object.assign(new Error('이 브라우저에서 시작한 로그인 요청이 없어요. 다시 시작해 주세요.'),{code:'auth/missing-initial-state'});
   let attempt:unknown;try{attempt=JSON.parse(raw);}catch{throw new Error('로그인 요청을 확인하지 못했어요. 다시 시작해 주세요.');}
   const provider=params.get('provider'),intent=params.get('intent');
   if(!object(attempt)||attempt.version!==1||!isProvider(attempt.provider)||!isIntent(attempt.intent)||typeof attempt.verifier!=='string'||!/^[A-Za-z0-9_-]{43,128}$/.test(attempt.verifier)||typeof attempt.createdAt!=='number'||attempt.origin!==window.location.origin||attempt.apiURL!==getAuthAPIURL()||(attempt.returnTo!==undefined&&(attempt.intent!=='signin'||!validSharedDestination(attempt.returnTo)))||provider!==attempt.provider||intent!==attempt.intent||params.getAll('provider').length!==1||params.getAll('intent').length!==1||(attempt.intent==='link'&&!validUID(attempt.uid))||(attempt.automatic!==undefined&&(attempt.automatic!==true||attempt.provider!=='kakao'||attempt.intent!=='link'))||(attempt.calendarEventId!==undefined&&(attempt.provider!=='kakao'||attempt.intent!=='link'||typeof attempt.calendarEventId!=='string'||!/^[A-Za-z0-9:_-]{1,128}$/.test(attempt.calendarEventId))))throw new Error('로그인 요청이 일치하지 않아요. 다시 시작해 주세요.');

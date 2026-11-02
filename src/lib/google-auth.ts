@@ -1,6 +1,7 @@
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup } from 'firebase/auth';
 import type { Auth, Unsubscribe, User, UserCredential } from 'firebase/auth';
-import { doc, onSnapshot, runTransaction } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { runAppTransaction as runTransaction } from './transaction';
 import type { Firestore } from 'firebase/firestore';
 import type { Member } from './types';
 import { reportError } from './telemetry';

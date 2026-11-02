@@ -15,6 +15,12 @@ export function AuthCallback() {
     const [error, setError] = useState('');
     const linking = query.current.get('intent') === 'link';
     useEffect(() => {
+        // The one-use URL is cleared before exchange. Refreshing that clean URL
+        // should return to the app, rather than attempt a second login exchange.
+        if (!query.current.toString()) {
+            navigate('/', { replace: true });
+            return;
+        }
         // React Strict Mode may run this effect twice; the exchange itself remains one-use.
         if (!request.current) {
             window.history.replaceState(window.history.state, '', window.location.pathname);

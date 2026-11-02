@@ -2,7 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import type { ReactNode } from 'react';
 import type { DocumentData, DocumentReference } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
-import { Bytes, collection, deleteDoc, deleteField, doc, getDoc, getDocs, onSnapshot, query, runTransaction, setDoc, serverTimestamp, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { Bytes, collection, deleteDoc, deleteField, doc, getDoc, getDocs, onSnapshot, query, setDoc, serverTimestamp, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { runAppTransaction as runTransaction } from './transaction';
 import { getBlob, ref } from 'firebase/storage';
 import { auth, configurationError, db, isDemo, storage } from './firebase';
 import { createDemoData, DEMO_USER_ID } from '../data/demo';

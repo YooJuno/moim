@@ -1,6 +1,7 @@
 import { TELEMETRY_CODES, TELEMETRY_CONTEXTS, TELEMETRY_KINDS, TELEMETRY_UI_ROUTES } from '../../shared/error-telemetry';
 import type { TelemetryBrowser, TelemetryContext, TelemetryFrame, TelemetryKind, TelemetryReport } from '../../shared/error-telemetry';
 import { getAuthAPIURL } from './api-url';
+import { recoverAssetLoad } from './asset-recovery';
 
 const allowedCodes = new Set(TELEMETRY_CODES);
 const seen = new WeakSet<object>();
@@ -49,9 +50,10 @@ export function makeErrorReport(error: unknown, options: { kind?: TelemetryKind;
   const browser: TelemetryBrowser = /\bKAKAOTALK\b/i.test(ua) ? 'kakao' : /Edg\//.test(ua) ? 'edge' : /SamsungBrowser\//.test(ua) ? 'samsung' : /Firefox\/|FxiOS\//.test(ua) ? 'firefox' : /Chrome\/|CriOS\//.test(ua) ? 'chrome' : /Safari\//.test(ua) ? 'safari' : 'other';
   const build = typeof __APP_RELEASE__ === 'string' ? __APP_RELEASE__ : 'dev';
   const release = /^(?:[a-f0-9]{7,40}(?:-\d{8}T\d{6}Z)?|dev|unknown)$/.test(build) ? build : 'unknown';
-  return { kind: options.kind && TELEMETRY_KINDS.includes(options.kind) ? options.kind : 'handled', code: errorCode(error),
+  const asset = options.context === 'asset-load';
+  return { kind: asset ? 'resource' : options.kind && TELEMETRY_KINDS.includes(options.kind) ? options.kind : 'handled', code: asset ? 'chunk-load-failed' : errorCode(error),
     context: options.context && TELEMETRY_CONTEXTS.includes(options.context) ? options.context : 'operation', route, release,
-    frames: errorFrames(error, window.location.origin), browser, device: /Android|iPhone|iPad|iPod|Mobile/.test(ua) ? 'mobile' : 'desktop' };
+    frames: asset ? [] : errorFrames(error, window.location.origin), browser, device: /Android|iPhone|iPad|iPod|Mobile/.test(ua) ? 'mobile' : 'desktop' };
 }
 
 /** Best effort only. No raw messages, user identifiers, request data, URLs, or tokens leave the browser. */
@@ -81,11 +83,20 @@ export function installErrorReporting(): () => void {
     if (event instanceof ErrorEvent) {
       reportError(event.error ?? { stack: `Error\n at ${event.filename}:${event.lineno}:${event.colno}` }, { kind: 'runtime', context: 'window-error' });
     } else if (event.target instanceof HTMLScriptElement || event.target instanceof HTMLLinkElement && event.target.rel === 'stylesheet') {
+      const target = event.target;
+      try {
+        const url = new URL(target instanceof HTMLScriptElement ? target.src : target.href, window.location.origin);
+        if (url.origin !== window.location.origin || !/^\/assets\/[-A-Za-z0-9_]+\.(?:js|css)$/.test(url.pathname)) return;
+      } catch { return; }
       reportError({ code: 'chunk-load-failed' }, { kind: 'resource', context: 'asset-load' });
+      void recoverAssetLoad();
     }
   };
   const rejection = (event: PromiseRejectionEvent) => reportError(event.reason, { kind: 'promise', context: 'unhandled-rejection' });
-  const preload = (event: Event) => reportError('payload' in event ? event.payload : { code: 'chunk-load-failed' }, { kind: 'resource', context: 'asset-load' });
+  const preload = (event: Event) => {
+    reportError('payload' in event ? event.payload : { code: 'chunk-load-failed' }, { kind: 'resource', context: 'asset-load' });
+    void recoverAssetLoad();
+  };
   window.addEventListener('error', runtime, true);
   window.addEventListener('unhandledrejection', rejection);
   window.addEventListener('vite:preloadError', preload);

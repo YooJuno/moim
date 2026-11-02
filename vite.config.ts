@@ -11,6 +11,9 @@ export default defineConfig(({ command, mode }) => {
   const release = command === 'serve' ? 'dev' : /^[a-f0-9]{7,40}$/.test(revision) ? `${revision}-${builtAt}` : 'unknown';
   return { plugins: [react(), {
     name: 'archive-private-source-maps', apply: 'build',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ release }) });
+    },
     closeBundle() {
       if (mode === 'demo' || !existsSync('dist/assets')) return;
       const archiveRoot = '.debug/sourcemaps';
@@ -19,7 +22,9 @@ export default defineConfig(({ command, mode }) => {
       writeFileSync(join(target, 'build.json'), JSON.stringify({ release, revision, builtAt }));
       const builds = readdirSync(archiveRoot).filter(file => /^[a-f0-9]{7,40}-\d{8}T\d{6}Z$/.test(file) && existsSync(join(archiveRoot, file, 'build.json')))
         .sort((a, b) => statSync(join(archiveRoot, b)).mtimeMs - statSync(join(archiveRoot, a)).mtimeMs);
-      for (const old of builds.slice(10)) rmSync(join(archiveRoot, old), { recursive: true });
+      // Diagnostics cover seven days; frequent deployments must not discard
+      // yesterday's source maps after just ten builds.
+      for (const [index, old] of builds.entries()) if (index >= 100 || Date.now() - statSync(join(archiveRoot, old)).mtimeMs > 7 * 86400000) rmSync(join(archiveRoot, old), { recursive: true });
     },
   }], define: { __APP_RELEASE__: JSON.stringify(release) }, build: { sourcemap: 'hidden' } };
 });

@@ -29,6 +29,11 @@ describe('safe error reports', () => {
     window.location.pathname = '/members/private-user-id';
     expect(makeErrorReport(new Error()).route).toBe('unknown');
   });
+  it('records failed Vite imports as one resource category across browser error messages', () => {
+    for (const error of [new TypeError('Load failed'), new Error('Unable to preload CSS for private-url'), new Error('Importing a module script failed.')]) {
+      expect(makeErrorReport(error, { context: 'asset-load' })).toMatchObject({ kind: 'resource', code: 'chunk-load-failed', frames: [] });
+    }
+  });
   it('bounds frames and refuses URL credentials, queries, hashes, private paths or impossible positions', () => {
     const lines = [`${origin}/assets/a.js:1:0`, `${origin}/assets/b.js:10000001:1`, `${origin}/assets/c.js#private:1:1`, `https://private@moim.example.test/assets/d.js:1:1`, ...Array.from({ length: 10 }, (_, index) => `${origin}/assets/file-${index}.js:2:3`)];
     expect(errorFrames({ stack: `Error\n${lines.map(line => ` at ${line}`).join('\n')}` }, origin)).toEqual(Array.from({ length: 5 }, (_, index) => ({ file: `file-${index}.js`, line: 2, column: 3 })));
@@ -36,6 +41,25 @@ describe('safe error reports', () => {
 });
 
 describe('best effort error transport', () => {
+  it('does not treat blocked external SDKs as missing app chunks or refresh the page for them', async () => {
+    vi.resetModules();
+    const handlers = new Map<string, EventListener>();
+    Object.assign(window, { addEventListener: (name: string, listener: EventListener) => handlers.set(name, listener), removeEventListener: vi.fn() });
+    class Script { constructor(public src: string) {} }
+    class Stylesheet { rel = 'stylesheet'; constructor(public href: string) {} }
+    vi.stubGlobal('HTMLScriptElement', Script); vi.stubGlobal('HTMLLinkElement', Stylesheet); vi.stubGlobal('ErrorEvent', class {});
+    vi.stubEnv('PROD', true); vi.stubEnv('VITE_DEMO_MODE', 'false'); vi.stubEnv('VITE_AUTH_API_URL', 'https://errors.example.test/');
+    const fetcher = vi.fn().mockResolvedValue(new Response('{}', { status: 202 })); vi.stubGlobal('fetch', fetcher);
+    const { installErrorReporting } = await import('../src/lib/telemetry'); const stop = installErrorReporting();
+    const failed = handlers.get('error')!;
+    for (const target of [new Script('https://t1.kakaocdn.net/kakao.min.js'), new Stylesheet('https://fonts.example.test/font.css'), new Script('/unrelated.js')]) failed({ target } as unknown as Event);
+    expect(fetcher).not.toHaveBeenCalled();
+    failed({ target: new Script(`${origin}/assets/Polls-AbCd123.js`) } as unknown as Event);
+    failed({ target: new Stylesheet(`${origin}/assets/Polls-AbCd123.css`) } as unknown as Event);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({ kind: 'resource', code: 'chunk-load-failed', context: 'asset-load' });
+    stop();
+  });
   it('does not send demo/development reports, deduplicates real errors, and bounds a production page to five reports per minute', async () => {
     vi.resetModules();
     const { reportError } = await import('../src/lib/telemetry');

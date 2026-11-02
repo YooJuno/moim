@@ -15,6 +15,26 @@ let environment: RulesTestEnvironment;
 let leaderId:string;
 let pendingId:string;
 
+test('an Auth network failure during an atomic read returns without poisoning Firestore retries', async ({page})=>{
+  await login(page,leaderEmail);
+  const result=await page.evaluate(async()=>{
+    const {auth,db}=await import('/src/lib/firebase.ts');
+    const {runAppTransaction}=await import('/src/lib/transaction.ts');
+    const source=await(await fetch('/src/lib/transaction.ts')).text();
+    const path=source.match(/from\s+["']([^"']*firebase_firestore[^"']*)["']/)?.[1];
+    if(!path||!auth?.currentUser||!db)throw Error('Test session unavailable');
+    const sdk=await import(path),actor=auth.currentUser,original=actor.getIdToken;
+    let code='unexpected-success';
+    actor.getIdToken=async()=>{throw Object.assign(new Error('Synthetic offline token refresh'),{name:'FirebaseError',code:'auth/network-request-failed'});};
+    try{await runAppTransaction(db,async transaction=>transaction.get(sdk.doc(db,'members',actor.uid)));}
+    catch(error){code=(error as {code:string}).code;}
+    finally{actor.getIdToken=original;}
+    const snapshot=await runAppTransaction(db,async transaction=>transaction.get(sdk.doc(db,'members',actor.uid)));
+    return {code,recovered:snapshot.exists()};
+  });
+  expect(result).toEqual({code:'auth/network-request-failed',recovered:true});
+});
+
 test('monthly poll deletion commits through Firebase after the confirmation button', async ({page})=>{
   const now=new Date().toISOString();
   await environment.withSecurityRulesDisabled(async context=>{
