@@ -7,29 +7,30 @@ import type { MoimEvent } from '../lib/types';
 import { setKakaoCalendarAutomatic, getAccountProviders, startSocialAuth, useAuthProviderConfig } from '../lib/social-auth';
 import { errorMessage, formatDate } from '../lib/utils';
 import { Button, Modal, useToast } from './ui';
+import { CalendarConnectionButton } from './CalendarConnectionButton';
 export function KakaoCalendarButton({ event }: {
     event: MoimEvent;
 }) {
-    const { t } = useI18n();
     const app = useApp();
     const config = useAuthProviderConfig();
     const [open, setOpen] = useState(false);
     const [params, setParams] = useSearchParams();
-    const [access, setAccess] = useState<{uid:string;available:boolean}|null>(null);
+    const [access, setAccess] = useState<{uid:string;available:boolean;automatic:boolean}|null>(null);
+    const [revision, setRevision] = useState(0);
     const attending = app.rsvps.some(rsvp => rsvp.eventId === event.id && rsvp.memberId === app.user?.id && rsvp.status === 'going');
     useEffect(() => {
         if (app.isDemo || !app.user || !app.canParticipate || !config.enabled || !config.calendar.kakao || !attending) { setAccess(null); return; }
         const uid = app.user.id; let active = true;
-        void getAccountProviders().then(result => { if (active) setAccess({uid,available:result.calendar.available !== false}); }).catch(problem => { if (active) { setAccess(null); errorMessage(problem); } });
+        void getAccountProviders().then(result => { if (active) setAccess({uid,available:result.calendar.available !== false,automatic:result.calendar.kakao && result.calendar.automatic === true}); }).catch(problem => { if (active) { setAccess(null); errorMessage(problem); } });
         return () => { active = false; };
-    }, [app.isDemo,app.user?.id,app.canParticipate,config.enabled,config.calendar.kakao,attending]);
+    }, [app.isDemo,app.user?.id,app.canParticipate,config.enabled,config.calendar.kakao,attending,revision]);
     const available = !app.isDemo && app.canParticipate && config.enabled && config.calendar.kakao && attending && access?.uid === app.user?.id && access?.available;
     useEffect(() => {
         if (!available || params.get('event') !== event.id || params.get('kakao') !== '1') return;
         setOpen(true); const next = new URLSearchParams(params); next.delete('kakao'); setParams(next,{replace:true});
     }, [available,params,event.id,setParams]);
     if (!available) return null;
-    return <><Button variant="secondary" icon={CalendarPlus} onClick={() => setOpen(true)}>{t("카카오 캘린더")}</Button>{open && <KakaoCalendarDialog event={event} onClose={() => setOpen(false)}/>}</>;
+    return <><CalendarConnectionButton provider="kakao" state={access?.automatic ? 'connected' : undefined} onClick={() => setOpen(true)}/>{open && <KakaoCalendarDialog event={event} onClose={() => {setOpen(false);setRevision(value => value + 1);}}/>}</>;
 }
 function KakaoCalendarDialog({ event, onClose }: {
     event: MoimEvent;

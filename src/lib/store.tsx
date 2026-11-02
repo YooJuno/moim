@@ -19,6 +19,7 @@ import { reportError } from './telemetry';
 import { kickKakaoCalendarSync } from './social-auth';
 import { needsMemberName } from '../../shared/member-name';
 import { registrationComplete } from './registration';
+import { mvpWindow } from './mvp';
 import { classifyBankTransactions, MAX_BANK_IMPORT_ROWS } from './bank-import';
 import type { TelemetryContext } from '../../shared/error-telemetry';
 
@@ -546,7 +547,7 @@ export function AppProvider({children}: {children: ReactNode}) {
     },
     async saveMvpVote(eventId,candidateId) {
       const actor=active();const id=`${eventId}_${actor.id}`;
-      const validate=(event:MoimEvent,voterGoing:boolean,candidateGoing:boolean,candidateActive:boolean)=>{const end=eventEnd(event).getTime();if(Date.now()<end-600000 || Date.now()>=end+86400000)throw new Error('MVP 투표는 모임 종료 10분 전부터 다음 날 같은 시간까지 참여할 수 있어요.');if(!voterGoing)throw new Error('이 모임에 참여한 멤버만 투표할 수 있어요.');if(!candidateGoing || !candidateActive)throw new Error('참여한 멤버 중에서 선택해 주세요.');};
+      const validate=(event:MoimEvent,voterGoing:boolean,candidateGoing:boolean,candidateActive:boolean)=>{if(!mvpWindow(event).isOpen)throw new Error('MVP 투표는 모임 종료 후 1시간 동안 참여할 수 있어요.');if(!voterGoing)throw new Error('이 모임에 참여한 멤버만 투표할 수 있어요.');if(!candidateGoing || !candidateActive)throw new Error('참여한 멤버 중에서 선택해 주세요.');};
       const next={id,eventId,memberId:actor.id,candidateId,updatedAt:new Date().toISOString()};
       if(isDemo){const event=dataRef.current.events.find(item=>item.id===eventId);if(!event)throw new Error('일정을 찾을 수 없어요.');validate(event,dataRef.current.rsvps.some(item=>item.eventId===eventId && item.memberId===actor.id && item.status==='going'),dataRef.current.rsvps.some(item=>item.eventId===eventId && item.memberId===candidateId && item.status==='going'),dataRef.current.members.some(item=>item.id===candidateId && item.status==='active'));applyDemo({...dataRef.current,mvpVotes:replace(dataRef.current.mvpVotes,next)});}
       else await runTransaction(database(),async transaction=>{const event=await transaction.get(doc(database(),'events',eventId));const voter=await transaction.get(doc(database(),'rsvps',`${eventId}_${actor.id}`));const candidate=await transaction.get(doc(database(),'rsvps',`${eventId}_${candidateId}`));const member=await transaction.get(doc(database(),'members',candidateId));if(!event.exists())throw new Error('일정을 찾을 수 없어요.');validate(event.data() as MoimEvent,voter.data()?.status==='going',candidate.data()?.status==='going',member.data()?.status==='active');transaction.set(doc(database(),'mvpVotes',id),next);});

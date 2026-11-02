@@ -1,7 +1,7 @@
 import {expect,test,type Page} from '@playwright/test';
 
 async function pendingDemo(page:Page){
-  await page.clock.setFixedTime(new Date('2026-10-24T15:55:00+09:00'));
+  await page.clock.setFixedTime(new Date('2026-10-24T16:05:00+09:00'));
   await page.goto('/profile');
   await page.getByRole('button',{name:'저장하기',exact:true}).click();
   await page.evaluate(()=>{

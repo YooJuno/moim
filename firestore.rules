@@ -379,7 +379,7 @@ service cloud.firestore {
         && request.resource.data.id == voteId && request.resource.data.memberId == request.auth.uid
         && request.resource.data.eventId is string && voteId == request.resource.data.eventId + '_' + request.auth.uid
         && request.resource.data.candidateId is string && request.resource.data.updatedAt is string
-        && event().endAt is timestamp && request.time >= event().endAt - duration.value(10,'m') && request.time < event().endAt + duration.value(24,'h')
+        && event().endAt is timestamp && request.time >= event().endAt && request.time < event().endAt + duration.value(1,'h')
         && get(/databases/$(database)/documents/rsvps/$(request.resource.data.eventId + '_' + request.auth.uid)).data.status == 'going'
         && get(/databases/$(database)/documents/rsvps/$(request.resource.data.eventId + '_' + request.resource.data.candidateId)).data.status == 'going'
         && get(/databases/$(database)/documents/members/$(request.resource.data.candidateId)).data.status == 'active';

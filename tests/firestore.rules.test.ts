@@ -43,7 +43,7 @@ describe.skipIf(!enabled)('Firebase access boundaries',()=>{
       batch.set(doc(db,'ledger','l1'),ledger('l1'));
       batch.set(doc(db,'places','saved'),{id:'saved',name:'테스트 장소',address:'테스트 지역',createdAt:now,updatedAt:now});
       batch.set(doc(db,'ballots','venue'),ballot('venue'));
-      for(const [id,offset] of [['mvp-before',3600000],['mvp-open',300000],['mvp-expired',-90000000]] as const){
+      for(const [id,offset] of [['mvp-before',300000],['mvp-open',-300000],['mvp-expired',-3605000]] as const){
         batch.set(doc(db,'events',id),{...event(id),endAt:Timestamp.fromMillis(Date.now()+offset)});
         for(const memberId of ['member','creator'])batch.set(doc(db,'rsvps',`${id}_${memberId}`),{id:`${id}_${memberId}`,eventId:id,memberId,status:'going',updatedAt:now});
       }
@@ -269,13 +269,15 @@ describe.skipIf(!enabled)('Firebase access boundaries',()=>{
     await assertFails(updateDoc(doc(db,'ballots','venue30'),{status:'open'}));
     await assertFails(deleteDoc(doc(db,'ballots','venue30')));
   });
-  it('opens MVP voting ten minutes before event end and closes it after 24 hours',async()=>{
+  it('allows MVP votes only from the event end until one hour later',async()=>{
     const db=client('member');
     const vote=(eventId:string)=>({id:`${eventId}_member`,eventId,memberId:'member',candidateId:'creator',updatedAt:now});
     await assertFails(setDoc(doc(db,'mvpVotes','mvp-before_member'),vote('mvp-before')));
     await assertSucceeds(setDoc(doc(db,'mvpVotes','mvp-open_member'),vote('mvp-open')));
     await assertSucceeds(setDoc(doc(db,'mvpVotes','mvp-open_member'),{...vote('mvp-open'),candidateId:'member'}));
     await assertFails(setDoc(doc(db,'mvpVotes','mvp-expired_member'),vote('mvp-expired')));
+    await environment.withSecurityRulesDisabled(async context=>{await setDoc(doc(context.firestore(),'mvpVotes','mvp-expired_member'),vote('mvp-expired'));});
+    await assertFails(updateDoc(doc(db,'mvpVotes','mvp-expired_member'),{candidateId:'member'}));
     await assertFails(setDoc(doc(client('leader'),'mvpVotes','mvp-open_leader'),{...vote('mvp-open'),id:'mvp-open_leader',memberId:'leader'}));
     await assertFails(setDoc(doc(db,'mvpVotes','mvp-open_member'),{...vote('mvp-open'),candidateId:'leader'}));
     await assertFails(setDoc(doc(db,'mvpVotes','mvp-open_creator'),{...vote('mvp-open'),id:'mvp-open_creator',memberId:'creator'}));

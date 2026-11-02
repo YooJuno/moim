@@ -39,7 +39,7 @@ function stepsFor(admin: boolean): Step[] {
         { id: 'home', title: '모임 홈', body: '예정된 모임과 진행 중인 투표, 새 소식을 한눈에 확인해요.', selectors: ['[data-tour="home"]'] },
         { id: 'group', title: '모임 정보', body: admin ? '모임 이름과 인원을 확인해요. 누르면 모임 설정으로 이동해요.' : '모임 이름과 함께하는 인원을 확인해요.', selectors: ['[data-tour="group"]'] },
         { id: 'polls', title: '일정 투표', body: '시간표에서 가능한 시간을 1시간 단위로 누르거나 드래그해 선택해요.', selectors: ['[data-tour="nav-polls"]', '[data-tour="mobile-nav-polls"]'] },
-        { id: 'calendar', title: '모임 캘린더', body: '모임별 참석 여부를 등록하고 장소 투표에 참여해요. MVP 투표는 모임 종료 10분 전부터 열려요.', selectors: ['[data-tour="nav-calendar"]', '[data-tour="mobile-nav-calendar"]'] },
+        { id: 'calendar', title: '모임 캘린더', body: '모임별 참석 여부를 등록하고 장소 투표에 참여해요. MVP 투표는 모임 종료 후 1시간 동안 열려요.', selectors: ['[data-tour="nav-calendar"]', '[data-tour="mobile-nav-calendar"]'] },
         { id: 'board', title: '게시판', body: '공지사항, 자유게시판, 정보 나눔과 사진첩에서 글과 사진을 나눠요.', selectors: ['[data-tour="nav-board"]', '[data-tour="mobile-nav-board"]'] },
         { id: 'members', title: '멤버', body: admin ? '멤버 명단과 직책을 관리하고 가입 계정을 기존 명단에 연결해요.' : '멤버와 직책을 확인해요.', selectors: ['[data-tour="nav-members"]'] },
         { id: 'more', title: '더보기', body: `멤버, 회칙, 회계 장부는 여기에서 열어요.${admin ? ' 모임 설정도 여기에서 관리해요.' : ''}`, selectors: ['[data-tour="mobile-more"]'] },

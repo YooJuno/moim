@@ -2,7 +2,7 @@ import { EventInvitePicker } from '../components/EventInvitePicker';
 import { useI18n } from "../lib/preferences";
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CalendarDays, CalendarPlus, Cake, Check, ChevronRight, Clock3, Download, MapPin, Pencil, Plus, Share2, MessageSquare, Trash2, UserPlus, Users, X } from 'lucide-react';
+import { CalendarDays, Cake, Check, ChevronRight, Clock3, Download, MapPin, Pencil, Plus, Share2, MessageSquare, Trash2, UserPlus, Users, X } from 'lucide-react';
 import { useApp } from '../lib/store';
 import type { MoimEvent } from '../lib/types';
 import { errorMessage, formatDate, localDate, memberName, today, uid } from '../lib/utils';
@@ -16,6 +16,7 @@ import { TimeInput } from '../components/TimeInput';
 import { MapLinks } from '../components/MapLinks';
 import { GoogleCalendarInvite } from '../components/GoogleCalendarInvite';
 import { KakaoCalendarButton } from '../components/KakaoCalendar';
+import { CalendarConnectionButton } from '../components/CalendarConnectionButton';
 import { EventSms } from '../components/EventSms';
 import { VenueBallot } from '../components/VenueBallot';
 import { MvpVoting } from '../components/MvpVoting';
@@ -135,8 +136,7 @@ function EventDetail({ event, onClose, onEdit, onDelete }: {
     {event.description && <p className="event-description">{event.description}</p>}
     {!!event.invitedMemberIds?.length && <details className="event-invited"><summary><UserPlus size={17}/>{t('초대 멤버')}<span>{event.invitedMemberIds.length}</span><ChevronRight size={15}/></summary><div className="event-invited-list">{app.members.filter(member=>member.status==='active'&&event.invitedMemberIds?.includes(member.id)).map(member=><span key={member.id}><Avatar member={member} size={25}/>{member.name}</span>)}</div></details>}
     <div className="event-rsvp"><h3>{t("참석 여부")}</h3><div className="event-rsvp-buttons"><Button variant={own?.status === 'going' ? 'primary' : 'secondary'} icon={Check} loading={busy === 'going'} disabled={!app.canParticipate || (busy !== null && busy !== 'going')} aria-pressed={own?.status === 'going'} onClick={() => save('going')}>{t("참여해요")}</Button><Button variant={own?.status === 'notGoing' ? 'primary' : 'secondary'} icon={X} loading={busy === 'notGoing'} disabled={!app.canParticipate || (busy !== null && busy !== 'notGoing')} aria-pressed={own?.status === 'notGoing'} onClick={() => save('notGoing')}>{t("어려워요")}</Button></div>{own && <p className="muted">{own.status === 'going' ? t("참여 예정으로 등록했어요.") : t("불참으로 등록했어요.")}</p>}</div>
-    {app.isAdmin && <div className="event-google-calendar"><Button variant="secondary" icon={CalendarPlus} onClick={() => setCalendarOpen(true)}>{t("Google 캘린더")}</Button>{event.calendarLink && <span className={event.calendarLink.signature !== calendarSignature(event, event.calendarLink.attendeeIds) ? 'needs-update' : ''}>{event.calendarLink.signature !== calendarSignature(event, event.calendarLink.attendeeIds) ? t("변경사항 있음") : t("연결됨")}</span>}</div>}
-    <KakaoCalendarButton event={event}/>
+    <div className="event-calendar-connections">{app.isAdmin && <CalendarConnectionButton provider="google" state={event.calendarLink ? event.calendarLink.signature !== calendarSignature(event, event.calendarLink.attendeeIds) ? 'changed' : 'connected' : undefined} onClick={() => setCalendarOpen(true)}/>}<KakaoCalendarButton event={event}/></div>
     <div className="event-people"><h3>{t("참여 예정")}<span>{going.length}{t("명")}</span></h3>{going.length ? <div className="event-people-list">{going.map(rsvp => <div key={rsvp.id}><Avatar member={app.members.find(m => m.id === rsvp.memberId)} name={memberName(app.members, rsvp.memberId)} size={34}/><span>{memberName(app.members, rsvp.memberId)}</span></div>)}</div> : <p className="muted">{t("첫 참여자가 되어 주세요.")}</p>}{notGoing.length > 0 && <details className="event-declined"><summary>{t("불참 {0}명", {"0":notGoing.length})}</summary><p>{notGoing.map(rsvp => memberName(app.members, rsvp.memberId)).join(', ')}</p></details>}</div>
     <VenueBallot event={event}/>
     <MvpVoting event={event}/>
