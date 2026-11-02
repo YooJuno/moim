@@ -34,7 +34,10 @@ export function ActionMenu({ label, actions, disabled = false }: { label: string
       <Button iconOnly variant="ghost" icon={MoreHorizontal} disabled={disabled} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined}
         onClick={() => setOpen(value => !value)} onKeyDown={event => { if (['ArrowDown', 'ArrowUp'].includes(event.key)) { event.preventDefault(); setOpen(true); } }}>{label}</Button>
     </span>
-    {open && <div id={id} role="menu" aria-label={label} className="action-menu-list">{actions.map(({ label: name, icon: Icon, onSelect, danger }) =>
+    {open && <div id={id} role="menu" aria-label={label} className="action-menu-list" onMouseDown={event => {
+      // Safari otherwise focuses the enclosing modal and closes the menu before click.
+      if (event.button === 0) event.preventDefault();
+    }}>{actions.map(({ label: name, icon: Icon, onSelect, danger }) =>
       <button type="button" role="menuitem" className={danger ? 'is-danger' : undefined} key={name} onClick={() => { setOpen(false); onSelect(); }}><Icon size={17} aria-hidden="true"/>{name}</button>
     )}</div>}
   </div>;

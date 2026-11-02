@@ -15,6 +15,40 @@ let environment: RulesTestEnvironment;
 let leaderId:string;
 let pendingId:string;
 
+test('monthly poll deletion commits through Firebase after the confirmation button', async ({page})=>{
+  const now=new Date().toISOString();
+  await environment.withSecurityRulesDisabled(async context=>{
+    const {setDoc}=await import('firebase/firestore');
+    const slots=[{id:'keep-slot',date:'2026-11-07',start:'08:00',end:'09:00'}];
+    await setDoc(doc(context.firestore(),'polls','keep-november'),{id:'keep-november',title:'유지할 11월 일정',description:'',slots,slotIds:['keep-slot'],deadline:null,deadlineAt:null,status:'open',creatorId:leaderId,createdAt:now,updatedAt:now});
+  });
+  await login(page,leaderEmail);
+  await page.goto('/polls?create=1');
+  const editor=page.getByRole('dialog',{name:'새 일정 투표',exact:true});
+  await editor.getByLabel('취합 월',{exact:true}).fill('2026-12');
+  await editor.getByRole('button',{name:'주말·공휴일 자동 선택',exact:true}).click();
+  await editor.getByLabel('투표 제목').fill('Firebase 12월 삭제 검증');
+  await editor.getByLabel('공통 시간 1 시작',{exact:true}).fill('08:00');
+  await editor.getByLabel('공통 시간 1 종료',{exact:true}).selectOption('22:00');
+  await editor.getByRole('button',{name:'투표 만들기',exact:true}).click();
+  await expect(page.getByRole('dialog')).toHaveAccessibleName('Firebase 12월 삭제 검증');
+  const id=new URL(page.url()).searchParams.get('poll')!;
+  await environment.withSecurityRulesDisabled(async context=>{
+    expect((await getDoc(doc(context.firestore(),'polls',id))).data()?.slots).toHaveLength(126);
+  });
+  await page.getByRole('button',{name:'투표 메뉴',exact:true}).click();
+  await page.getByRole('menuitem',{name:'투표 삭제',exact:true}).click();
+  await page.getByRole('dialog',{name:'투표를 삭제할까요?',exact:true}).getByRole('button',{name:'삭제하기',exact:true}).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('.toast').last()).toHaveText('투표를 삭제했어요.');
+  await page.reload();
+  await expect(page.locator('.poll-card').filter({hasText:'Firebase 12월 삭제 검증'})).toHaveCount(0);
+  await environment.withSecurityRulesDisabled(async context=>{
+    expect((await getDoc(doc(context.firestore(),'polls',id))).exists()).toBe(false);
+    expect((await getDoc(doc(context.firestore(),'polls','keep-november'))).data()?.title).toBe('유지할 11월 일정');
+  });
+});
+
 test('open poll, event, venue and ledger editors cannot recreate records deleted in another session', async ({ page }) => {
   const now = new Date().toISOString();
   const day = new Date(); day.setDate(day.getDate() + 4);
