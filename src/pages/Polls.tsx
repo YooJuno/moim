@@ -9,6 +9,7 @@ import { errorMessage, formatDate, formatTime, memberName, shortDate, slotLabel,
 import { PlacePicker } from '../components/PlacePicker';
 import { InviteShare } from '../components/InviteShare';
 import { ActionMenu } from '../components/ActionMenu';
+import { useDraftClose } from '../components/useDraftClose';
 import { AddressField } from '../components/AddressField';
 import { TimeInput } from '../components/TimeInput';
 import { notifyEventConfirmed } from '../lib/sms';
@@ -18,6 +19,7 @@ import { getHoliday, hasHolidayData } from '../lib/holidays';
 import { contiguousEndSlots, expandTimeWindows, pollTimeWindows, timeToMinutes } from '../lib/poll-times';
 import { monthlyPollDates, monthlyPollTitle, nextPollMonth } from '../lib/poll-presets';
 import { getPollAvailabilityWindows } from '../lib/poll-results';
+import { buildPollGridIndex, slotPosition } from '../lib/poll-grid';
 import type { PollAvailabilityWindow } from '../lib/poll-results';
 import './schedule.css';
 import './poll-time-grid.css';
@@ -40,6 +42,12 @@ export function Polls() {
     } | null>(null);
     const [busy, setBusy] = useState(false);
     const selected = app.polls.find(p => p.id === params.get('poll'));
+    const voteGroups = useMemo(() => {
+        const grouped = new Map<string, Vote[]>();
+        for (const vote of app.votes) { const group = grouped.get(vote.pollId) ?? []; group.push(vote); grouped.set(vote.pollId, group); }
+        return grouped;
+    }, [app.votes]);
+    const bestWindows = useMemo(() => new Map(app.polls.map(poll => [poll.id, getPollAvailabilityWindows(poll, voteGroups.get(poll.id) ?? [])[0]])), [app.polls, voteGroups]);
     const active = app.polls.filter(isOpen);
     const past = app.polls.filter(p => !isOpen(p));
     const visible = (tab === 'open' ? active : past).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -79,10 +87,10 @@ export function Polls() {
       <button className={`tab ${tab === 'past' ? 'active' : ''}`} onClick={() => setTab('past')}>{t("지난 투표")}<span>{past.length}</span></button>
     </div>
     {visible.length ? <div className="poll-grid">{visible.map(poll => {
-                const votes = app.votes.filter(v => v.pollId === poll.id);
+                const votes = voteGroups.get(poll.id) ?? [];
                 const ownVote = votes.find(v => v.memberId === app.user?.id);
                 const staleVote = ownVote?.slotIds.some(id => !poll.slotIds.includes(id));
-                const first = getPollAvailabilityWindows(poll, votes)[0];
+                const first = bestWindows.get(poll.id);
                 const total = app.members.filter(m => m.status === 'active').length;
                 const participating = votes.map(v => app.members.find(m => m.id === v.memberId)).filter((m): m is NonNullable<typeof m> => !!m);
                 return <button className="card poll-card" key={poll.id} onClick={() => openDetail(poll)}>
@@ -128,6 +136,8 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
     const [saving, setSaving] = useState(false);
     const [showParticipants, setShowParticipants] = useState(false);
     const [shareOpen, setShareOpen] = useState(false);
+    const draftSignature = (ids: string[], unavailable: boolean) => JSON.stringify([[...new Set(ids)].sort(), unavailable]);
+    const [savedDraft, setSavedDraft] = useState(() => draftSignature(selected, unavailable));
     const grid = useRef<HTMLDivElement>(null);
     const dragScroll = useRef<{ frame: number; x: number; y: number; last: number } | null>(null);
     const touchPress = useRef<{pointerId:number;owner:HTMLButtonElement;id:string;row:number;column:number;x:number;y:number;timer:ReturnType<typeof setTimeout>}|null>(null);
@@ -140,13 +150,18 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
     } | null>(null);
     const dragOwner = useRef<HTMLButtonElement | null>(null);
     const suppressClick = useRef(false);
-    useEffect(() => { setSelected(ownVote?.slotIds.filter(id => poll.slotIds.includes(id)) ?? []); setUnavailable(!!ownVote && ownVote.slotIds.length === 0); }, [poll.id, ownVote?.updatedAt, poll.slotIds.join(',')]);
-    const dates = [...new Set(poll.slots.map(slot => slot.date))].sort();
-    const times = [...new Set(poll.slots.map(slot => `${slot.start}|${slot.end}`))].sort();
-    const counts = useMemo(() => poll.slots.map(slot => ({ slot, count: votes.filter(v => v.slotIds.includes(slot.id)).length })).sort((a, b) => b.count - a.count || a.slot.date.localeCompare(b.slot.date) || a.slot.start.localeCompare(b.slot.start)), [poll.slots, votes]);
-    const topCount = counts[0]?.count ?? 0;
+    useEffect(() => { const ids = ownVote?.slotIds.filter(id => poll.slotIds.includes(id)) ?? [], none = !!ownVote && ownVote.slotIds.length === 0; setSelected(ids); setUnavailable(none); setSavedDraft(draftSignature(ids, none)); }, [poll.id, ownVote?.updatedAt, poll.slotIds.join(',')]);
+    const gridIndex = useMemo(() => buildPollGridIndex(poll.slots, votes), [poll.slots, votes]);
+    const { dates, times, topCount } = gridIndex;
+    const selectedIds = useMemo(() => new Set(selected), [selected]);
+    const voterNames = useMemo(() => {
+        const names = new Map(app.members.map(member => [member.id, member.name]));
+        return new Map([...gridIndex.voters].map(([id, voters]) => [id, voters.map(vote => names.get(vote.memberId) ?? t('멤버')).join(', ') || t('선택한 사람이 없어요')]));
+    }, [gridIndex, app.members, t]);
     const open = isOpen(poll);
     const interactive = open && app.canParticipate;
+    const draft = useDraftClose(interactive && draftSignature(selected, unavailable) !== savedDraft, saving || busy, onClose);
+    const confirm = (range?: PollAvailabilityWindow) => draft.guard(() => onConfirm(range));
     const manageable = canManage(poll, app.user?.id, app.isAdmin, app.canCreatePoll) && poll.status !== 'confirmed';
     const finishDrag = (cancel = false) => {
         if(dragScroll.current)cancelAnimationFrame(dragScroll.current.frame);
@@ -212,7 +227,7 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
         for(let row=Math.min(state.row,targetRow);row<=Math.max(state.row,targetRow);row++){
             const [start,end]=times[row].split('|');
             for(let column=Math.min(state.column,targetColumn);column<=Math.max(state.column,targetColumn);column++){
-                const id=poll.slots.find(slot=>slot.date===dates[column]&&slot.start===start&&slot.end===end)?.id;
+                const id=gridIndex.slotAt.get(slotPosition(dates[column],start,end))?.id;
                 if(id&&!state.visited.has(id)){state.visited.add(id);nextIds.push(id);}
             }
         }
@@ -273,6 +288,7 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
     const waiting = app.members.filter(m => m.status === 'active' && !participantIds.has(m.id));
     const save = async () => { setSaving(true); try {
         await app.saveVote(poll.id, selected);
+        setSavedDraft(draftSignature(selected, unavailable));
         toast('가능한 시간을 저장했어요.');
     }
     catch (error) {
@@ -282,16 +298,16 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
         setSaving(false);
     } };
     if (shareOpen) return <InviteShare poll={poll} onClose={() => setShareOpen(false)}/>;
-    return <Modal title={poll.title} onClose={onClose} wide className="poll-detail-modal"
+    return <><Modal title={poll.title} onClose={draft.close} busy={saving || busy} wide className="poll-detail-modal"
       headerActions={<><Button iconOnly variant="ghost" icon={Share2} aria-label={t("투표 공유")} title={t("투표 공유")} disabled={busy || saving} onClick={() => setShareOpen(true)}>{t("공유")}</Button>
         {manageable && <ActionMenu label={t('투표 메뉴')} disabled={busy || saving} actions={[
-          {label:t('투표 수정'),icon:Pencil,onSelect:onEdit},
-          {label:t(open ? '투표 마감' : '다시 열기'),icon:open ? LockKeyhole : RotateCcw,onSelect:onStatus},
-          {label:t('투표 삭제'),icon:Trash2,onSelect:onDelete,danger:true},
+          {label:t('투표 수정'),icon:Pencil,onSelect:()=>draft.guard(onEdit)},
+          {label:t(open ? '투표 마감' : '다시 열기'),icon:open ? LockKeyhole : RotateCcw,onSelect:()=>draft.guard(onStatus)},
+          {label:t('투표 삭제'),icon:Trash2,onSelect:()=>draft.guard(onDelete),danger:true},
         ]}/>}</>}
       footer={<div className="poll-detail-footer"><div className="poll-detail-actions">
-        {app.isAdmin && poll.status !== 'confirmed' && <Button iconOnly variant="secondary" icon={CalendarCheck} onClick={() => onConfirm()} disabled={busy || saving}>{t("일정 확정")}</Button>}
-        {interactive ? <Button iconOnly icon={Save} loading={saving} disabled={(!selected.length && !unavailable) || busy} onClick={save}>{ownVote ? t("선택 수정하기") : t("선택 저장하기")}</Button> : <Button icon={X} iconOnly variant="secondary" onClick={onClose}>{t("닫기")}</Button>}
+        {app.isAdmin && poll.status !== 'confirmed' && <Button iconOnly variant="secondary" icon={CalendarCheck} onClick={() => confirm()} disabled={busy || saving}>{t("일정 확정")}</Button>}
+        {interactive ? <Button iconOnly icon={Save} loading={saving} disabled={(!selected.length && !unavailable) || busy} onClick={save}>{ownVote ? t("선택 수정하기") : t("선택 저장하기")}</Button> : <Button icon={X} iconOnly variant="secondary" onClick={draft.close}>{t("닫기")}</Button>}
       </div></div>}>
     <div className="poll-detail-meta"><Badge tone={poll.status === 'confirmed' ? 'green' : open ? 'blue' : 'gray'}>{poll.status === 'confirmed' ? t("일정 확정") : open ? t("투표 중") : t("마감")}</Badge><span><Clock3 size={14}/>{poll.deadline ? <>{formatDate(poll.deadline)} {t("{0} 마감", {"0":formatTime(poll.deadline)})}</> : t("마감 없음")}</span></div>
     {poll.description && <p className="poll-detail-description">{poll.description}</p>}
@@ -299,22 +315,22 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
     {poll.status === 'confirmed' && poll.eventId && <a className="poll-confirmed-link" href={`/calendar?event=${encodeURIComponent(poll.eventId)}`}><CalendarCheck size={20}/><span>{t("확정된 일정 확인하기")}</span><ChevronRight size={17}/></a>}
     <button className="poll-participant-toggle" onClick={() => setShowParticipants(!showParticipants)} aria-expanded={showParticipants}><Users size={16}/><span>{t("참여 현황")}<strong>{votes.length}{t("명")}</strong><span className="muted">{t(" · 미응답 {0}명", {"0":waiting.length})}</span></span><ChevronRight size={16} className={showParticipants ? 'rotated' : ''}/></button>
     {showParticipants && <div className="poll-participant-list">{votes.map(vote => { const member = app.members.find(m => m.id === vote.memberId); return <div className="poll-participant-row" key={vote.id}><Avatar member={member} name={member?.name ?? t("멤버")} size={30}/><strong>{member?.name ?? t("멤버")}</strong><span>{vote.slotIds.filter(id => poll.slotIds.includes(id)).length ? t("참여 완료") : vote.slotIds.length ? t("후보 변경 \u00B7 재응답 필요") : t("가능한 시간 없음")}</span></div>; })}{waiting.map(member => <div className="poll-participant-row" key={member.id}><Avatar member={member} size={30}/><strong>{member.name}</strong><span className="muted">{t("미응답")}</span></div>)}</div>}
-    <AvailabilityResults poll={poll} votes={votes} onConfirm={onConfirm} disabled={busy || saving}/>
+    <AvailabilityResults poll={poll} votes={votes} onConfirm={confirm} disabled={busy || saving}/>
     <div className="section-head poll-grid-heading"><div><h3>{interactive ? t("시간 선택") : t("투표 결과")}</h3><p className="muted">{interactive ? <><span className="poll-pointer-hint">{t("드래그로 선택")}</span><span className="poll-touch-hint">{t("꾹 눌러 여러 칸 선택")}</span></> : t("{0}명이 응답했어요.", { "0": votes.length })}</p></div><div className="poll-grid-controls"><span className="poll-grid-legend"><i />{t("가능 인원")}</span></div></div>
     <div ref={grid} className="poll-time-scroll"><table className="poll-time-table"><thead className={interactive ? 'has-day-toggles' : undefined}><tr><th scope="col">{t("시간")}</th>{dates.map(date => {
-            const ids = poll.slots.filter(slot => slot.date === date).map(slot => slot.id);
-            const all = ids.length > 0 && ids.every(id => selected.includes(id));
+            const ids = gridIndex.dayIds.get(date) ?? [];
+            const all = ids.length > 0 && ids.every(id => selectedIds.has(id));
             return <th scope="col" key={date} className={getHoliday(date) || new Date(`${date}T12:00:00`).getDay() === 0 ? 'poll-table-holiday' : new Date(`${date}T12:00:00`).getDay() === 6 ? 'poll-table-saturday' : ''}><strong>{shortDate(date)}</strong><span>{formatDate(date, { weekday: 'short' })}{getHoliday(date) && ` · ${t(getHoliday(date) || "")}`}</span>
               {interactive && <button type="button" className={`poll-day-toggle ${all ? 'button-primary' : ''}`} data-date={date} disabled={saving || busy} aria-pressed={all} aria-label={t("{0} 종일", {"0":formatDate(date, {year:'numeric',month:'long',day:'numeric'})})} onClick={() => toggleDay(ids)}>{all && <Check size={12} aria-hidden="true"/>}{t("종일")}</button>}
             </th>;
         })}</tr></thead><tbody>{times.map((time, rowIndex) => {
             const [start, end] = time.split('|');
             return <tr key={time}><th scope="row"><strong>{start}</strong><span>{end}</span></th>{dates.map((date, columnIndex) => {
-                    const slot = poll.slots.find(s => s.date === date && s.start === start && s.end === end);
+                    const slot = gridIndex.slotAt.get(slotPosition(date,start,end));
                     if (!slot)
                         return <td key={date}><div className="poll-slot-missing">—</div></td>;
-                    const count = counts.find(c => c.slot.id === slot.id)?.count ?? 0;
-                    const chosen = selected.includes(slot.id);
+                    const count = gridIndex.voters.get(slot.id)?.length ?? 0;
+                    const chosen = selectedIds.has(slot.id);
                     return <td key={date}><button className={`poll-time-cell ${chosen ? 'is-selected' : ''} ${count > 0 && count === topCount ? 'is-best' : ''}`} style={{ '--slot-intensity': count ? Math.max(.05, count / Math.max(votes.length, 1) * .17) : 0 } as React.CSSProperties} disabled={!interactive || saving || busy} onContextMenu={event=>{if(interactive)event.preventDefault();}} data-slot-id={slot.id} data-slot-row={rowIndex} data-slot-column={columnIndex} onPointerDown={event => beginDrag(event, slot.id, rowIndex, columnIndex)} onPointerMove={moveDrag} onPointerUp={() => finishDrag()} onPointerCancel={() => finishDrag(true)} onLostPointerCapture={() => { if (dragState.current || touchPress.current)
                         finishDrag(true); }} onClick={event => { if (event.detail === 0) {
                         toggleSlot(slot.id);
@@ -322,12 +338,12 @@ function PollDetail({ poll, onClose, onEdit, onDelete, onConfirm, onStatus, busy
                     } if (suppressClick.current) {
                         suppressClick.current = false;
                         return;
-                    } toggleSlot(slot.id); }} aria-pressed={chosen} aria-label={t("{0}, {1}명 가능{2}", { "0": slotLabel(slot), "1": count, "2": chosen ? t(", 선택됨") : '' })} title={votes.filter(v => v.slotIds.includes(slot.id)).map(v => memberName(app.members, v.memberId)).join(', ') || t("선택한 사람이 없어요")}>{chosen && <Check className="poll-cell-selected" size={12} aria-hidden="true"/>}<strong>{count}</strong></button></td>;
+                    } toggleSlot(slot.id); }} aria-pressed={chosen} aria-label={t("{0}, {1}명 가능{2}", { "0": slotLabel(slot), "1": count, "2": chosen ? t(", 선택됨") : '' })} title={voterNames.get(slot.id)}>{chosen && <Check className="poll-cell-selected" size={12} aria-hidden="true"/>}<strong>{count}</strong></button></td>;
                 })}</tr>;
         })}</tbody></table></div>
     {interactive && <button className={`poll-unavailable ${unavailable ? 'active' : ''}`} aria-pressed={unavailable} onClick={() => { setUnavailable(!unavailable); setSelected([]); }} disabled={saving}><span className="poll-check-box">{unavailable && <Check size={13}/>}</span>{t("가능한 시간이 없어요")}</button>}
 
-  </Modal>;
+  </Modal>{draft.confirmation}</>;
 }
 function AvailabilityResults({ poll, votes, onConfirm, disabled }: {
     poll: Poll;

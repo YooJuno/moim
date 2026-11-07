@@ -118,6 +118,7 @@ test('첨부 개수와 파일 크기를 제한하고 취소한 글을 저장하�
   await editor.getByLabel('파일 첨부', { exact: true }).setInputFiles(note);
   await expect(editor.locator('.board-file-draft')).toHaveCount(1);
   await editor.getByRole('button', { name: '취소', exact: true }).click();
+  await page.getByRole('dialog', {name:'저장하지 않고 닫을까요?',exact:true}).getByRole('button', {name:'나가기',exact:true}).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('moim-demo-v1')!).posts)).toEqual(before);
   expect(await attachmentKeys(page)).toEqual(filesBefore);

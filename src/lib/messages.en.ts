@@ -1,5 +1,15 @@
 /** Static interface copy. Member names and group content are never translated. */
 export const messagesEn: Record<string, string> = {
+  '서비스 연결 설정을 확인하지 못했어요. 다시 시도해 주세요.': 'Could not load service settings. Please try again.',
+  '요청 시간이 초과됐어요. 연결을 확인하고 다시 시도해 주세요.': 'The request timed out. Check your connection and try again.',
+  '저장하지 않고 닫을까요?': 'Close without saving?',
+  '계속 편집': 'Keep editing',
+  '나가기': 'Leave',
+  '회계 검색': 'Search transactions',
+  '내역·비고·금액 검색': 'Search descriptions, notes or amounts',
+  '검색 지우기': 'Clear search',
+  '선택한 기간에 내역이 없어요': 'No transactions in this period',
+
   '투표 시작 ·': 'Voting opens ·',
   ' · {0} 단위': ' · {0} intervals',
   ' · 수정됨': ' · edited',

@@ -1,4 +1,5 @@
 import { useI18n } from "../lib/preferences";
+import { useDraftClose } from '../components/useDraftClose';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ArrowRight, Camera, FileText, Heart, ImagePlus, MessageCircle, Megaphone, MoreHorizontal, Paperclip, Pencil, Pin, Plus, Search, Send, Trash2, X } from 'lucide-react';
@@ -82,6 +83,9 @@ function PostEditor({ post, initialCategory, onClose, onSaved }: {
     const [pinned, setPinned] = useState(post?.pinned ?? false);
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const initialDraft = useRef(JSON.stringify([category,title,body,images,attachments,pinned]));
+    const dirty = newFiles.length > 0 || initialDraft.current !== JSON.stringify([category,title,body,images,attachments,pinned]);
+    const draft = useDraftClose(dirty, saving || uploading, onClose);
     function selectFiles(files: FileList | null) {
         if (!files?.length || saving) return;
         const selected = Array.from(files);
@@ -143,7 +147,7 @@ function PostEditor({ post, initialCategory, onClose, onSaved }: {
             setSaving(false);
         }
     }
-    return <Modal title={post ? t("게시글 수정") : t("새 이야기")} onClose={() => { if (!saving && !uploading) onClose(); }} wide footer={<><Button icon={X} iconOnly variant="secondary" onClick={onClose} disabled={saving || uploading}>{t("취소")}</Button><Button icon={Send} iconOnly form="post-form" type="submit" loading={saving} disabled={uploading}>{post ? t("수정 완료") : t("올리기")}</Button></>}>
+    return <><Modal title={post ? t("게시글 수정") : t("새 이야기")} onClose={draft.close} busy={saving || uploading} wide footer={<><Button icon={X} iconOnly variant="secondary" onClick={draft.close} disabled={saving || uploading}>{t("취소")}</Button><Button icon={Send} iconOnly form="post-form" type="submit" loading={saving} disabled={uploading}>{post ? t("수정 완료") : t("올리기")}</Button></>}>
     <form id="post-form" className="stack board-editor" onSubmit={save}>
       <Field label={t("게시판")}><select value={category} onChange={e => setCategory(e.target.value as Category)}>{categories.filter(key => key !== 'notice' || app.isAdmin || post?.category === 'notice').map(key => <option value={key} key={key}>{t(categoryLabels[key])}</option>)}</select></Field>
       <Field label={t("제목")} required><input value={title} onChange={e => setTitle(e.target.value)} placeholder={t("제목을 입력해 주세요")} maxLength={100} required/></Field>
@@ -154,7 +158,7 @@ function PostEditor({ post, initialCategory, onClose, onSaved }: {
       {(attachments.length > 0 || newFiles.length > 0) && <div className="board-file-drafts">{[...attachments.map(file => ({ id: file.id, name: file.name, size: file.size, stored: true })), ...newFiles.map(item => ({ id: item.id, name: item.file.name, size: item.file.size, stored: false }))].map(file => <div key={file.id} className="board-file-draft"><span className="board-file-icon"><FileText size={20}/></span><span className="board-file-info"><strong title={file.name}>{file.name}</strong><small>{attachmentSize(file.size)}</small></span><IconButton icon={X} label={t('{0} 첨부 삭제', { '0': file.name })} disabled={saving} onClick={() => { if (file.stored) setAttachments(current => current.filter(item => item.id !== file.id)); else setNewFiles(current => current.filter(item => item.id !== file.id)); }}/></div>)}</div>}</div>
       {app.isAdmin && <label className="community-check"><input type="checkbox" checked={pinned} onChange={e => setPinned(e.target.checked)}/><Pin size={16}/>{t("상단에 고정")}</label>}
     </form>
-  </Modal>;
+  </Modal>{draft.confirmation}</>;
 }
 function PostDetail({ post, onClose, onEdit }: {
     post: Post;

@@ -4,10 +4,13 @@ const sdk = vi.hoisted(() => ({ auth: { authStateReady: vi.fn(), currentUser: nu
 vi.mock('../src/lib/firebase', () => ({ auth: sdk.auth }));
 import { isPlaceSearchReady, parsePlaces, searchPlaces } from '../src/lib/place-search';
 
+import { clearServiceConfigCache } from '../src/lib/service-config';
+
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
 const place = { id: 'naver-place', name: '농구장 & 코트', address: '서울 지번 1', roadAddress: '서울 도로 1' };
 let fetcher: ReturnType<typeof vi.fn>;
 beforeEach(() => {
+  clearServiceConfigCache();
   fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher); vi.stubEnv('VITE_AUTH_API_URL', 'https://auth.example.test/');
   sdk.auth.authStateReady.mockReset().mockResolvedValue(undefined);
   sdk.auth.currentUser = { uid: 'member', getIdToken: vi.fn().mockResolvedValue('id-token') };
@@ -19,7 +22,7 @@ describe('NAVER place search', () => {
     vi.stubEnv('VITE_AUTH_API_URL', ''); expect(await isPlaceSearchReady()).toBe(false); expect(fetcher).not.toHaveBeenCalled();
     vi.stubEnv('VITE_AUTH_API_URL', 'https://auth.example.test/');
     fetcher.mockResolvedValueOnce(json({ places: { naver: 'true' } })).mockResolvedValueOnce(json({ places: { naver: true } }));
-    expect(await isPlaceSearchReady()).toBe(false); expect(await isPlaceSearchReady()).toBe(true);
+    expect(await isPlaceSearchReady()).toBe(false); clearServiceConfigCache(); expect(await isPlaceSearchReady()).toBe(true);
     expect(fetcher.mock.calls.every(([, options]) => !options.headers && options.credentials === 'omit')).toBe(true);
   });
   it('validates a query before network access, then sends an encoded query with the current Firebase token', async () => {

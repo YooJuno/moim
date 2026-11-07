@@ -1,5 +1,6 @@
-import { auth } from './firebase';
 import { getAuthAPIURL } from './social-auth';
+import { getServiceConfig } from './service-config';
+import { withAuthenticatedRequest } from './authenticated-request';
 
 export interface PlaceSearchResult {
   id: string;
@@ -34,8 +35,8 @@ async function request(path: string, signal?: AbortSignal, token?: string): Prom
 
 export async function isPlaceSearchReady(signal?: AbortSignal): Promise<boolean> {
   if (!getAuthAPIURL()) return false;
-  const config = await request('config', signal);
-  return object(config) && object(config.places) && config.places.naver === true;
+  const config = await getServiceConfig(signal);
+  return config?.places.naver === true;
 }
 
 export function parsePlaces(value: unknown): PlaceSearchResult[] {
@@ -51,14 +52,6 @@ export function parsePlaces(value: unknown): PlaceSearchResult[] {
 export async function searchPlaces(query: string, signal?: AbortSignal): Promise<PlaceSearchResult[]> {
   const keyword = query.trim();
   if (!keyword || keyword.length > 120) throw new Error('장소 이름을 120자 이내로 입력해 주세요.');
-  if (!auth) throw new Error('로그인이 필요해요.');
-  await auth.authStateReady();
-  const user = auth.currentUser;
-  if (!user) throw new Error('로그인이 필요해요.');
-  const token = await user.getIdToken();
-  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-  if (auth.currentUser?.uid !== user.uid) throw new Error('로그인 계정이 변경됐어요. 다시 시도해 주세요.');
-  const result = await request(`places/search?q=${encodeURIComponent(keyword)}`, signal, token);
-  if (auth.currentUser?.uid !== user.uid) throw new Error('로그인 계정이 변경됐어요. 다시 시도해 주세요.');
+  const result = await withAuthenticatedRequest((token,requestSignal)=>request(`places/search?q=${encodeURIComponent(keyword)}`,requestSignal,token),signal);
   return parsePlaces(result);
 }

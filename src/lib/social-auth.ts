@@ -3,6 +3,8 @@ import { GoogleAuthProvider, linkWithPopup, signInWithCustomToken, signOut } fro
 import { auth } from './firebase';
 import { getAuthAPIURL } from './api-url';
 import { reportError } from './telemetry';
+import { getServiceConfig } from './service-config';
+import { withAuthenticatedRequest } from './authenticated-request';
 import { sharedDestination, validSharedDestination } from './share-target';
 export { getAuthAPIURL } from './api-url';
 
@@ -30,9 +32,8 @@ async function requestJSON(path:string,init:RequestInit={},apiURL=getAuthAPIURL(
 }
 
 export async function fetchAuthProviderConfig(signal?:AbortSignal):Promise<AuthProviderConfig|null>{
-  if(!getAuthAPIURL())return null;
-  const data=await requestJSON('/config',{signal});if(!object(data)||!object(data.providers)||!object(data.calendar))throw new Error('로그인 설정을 확인하지 못했어요.');
-  return {providers:{kakao:data.providers.kakao===true,naver:data.providers.naver===true},calendar:{kakao:data.calendar.kakao===true}};
+  const data=await getServiceConfig(signal);
+  return data ? {providers:data.providers,calendar:data.calendar} : null;
 }
 export function useAuthProviderConfig(){
   const apiURL=getAuthAPIURL();const [state,setState]=useState<AuthProviderConfig&{enabled:boolean;loading:boolean}>({...emptyConfig(),enabled:false,loading:!!apiURL});
@@ -88,7 +89,7 @@ export async function exchangeSocialCallback(params:URLSearchParams):Promise<Soc
 }
 
 export async function getAccountProviders():Promise<AccountProviders>{
-  if(!auth)throw new Error('로그인이 필요해요.');await auth.authStateReady();const user=auth.currentUser;if(!user)throw new Error('로그인이 필요해요.');const data=await requestJSON('/account/providers',{headers:{Authorization:`Bearer ${await user.getIdToken()}`}});if(!object(data)||!object(data.calendar))throw new Error('계정 연결 상태를 확인하지 못했어요.');if(auth.currentUser?.uid!==user.uid)throw new Error('로그인 계정이 변경됐어요.');return {google:data.google===true,kakao:data.kakao===true,naver:data.naver===true,calendar:{kakao:data.calendar.kakao===true,...(typeof data.calendar.available==='boolean'?{available:data.calendar.available}:{}),automatic:data.calendar.automatic===true}};
+  const data=await withAuthenticatedRequest((token,signal)=>requestJSON('/account/providers',{signal,headers:{Authorization:`Bearer ${token}`}}));if(!object(data)||!object(data.calendar))throw new Error('계정 연결 상태를 확인하지 못했어요.');return {google:data.google===true,kakao:data.kakao===true,naver:data.naver===true,calendar:{kakao:data.calendar.kakao===true,...(typeof data.calendar.available==='boolean'?{available:data.calendar.available}:{}),automatic:data.calendar.automatic===true}};
 }
 export async function linkGoogleAccount(expectedUID:string):Promise<void>{
   if(!auth)throw new Error('먼저 기존 계정으로 로그인해 주세요.');await auth.authStateReady();const user=auth.currentUser;if(!user||user.uid!==expectedUID)throw new Error('먼저 기존 계정으로 로그인해 주세요.');const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});
@@ -101,9 +102,7 @@ export interface KakaoCalendarAddResult {added:true;alreadySynced:boolean;eventI
 export async function addToKakaoCalendar(eventId:string):Promise<KakaoCalendarAddResult>{
   if(!/^[A-Za-z0-9_-]{1,200}$/.test(eventId))throw new Error('모임 일정을 확인해 주세요.');
   if(!getAuthAPIURL()||!auth)throw new Error('지금은 카카오 캘린더를 사용할 수 없어요.');
-  await auth.authStateReady();const user=auth.currentUser;if(!user)throw new Error('먼저 로그인해 주세요.');const token=await user.getIdToken();if(auth.currentUser?.uid!==user.uid)throw new Error('로그인 계정이 변경됐어요. 다시 시도해 주세요.');
-  const data=await requestJSON(`/calendar/kakao/events/${encodeURIComponent(eventId)}/add`,{method:'POST',headers:{Authorization:`Bearer ${token}`}},getAuthAPIURL(),true);
-  if(auth.currentUser?.uid!==user.uid)throw new Error('로그인 계정이 변경됐어요. 다시 시도해 주세요.');
+  const data=await withAuthenticatedRequest((token,signal)=>requestJSON(`/calendar/kakao/events/${encodeURIComponent(eventId)}/add`,{signal,method:'POST',headers:{Authorization:`Bearer ${token}`}},getAuthAPIURL(),true));
   if(!object(data)||data.added!==true||typeof data.alreadySynced!=='boolean'||data.eventId!==eventId||typeof data.kakaoEventId!=='string'||!data.kakaoEventId||data.kakaoEventId.length>200)throw new Error('캘린더 추가 결과를 확인하지 못했어요. 다시 확인해 주세요.');
   return {added:true,alreadySynced:data.alreadySynced,eventId,kakaoEventId:data.kakaoEventId};
 }
@@ -111,10 +110,7 @@ export async function addToKakaoCalendar(eventId:string):Promise<KakaoCalendarAd
 export interface KakaoSyncProgress {pending:boolean;busy:boolean;synced:number;skipped:number;failed:number}
 async function calendarRequest(path:string,value?:unknown):Promise<unknown>{
   if(!auth||!getAuthAPIURL())throw new Error('지금은 카카오 캘린더를 사용할 수 없어요.');
-  await auth.authStateReady();const user=auth.currentUser;if(!user)throw new Error('먼저 로그인해 주세요.');
-  const token=await user.getIdToken();if(auth.currentUser?.uid!==user.uid)throw new Error('로그인 계정이 변경됐어요.');
-  const result=await requestJSON(path,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},...(value!==undefined?{body:JSON.stringify(value)}:{})},getAuthAPIURL(),true);
-  if(auth.currentUser?.uid!==user.uid)throw new Error('로그인 계정이 변경됐어요.');return result;
+  return withAuthenticatedRequest((token,signal)=>requestJSON(path,{signal,method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},...(value!==undefined?{body:JSON.stringify(value)}:{})},getAuthAPIURL(),true));
 }
 export async function flushKakaoCalendar(eventId:string):Promise<KakaoSyncProgress>{
   if(!/^[A-Za-z0-9:_-]{1,128}$/.test(eventId))throw new Error('모임 일정을 확인해 주세요.');

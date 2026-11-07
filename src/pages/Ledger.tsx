@@ -1,7 +1,7 @@
 import { getLocale } from "../lib/i18n";
 import { useI18n } from "../lib/preferences";
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Download, ImagePlus, LoaderCircle, Pencil, Plus, ReceiptText, Trash2, Upload, Wallet, X, ZoomIn, ZoomOut, Save } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Download, ImagePlus, LoaderCircle, Pencil, Plus, ReceiptText, Search, Trash2, Upload, Wallet, X, ZoomIn, ZoomOut, Save } from 'lucide-react';
 import { useApp } from '../lib/store';
 import { BankImport } from '../components/BankImport';
 import { GroupBankAccount } from '../components/GroupBankAccount';
@@ -12,7 +12,8 @@ import { Badge, Button, EmptyState, Field, IconButton, Modal, PageHeader, useToa
 import './community.css';
 import './ledger-notes.css';
 const ledgerCategories = ['회비', '식비', '대관', '준비물', '기타'];
-const money = (amount: number) => new Intl.NumberFormat(getLocale()).format(amount);
+let moneyLocale = '', moneyFormatter: Intl.NumberFormat;
+const money = (amount: number) => { const locale = getLocale(); if (moneyLocale !== locale) { moneyLocale = locale; moneyFormatter = new Intl.NumberFormat(locale); } return moneyFormatter.format(amount); };
 function csvCell(value: string | number) { const text = String(value); const safe = /^[\s\u0000-\u001f]*[=+\-@]/.test(text) ? `'${text}` : text; return `"${safe.replaceAll('"', '""')}"`; }
 function monthLabel(value: string) { return formatDate(`${value}-01`, {year:"numeric",month:"long"}); }
 export function Ledger() {
@@ -23,6 +24,7 @@ export function Ledger() {
     const [month, setMonth] = useState(today().slice(0, 7));
     const [allMonths, setAllMonths] = useState(false);
     const [type, setType] = useState<'all' | 'income' | 'expense'>('all');
+    const [search, setSearch] = useState('');
     const [editor, setEditor] = useState<LedgerEntry | 'new' | null>(null);
     const [importOpen, setImportOpen] = useState(false);
     const [receiptEntry, setReceiptEntry] = useState<LedgerEntry | null>(null);
@@ -30,7 +32,14 @@ export function Ledger() {
     const monthly = useMemo(() => app.ledger.filter(item => allMonths || item.date.startsWith(month)), [app.ledger, allMonths, month]);
     const income = monthly.filter(item => item.type === 'income').reduce((total, item) => total + item.amount, 0);
     const expense = monthly.filter(item => item.type === 'expense').reduce((total, item) => total + item.amount, 0);
-    const entries = monthly.filter(item => type === 'all' || item.type === type).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+    const entries = useMemo(() => {
+        const terms = search.trim().normalize('NFKC').toLowerCase().replace(/[,₩]/g, '').split(/\s+/).filter(Boolean);
+        return monthly.filter(item => {
+            if (type !== 'all' && item.type !== type) return false;
+            const text = `${item.description} ${item.memo ?? ''} ${item.category} ${item.amount} ${item.memberId ? memberName(app.members, item.memberId) : ''}`.normalize('NFKC').toLowerCase().replaceAll(',', '');
+            return terms.every(term => text.includes(term.replace(/(\d)원$/, '$1')));
+        }).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+    }, [monthly, type, search, app.members]);
     function moveMonth(step: number) { const date = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1 + step, 1); setMonth(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`); setAllMonths(false); }
     function download() { if (!entries.length) {
         toast('내보낼 내역이 없어요.', 'error');
@@ -40,9 +49,10 @@ export function Ledger() {
     <GroupBankAccount/>
     <div className="ledger-summary-grid"><div className="card ledger-summary ledger-balance"><div><span className="ledger-summary-icon"><Wallet size={22}/></span><span>{t("현재 잔액")}</span></div><strong>{money(balance)}<small>{t("원")}</small></strong><span>{t("전체 수입 \u2212 전체 지출")}</span></div><div className="card ledger-summary"><div><span className="ledger-summary-icon income"><ArrowDownLeft size={21}/></span><span>{allMonths ? t("전체 수입") : t("선택 기간 수입")}</span></div><strong className="ledger-income">{money(income)}<small>{t("원")}</small></strong><span>{allMonths ? t("전체 기간") : monthLabel(month)}</span></div><div className="card ledger-summary"><div><span className="ledger-summary-icon expense"><ArrowUpRight size={21}/></span><span>{allMonths ? t("전체 지출") : t("선택 기간 지출")}</span></div><strong className="ledger-expense">{money(expense)}<small>{t("원")}</small></strong><span>{allMonths ? t("전체 기간") : monthLabel(month)}</span></div></div>
     <div className="ledger-toolbar"><div className="ledger-month-selector"><IconButton label={t("이전 달")} icon={ChevronLeft} onClick={() => moveMonth(-1)}/><strong>{allMonths ? t("전체 내역") : monthLabel(month)}</strong><IconButton label={t("다음 달")} icon={ChevronRight} onClick={() => moveMonth(1)}/><button className={`ledger-all-months ${allMonths ? 'active' : ''}`} onClick={() => setAllMonths(!allMonths)}>{allMonths ? t("월별 보기") : t("전체 보기")}</button></div><div className="tabs" aria-label={t("수입과 지출 필터")}>{(['all', 'income', 'expense'] as const).map(key => <button key={key} className={`tab ${type === key ? 'active' : ''}`} onClick={() => setType(key)}>{key === 'all' ? t("전체") : key === 'income' ? t("수입") : t("지출")}</button>)}</div></div>
-    <div className="card ledger-list"><div className="ledger-list-head"><span>{t("날짜")}</span><span>{t("내역")}</span><span>{t("멤버")}</span><span>{t("금액")}</span>{canManage && <span />}</div>
-      {entries.map(item => <div className={`ledger-row ${canManage ? 'manageable' : ''}`} key={item.id}><span className="ledger-date">{formatDate(item.date, { month: '2-digit', day: '2-digit' })}<small>{formatDate(item.date, { weekday: 'short' })}</small></span><div className="ledger-entry-description"><span className={`ledger-entry-icon ${item.type}`}>{item.type === 'income' ? <ArrowDownLeft size={18}/> : <ArrowUpRight size={18}/>}</span><div><strong>{item.description}</strong>{item.memo && <p className="ledger-entry-memo" title={item.memo}>{item.memo}</p>}<div><Badge tone={item.type === 'income' ? 'blue' : 'gray'}>{item.type === 'income' ? t("수입") : t("지출")}</Badge><span>{ledgerCategories.includes(item.category) ? t(item.category) : item.category}</span>{item.hasReceipt && <IconButton label={t("영수증 보기")} icon={ReceiptText} onClick={() => setReceiptEntry(item)}/>}</div></div></div><span className="ledger-member">{item.memberId ? memberName(app.members, item.memberId) : '—'}</span><strong className={`ledger-amount ${item.type === 'income' ? 'ledger-income' : 'ledger-expense'}`}>{item.type === 'income' ? '+' : '−'}{money(item.amount)}<small>{t("원")}</small></strong>{canManage && <button className="ledger-edit" onClick={() => setEditor(item)} aria-label={t("{0} 수정", { "0": item.description })} title={t("수정")}><Pencil size={16} aria-hidden="true"/></button>}</div>)}
-      {entries.length === 0 && <EmptyState icon={ReceiptText} title={t("아직 등록된 내역이 없어요")} action={canManage ? <Button icon={Plus} onClick={() => setEditor('new')}>{t("내역 추가")}</Button> : undefined}/>}
+    <div className="ledger-search"><Search size={17} aria-hidden="true"/><input type="search" aria-label={t("회계 검색")} placeholder={t("내역·비고·금액 검색")} value={search} onChange={event=>setSearch(event.target.value)}/>{search && <IconButton label={t("검색 지우기")} icon={X} onClick={()=>setSearch('')}/>}</div>
+    <div className={`card ledger-list ${canManage ? 'is-manageable' : ''}`}><div className="ledger-list-head"><span>{t("날짜")}</span><span>{t("내역")}</span><span>{t("금액")}</span>{canManage && <span />}</div>
+      {entries.map(item => <div className={`ledger-row ${canManage ? 'manageable' : ''}`} key={item.id}><span className="ledger-date">{formatDate(item.date, { month: '2-digit', day: '2-digit' })}<small>{formatDate(item.date, { weekday: 'short' })}</small></span><div className="ledger-entry-description"><span className={`ledger-entry-icon ${item.type}`}>{item.type === 'income' ? <ArrowDownLeft size={18}/> : <ArrowUpRight size={18}/>}</span><div><strong>{item.description}</strong>{item.memo && <p className="ledger-entry-memo" title={item.memo}>{item.memo}</p>}<div><Badge tone={item.type === 'income' ? 'blue' : 'gray'}>{item.type === 'income' ? t("수입") : t("지출")}</Badge><span>{ledgerCategories.includes(item.category) ? t(item.category) : item.category}</span>{item.memberId && <span className="ledger-entry-member">{memberName(app.members,item.memberId)}</span>}{item.hasReceipt && <IconButton label={t("영수증 보기")} icon={ReceiptText} onClick={() => setReceiptEntry(item)}/>}</div></div></div><strong className={`ledger-amount ${item.type === 'income' ? 'ledger-income' : 'ledger-expense'}`}>{item.type === 'income' ? '+' : '−'}{money(item.amount)}<small>{t("원")}</small></strong>{canManage && <button className="ledger-edit" onClick={() => setEditor(item)} aria-label={t("{0} 수정", { "0": item.description })} title={t("수정")}><Pencil size={16} aria-hidden="true"/></button>}</div>)}
+      {entries.length === 0 && <EmptyState icon={search.trim() ? Search : ReceiptText} title={t(search.trim() ? "검색 결과가 없어요" : "선택한 기간에 내역이 없어요")} action={search.trim() ? <Button variant="secondary" icon={X} onClick={()=>setSearch('')}>{t("검색 지우기")}</Button> : !allMonths && app.ledger.length ? <Button variant="secondary" onClick={()=>setAllMonths(true)}>{t("전체 보기")}</Button> : canManage ? <Button icon={Plus} onClick={() => setEditor('new')}>{t("내역 추가")}</Button> : undefined}/> }
       {entries.length > 0 && <div className="ledger-list-footer"><span>{t("총 {0}건", {"0":entries.length})}</span><span>{t("선택 기간 수입")}<strong>{money(income)}{t("원")}</strong><i>·</i>{t("지출")}<strong>{money(expense)}{t("원")}</strong></span></div>}
     </div>
     {importOpen && <BankImport onClose={() => setImportOpen(false)} onSaved={() => { setImportOpen(false); setAllMonths(true); setType('all'); }}/>}

@@ -25,3 +25,20 @@
 
 .ledger-edit { display: inline-flex; align-items: center; justify-content: center; justify-self: end; width: 32px; height: 32px; padding: 0; border-radius: 8px; }
 .ledger-edit:hover { color: var(--blue); background: var(--surface-edf3ff); }
+
+.ledger-search{display:flex;align-items:center;gap:9px;min-height:44px;margin-bottom:12px;padding:0 0 0 13px;border:1px solid var(--line);border-radius:10px;background:var(--surface-ffffff);color:var(--muted)}
+.ledger-search>svg{flex-shrink:0}.ledger-search>input{width:100%;min-width:0;min-height:42px;padding:10px 0;border:0;border-radius:0;background:transparent;font-size:13px;box-shadow:none;outline:none}.ledger-search:focus-within{border-color:var(--blue);box-shadow:0 0 0 2px var(--surface-edf3ff)}.ledger-search>input::-webkit-search-cancel-button{display:none}.ledger-search>.icon-button{width:44px;height:44px;flex-shrink:0}
+.ledger-page .ledger-list-head,.ledger-page .ledger-row,.ledger-page .ledger-row:not(.manageable){grid-template-columns:88px minmax(0,1fr) minmax(110px,.4fr)}
+.ledger-page .ledger-list.is-manageable .ledger-list-head,.ledger-page .ledger-row.manageable{grid-template-columns:88px minmax(0,1fr) minmax(110px,.4fr) 42px}
+.ledger-page .ledger-list-head>span:nth-child(3){text-align:right}
+@media(max-width:700px){.ledger-page .ledger-row,.ledger-page .ledger-row:not(.manageable),.ledger-page .ledger-row.manageable{grid-template-columns:minmax(0,1fr) auto}.ledger-search>input{font-size:16px}}
+@media(max-width:700px){
+  .ledger-page .ledger-row{position:relative}
+  .ledger-page .ledger-row .ledger-date{grid-column:1;grid-row:1}
+  .ledger-page .ledger-row .ledger-amount,.ledger-page .ledger-row:not(.manageable) .ledger-amount{grid-column:2;grid-row:1}
+  .ledger-page .ledger-row.manageable .ledger-amount{margin-right:40px}
+  .ledger-page .ledger-row .ledger-entry-description{grid-column:1/-1;grid-row:2;min-width:0}
+  .ledger-page .ledger-entry-description>div{min-width:0;flex:1}
+  .ledger-page .ledger-entry-description strong{white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+  .ledger-page .ledger-row .ledger-edit{position:absolute;right:6px;top:6px;width:44px;height:44px}
+}

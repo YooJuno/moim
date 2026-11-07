@@ -2,7 +2,7 @@ import { useI18n } from "../lib/preferences";
 import { useEffect, useRef, useState } from 'react';
 import { MessageSquare, Save } from 'lucide-react';
 import { useApp } from '../lib/store';
-import { getAuthAPIURL } from '../lib/social-auth';
+import { getServiceConfig } from '../lib/service-config';
 import { errorMessage } from '../lib/utils';
 import { Badge, Button, useToast } from './ui';
 import './event-sms.css';
@@ -12,8 +12,7 @@ export function SmsSettings() {
     const [enabled, setEnabled] = useState(app.settings.smsEnabled === true), [automatic, setAutomatic] = useState(app.settings.smsAutoOnConfirm === true), [saving, setSaving] = useState(false), [serverReady, setServerReady] = useState(false);
     const dirty = useRef(false);
     useEffect(() => { if (!app.settingsReady) { dirty.current = false; setEnabled(false); setAutomatic(false); return; } if (dirty.current) return; setEnabled(app.settings.smsEnabled === true); setAutomatic(app.settings.smsAutoOnConfirm === true); }, [app.settingsReady, app.settings.smsEnabled, app.settings.smsAutoOnConfirm]);
-    useEffect(() => { const base = getAuthAPIURL(); if (!base || app.isDemo)
-        return; const controller = new AbortController(); void fetch(new URL('config', base), { signal: controller.signal, credentials: 'omit', cache: 'no-store' }).then(response => response.ok ? response.json() : null).then(data => setServerReady(data?.notifications?.sms === true)).catch(() => { }); return () => controller.abort(); }, [app.isDemo]);
+    useEffect(() => { if (app.isDemo) return; const controller = new AbortController(); void getServiceConfig(controller.signal).then(data => {if(!controller.signal.aborted)setServerReady(data?.notifications.sms === true);}).catch(() => { }); return () => controller.abort(); }, [app.isDemo]);
     if (!app.isAdmin)
         return null;
     async function save() { if (!app.settingsReady || saving)

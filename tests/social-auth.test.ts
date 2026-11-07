@@ -6,6 +6,8 @@ vi.mock('../src/lib/firebase',()=>({auth:sdk.auth}));
 vi.mock('firebase/auth',()=>({GoogleAuthProvider:class{setCustomParameters(){}},linkWithPopup:sdk.link,signInWithCustomToken:sdk.signin,signOut:sdk.signout}));
 import { addToKakaoCalendar, createSocialProof, exchangeSocialCallback, fetchAuthProviderConfig, getAccountProviders, flushKakaoCalendar, setKakaoCalendarAutomatic, getAuthAPIURL, linkGoogleAccount, SOCIAL_ATTEMPT_KEY, startSocialAuth } from '../src/lib/social-auth';
 
+import { clearServiceConfigCache } from '../src/lib/service-config';
+
 class MemoryStorage implements Storage {
   private values=new Map<string,string>();get length(){return this.values.size;}clear(){this.values.clear();}getItem(key:string){return this.values.get(key)??null;}key(index:number){return [...this.values.keys()][index]??null;}removeItem(key:string){this.values.delete(key);}setItem(key:string,value:string){this.values.set(key,String(value));}
 }
@@ -19,12 +21,12 @@ function callback(provider='kakao',intent='signin'){return new URLSearchParams({
 function attempt(intent='signin',extras:Record<string,unknown>={}){const value={version:1,provider:'kakao',intent,verifier:'v'.repeat(43),createdAt:Date.now(),origin,apiURL:base,...(intent==='link'?{uid:'existing-uid'}:{}),...extras};storage.setItem(SOCIAL_ATTEMPT_KEY,JSON.stringify(value));return value;}
 function signedIn(uid='existing-uid'){const user={uid,getIdToken:vi.fn().mockResolvedValue('firebase-id-token')};sdk.auth.currentUser=user;return user;}
 
-beforeEach(()=>{storage=new MemoryStorage();assign=vi.fn();fetcher=vi.fn();vi.stubGlobal('crypto',webcrypto);vi.stubGlobal('window',{sessionStorage:storage,location:{origin,assign}});vi.stubGlobal('fetch',fetcher);vi.stubEnv('VITE_AUTH_API_URL',base);sdk.auth.currentUser=null;sdk.auth.authStateReady.mockReset().mockResolvedValue(undefined);sdk.signin.mockReset();sdk.signout.mockReset().mockResolvedValue(undefined);sdk.link.mockReset();});
+beforeEach(()=>{clearServiceConfigCache();storage=new MemoryStorage();assign=vi.fn();fetcher=vi.fn();vi.stubGlobal('crypto',webcrypto);vi.stubGlobal('window',{sessionStorage:storage,location:{origin,assign}});vi.stubGlobal('fetch',fetcher);vi.stubEnv('VITE_AUTH_API_URL',base);sdk.auth.currentUser=null;sdk.auth.authStateReady.mockReset().mockResolvedValue(undefined);sdk.signin.mockReset();sdk.signout.mockReset().mockResolvedValue(undefined);sdk.link.mockReset();});
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();vi.restoreAllMocks();});
 
 describe('social login configuration and proof',()=>{
   it('accepts HTTPS APIs and loopback development URLs, rejecting unsafe addresses',()=>{expect(getAuthAPIURL('https://auth.example.test/api')).toBe('https://auth.example.test/api/');expect(getAuthAPIURL('http://127.0.0.1:8787')).toBe('http://127.0.0.1:8787/');for(const value of ['http://auth.example.test','javascript:alert(1)','https://user:secret@auth.example.test','https://auth.example.test/?token=x'])expect(getAuthAPIURL(value)).toBeNull();});
-  it('does not enable an absent backend and only trusts reachable boolean provider config',async()=>{vi.stubEnv('VITE_AUTH_API_URL','');expect(await fetchAuthProviderConfig()).toBeNull();expect(fetcher).not.toHaveBeenCalled();vi.stubEnv('VITE_AUTH_API_URL',base);fetcher.mockResolvedValueOnce(json({providers:{kakao:true,naver:'true'},calendar:{kakao:true}}));expect(await fetchAuthProviderConfig()).toEqual({providers:{kakao:true,naver:false},calendar:{kakao:true}});fetcher.mockResolvedValueOnce(json({},503));await expect(fetchAuthProviderConfig()).rejects.toThrow();});
+  it('does not enable an absent backend and only trusts reachable boolean provider config',async()=>{vi.stubEnv('VITE_AUTH_API_URL','');expect(await fetchAuthProviderConfig()).toBeNull();expect(fetcher).not.toHaveBeenCalled();vi.stubEnv('VITE_AUTH_API_URL',base);fetcher.mockResolvedValueOnce(json({providers:{kakao:true,naver:'true'},calendar:{kakao:true}}));expect(await fetchAuthProviderConfig()).toEqual({providers:{kakao:true,naver:false},calendar:{kakao:true}});clearServiceConfigCache();fetcher.mockResolvedValueOnce(json({},503));await expect(fetchAuthProviderConfig()).rejects.toThrow();});
   it('uses a fresh 256-bit verifier and SHA256 base64url challenge',async()=>{const proof=await createSocialProof();expect(proof.verifier).toMatch(/^[A-Za-z0-9_-]{43}$/);const digest=await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(proof.verifier));expect(proof.challenge).toBe(Buffer.from(digest).toString('base64url'));expect((await createSocialProof()).verifier).not.toBe(proof.verifier);});
 });
 

@@ -47,28 +47,28 @@ export function EmptyState({ icon: Icon, title, description, action }: {
     action?: ReactNode;
 }) { return <div className="empty-state"><span className="empty-icon"><Icon size={27}/></span><h3>{title}</h3>{description && <p>{description}</p>}{action}</div>; }
 const modalStack: string[] = [];
-export function Modal({ title, onClose, children, footer, headerActions, wide = false, className = '' }: {
+export function Modal({ title, onClose, children, footer, headerActions, wide = false, className = '', busy = false }: {
     title: string;
     onClose: () => void;
-    children: ReactNode;
+    children?: ReactNode;
     footer?: ReactNode;
     headerActions?: ReactNode;
     wide?: boolean;
     className?: string;
+    busy?: boolean;
 }) {
     const { t } = useI18n();
     const id = useId();
     const box = useRef<HTMLDivElement>(null);
     const closeRef = useRef(onClose);
-    closeRef.current = onClose;
+    closeRef.current = () => { if (!busy) onClose(); };
     useEffect(() => { const previous = document.activeElement as HTMLElement | null; modalStack.push(id); document.body.style.overflow = 'hidden'; const frame = requestAnimationFrame(() => box.current?.focus()); const onKey = (e: KeyboardEvent) => { if (modalStack.at(-1) !== id)
         return; if (e.key === 'Escape') {
         e.preventDefault();
         closeRef.current();
     } if (e.key === 'Tab') {
         const elements = box.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex="0"]');
-        if (!elements?.length)
-            return;
+        if (!elements?.length) { e.preventDefault(); box.current?.focus(); return; }
         const first = elements[0], last = elements[elements.length - 1];
         if (e.shiftKey && (document.activeElement === first || document.activeElement === box.current)) {
             e.preventDefault();
@@ -81,7 +81,7 @@ export function Modal({ title, onClose, children, footer, headerActions, wide = 
     } }; document.addEventListener('keydown', onKey); return () => { cancelAnimationFrame(frame); modalStack.splice(modalStack.indexOf(id), 1); if (!modalStack.length)
         document.body.style.overflow = ''; document.removeEventListener('keydown', onKey); previous?.focus(); }; }, [id]);
     return createPortal(<div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget)
-        onClose(); }}><div ref={box} role="dialog" aria-modal="true" aria-labelledby={id} tabIndex={-1} className={`modal ${wide ? 'modal-wide' : ''} ${className}`}><div className="modal-header"><h2 id={id}>{title}</h2><div className="modal-header-actions">{headerActions}<IconButton label={t("닫기")} icon={X} onClick={onClose}/></div></div><div className="modal-body">{children}</div>{footer && <div className="modal-footer">{footer}</div>}</div></div>, document.body);
+        closeRef.current(); }}><div ref={box} role="dialog" aria-modal="true" aria-labelledby={id} tabIndex={-1} className={`modal ${wide ? 'modal-wide' : ''} ${className}`}><div className="modal-header"><h2 id={id}>{title}</h2><div className="modal-header-actions">{headerActions}<IconButton label={t("닫기")} icon={X} disabled={busy} onClick={() => closeRef.current()}/></div></div>{children && <div className="modal-body">{children}</div>}{footer && <div className="modal-footer">{footer}</div>}</div></div>, document.body);
 }
 type ToastFn = (message: string, tone?: 'success' | 'error') => void;
 const ToastContext = createContext<ToastFn>(() => { });
