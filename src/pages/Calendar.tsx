@@ -1,6 +1,6 @@
 import { EventInvitePicker } from '../components/EventInvitePicker';
 import { useI18n } from "../lib/preferences";
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CalendarDays, Cake, Check, ChevronRight, Clock3, Download, MapPin, Pencil, Plus, Share2, MessageSquare, Trash2, UserPlus, Users, X } from 'lucide-react';
 import { useApp } from '../lib/store';
@@ -22,6 +22,7 @@ import { VenueBallot } from '../components/VenueBallot';
 import { MvpVoting } from '../components/MvpVoting';
 import { calendarSignature } from '../lib/google-calendar';
 import { MonthGrid, MonthNavigation } from './ScheduleGrid';
+import { useDraftClose } from '../components/useDraftClose';
 import './schedule.css';
 import './calendar-mobile.css';
 export function Calendar() {
@@ -162,7 +163,10 @@ function EventEditor({ event, initialDate, onClose, onSaved }: {
     const invitedMemberIds=(invitees??activeMembers.map(member=>member.id)).filter(id=>activeMembers.some(member=>member.id===id));
     const [busy, setBusy] = useState(false);
     const [month, setMonth] = useState(() => { const d = new Date(`${date}T12:00:00`); return new Date(d.getFullYear(), d.getMonth(), 1); });
-    return <Modal title={event ? t("일정 수정") : t("새 모임 일정")} onClose={() => !busy && onClose()} wide footer={<><Button icon={X} iconOnly variant="secondary" disabled={busy} onClick={onClose}>{t("취소")}</Button><Button type="submit" form="event-editor" icon={Check} loading={busy}>{event ? t("수정하기") : t("일정 만들기")}</Button></>}><form id="event-editor" className="stack" onSubmit={async (e) => { e.preventDefault(); if (!app.user || busy)
+    const currentDraft = JSON.stringify([title, date, start, end, location, description, invitees === null ? null : [...invitees].sort()]);
+    const originalDraft = useRef(currentDraft);
+    const draft = useDraftClose(originalDraft.current !== currentDraft, busy, onClose);
+    return <><Modal title={event ? t("일정 수정") : t("새 모임 일정")} onClose={draft.close} busy={busy} wide footer={<><Button icon={X} iconOnly variant="secondary" disabled={busy} onClick={draft.close}>{t("취소")}</Button><Button type="submit" form="event-editor" icon={Check} loading={busy}>{event ? t("수정하기") : t("일정 만들기")}</Button></>}><form id="event-editor" className="stack" onSubmit={async (e) => { e.preventDefault(); if (!app.user || busy)
         return; if (!title.trim() || !date || !start || !end || start >= end) {
         toast('제목과 날짜, 시작·종료 시간을 확인해 주세요.', 'error');
         return;
@@ -184,7 +188,7 @@ function EventEditor({ event, initialDate, onClose, onSaved }: {
     <PlacePicker value={location} onChange={setLocation} disabled={busy}/>
     <AddressField includePlaceName label={t("장소")} value={location} onChange={setLocation} maxLength={500} placeholder={t("장소 이름 또는 주소")} required disabled={busy}/>
     <Field label={t("상세 내용")}><textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={4000} rows={3} placeholder={t("준비물, 안내사항 등")}/></Field>
-  </form></Modal>;
+  </form></Modal>{draft.confirmation}</>;
 }
 function downloadEvent(event: MoimEvent) {
     const escape = (value: string) => value.replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');

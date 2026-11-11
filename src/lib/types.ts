@@ -25,6 +25,7 @@ export interface BallotResponse { id: string; ballotId: string; eventId: string;
 export interface MvpVote { id: string; eventId: string; memberId: string; candidateId: string; updatedAt: string }
 export interface AppData { places: SavedPlace[]; mvpVotes: MvpVote[]; ballots: EventBallot[]; ballotResponses: BallotResponse[]; bylaws: Bylaws; ledger: LedgerEntry[]; settings: Settings; members: Member[]; profiles: Profile[]; posts: Post[]; comments: Comment[]; polls: Poll[]; votes: Vote[]; events: MoimEvent[]; rsvps: Rsvp[] }
 export interface AppContextValue extends AppData {
+  now: number;
   user: Member | null; loading: boolean; settingsReady: boolean; bylawsReady: boolean; isDemo: boolean; isAdmin: boolean; canParticipate: boolean; canCreatePoll: boolean; error: string | null;
   login: (forceAccountPicker?: boolean) => Promise<void>; logout: () => Promise<void>;
   savePlace: (place: SavedPlace) => Promise<void>;

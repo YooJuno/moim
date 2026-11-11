@@ -20,14 +20,17 @@ import { contiguousEndSlots, expandTimeWindows, pollTimeWindows, timeToMinutes }
 import { monthlyPollDates, monthlyPollTitle, nextPollMonth } from '../lib/poll-presets';
 import { getPollAvailabilityWindows } from '../lib/poll-results';
 import { buildPollGridIndex, slotPosition } from '../lib/poll-grid';
+import { isPollOpen as isOpen, sortOpenPolls } from '../lib/poll-list';
 import type { PollAvailabilityWindow } from '../lib/poll-results';
 import './schedule.css';
 import './poll-time-grid.css';
-const isOpen = (poll: Poll) => poll.status === 'open' && (!poll.deadline || new Date(poll.deadline).getTime() > Date.now());
+import './poll-list.css';
 const canManage = (poll: Poll, userId: string | undefined, admin: boolean, allowed: boolean) => admin || (allowed && poll.creatorId === userId);
 const localDateTime = (value: string) => { const d = new Date(value); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
-function deadlineLabel(value: string | null) { if (!value)
-    return translate('마감 없음'); const days = Math.ceil((new Date(value).getTime() - Date.now()) / 86400000); return days > 0 ? translate('{0}일 후 마감', undefined, {'0':days}) : translate('마감됨'); }
+function deadlineLabel(poll: Poll, now: number) {
+    if (!isOpen(poll, now)) return translate('마감됨');
+    return poll.deadline ? translate('{0} 마감', undefined, {'0': `${shortDate(poll.deadline)} · ${formatTime(poll.deadline)}`}) : translate('마감 없음');
+}
 export function Polls() {
     const { t } = useI18n();
     const app = useApp();
@@ -47,10 +50,13 @@ export function Polls() {
         for (const vote of app.votes) { const group = grouped.get(vote.pollId) ?? []; group.push(vote); grouped.set(vote.pollId, group); }
         return grouped;
     }, [app.votes]);
-    const bestWindows = useMemo(() => new Map(app.polls.map(poll => [poll.id, getPollAvailabilityWindows(poll, voteGroups.get(poll.id) ?? [])[0]])), [app.polls, voteGroups]);
-    const active = app.polls.filter(isOpen);
-    const past = app.polls.filter(p => !isOpen(p));
-    const visible = (tab === 'open' ? active : past).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const active = useMemo(() => sortOpenPolls(app.polls, app.votes, app.user?.id, app.canParticipate, app.now), [app.polls, app.votes, app.user?.id, app.canParticipate, app.now]);
+    const past = useMemo(() => app.polls.filter(p => !isOpen(p, app.now)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [app.polls, app.now]);
+    const visible = tab === 'open' ? active : past;
+    // Past results are not needed while looking at ongoing polls (and vice versa).
+    const bestWindows = useMemo(() => new Map(visible.map(poll => [poll.id, getPollAvailabilityWindows(poll, voteGroups.get(poll.id) ?? [])[0]])), [visible, voteGroups]);
+    const activeCount = useMemo(() => app.members.filter(m => m.status === 'active').length, [app.members]);
+    const membersById = useMemo(() => new Map(app.members.map(member => [member.id, member])), [app.members]);
     const closeDetail = () => { const next = new URLSearchParams(params); next.delete('poll'); setParams(next, { replace: true }); };
     const openDetail = (poll: Poll) => { const next = new URLSearchParams(params); next.set('poll', poll.id); setParams(next); };
     useEffect(() => {
@@ -83,18 +89,18 @@ export function Polls() {
     return <div className="page polls-page">
     <PageHeader title={t("일정 투표")} action={app.canCreatePoll ? <Button iconOnly icon={Plus} onClick={() => setEditing('new')}>{t("투표 만들기")}</Button> : undefined}/>
     <div className="tabs" aria-label={t("투표 목록")}>
-      <button className={`tab ${tab === 'open' ? 'active' : ''}`} onClick={() => setTab('open')}>{t("진행 중")}<span>{active.length}</span></button>
-      <button className={`tab ${tab === 'past' ? 'active' : ''}`} onClick={() => setTab('past')}>{t("지난 투표")}<span>{past.length}</span></button>
+      <button className={`tab ${tab === 'open' ? 'active' : ''}`} aria-pressed={tab === 'open'} onClick={() => setTab('open')}>{t("진행 중")}<span>{active.length}</span></button>
+      <button className={`tab ${tab === 'past' ? 'active' : ''}`} aria-pressed={tab === 'past'} onClick={() => setTab('past')}>{t("지난 투표")}<span>{past.length}</span></button>
     </div>
     {visible.length ? <div className="poll-grid">{visible.map(poll => {
                 const votes = voteGroups.get(poll.id) ?? [];
                 const ownVote = votes.find(v => v.memberId === app.user?.id);
                 const staleVote = ownVote?.slotIds.some(id => !poll.slotIds.includes(id));
                 const first = bestWindows.get(poll.id);
-                const total = app.members.filter(m => m.status === 'active').length;
-                const participating = votes.map(v => app.members.find(m => m.id === v.memberId)).filter((m): m is NonNullable<typeof m> => !!m);
+                const total = activeCount;
+                const participating = votes.map(v => membersById.get(v.memberId)).filter((m): m is NonNullable<typeof m> => !!m);
                 return <button className="card poll-card" key={poll.id} onClick={() => openDetail(poll)}>
-        <div className="poll-card-top"><Badge tone={poll.status === 'confirmed' ? 'green' : isOpen(poll) ? 'blue' : 'gray'}>{poll.status === 'confirmed' ? t("일정 확정") : isOpen(poll) ? t("투표 중") : t("마감")}</Badge><span className="poll-deadline">{isOpen(poll) && <Clock3 size={13}/>}{deadlineLabel(poll.deadline)}</span></div>
+        <div className="poll-card-top"><Badge tone={poll.status === 'confirmed' ? 'green' : isOpen(poll, app.now) ? 'blue' : 'gray'}>{poll.status === 'confirmed' ? t("일정 확정") : isOpen(poll, app.now) ? t("투표 중") : t("마감")}</Badge>{poll.status !== 'confirmed' && <span className="poll-deadline">{isOpen(poll, app.now) && <Clock3 size={13}/>}{deadlineLabel(poll, app.now)}</span>}</div>
         <h2>{poll.title}</h2>{poll.description && <p className="poll-card-description">{poll.description}</p>}
         {first ? <div className="poll-best"><Trophy size={16}/><div><span>{t("가장 많은 인원이 가능한 시간")}</span><strong>{shortDate(first.date)} · {first.start}–{first.end}<em>{first.memberIds.length}{t("명")}</em></strong></div></div> : <div className="poll-best poll-best-empty"><BarChart3 size={18}/><span>{t("첫 번째 가능한 시간을 알려 주세요")}</span></div>}
         <div className="poll-progress"><div style={{ width: `${total ? Math.min(votes.length / total * 100, 100) : 0}%` }}/></div>
@@ -385,12 +391,15 @@ function PollEditor({ poll, onClose, onSaved }: {
     const { t } = useI18n();
     const app = useApp();
     const toast = useToast();
-    const initialWindows = pollTimeWindows(poll);
-    const initialMonth = poll?.slots[0]?.date.slice(0, 7) ?? nextPollMonth();
-    const initialDates = poll ? [...new Set(initialWindows.map(slot => slot.date))].sort() : hasHolidayData(Number(initialMonth.slice(0, 4))) ? monthlyPollDates(initialMonth, today()) : [];
-    const firstTimes = (poll ? initialWindows.filter(slot => slot.date === initialDates[0]).map(slot => ({ id: slot.id, start: slot.start, end: slot.end })) : undefined) ?? [{ id: uid(), start: '08:00', end: '24:00' }];
-    const signature = (times: TimeRange[]) => times.map(time => `${time.start}/${time.end}`).sort().join(',');
-    const initialOverrides = poll ? initialDates.filter(date => signature(initialWindows.filter(slot => slot.date === date)) !== signature(firstTimes)) : [];
+    const [{ initialWindows, initialMonth, initialDates, firstTimes, initialOverrides }] = useState(() => {
+        const initialWindows = pollTimeWindows(poll);
+        const initialMonth = poll?.slots[0]?.date.slice(0, 7) ?? nextPollMonth();
+        const initialDates = poll ? [...new Set(initialWindows.map(slot => slot.date))].sort() : hasHolidayData(Number(initialMonth.slice(0, 4))) ? monthlyPollDates(initialMonth, today()) : [];
+        const firstTimes = (poll ? initialWindows.filter(slot => slot.date === initialDates[0]).map(slot => ({ id: slot.id, start: slot.start, end: slot.end })) : undefined) ?? [{ id: uid(), start: '08:00', end: '24:00' }];
+        const signature = (times: TimeRange[]) => times.map(time => `${time.start}/${time.end}`).sort().join(',');
+        const initialOverrides = poll ? initialDates.filter(date => signature(initialWindows.filter(slot => slot.date === date)) !== signature(firstTimes)) : [];
+        return { initialWindows, initialMonth, initialDates, firstTimes, initialOverrides };
+    });
     const [title, setTitle] = useState(poll?.title ?? monthlyPollTitle(initialMonth));
     const [description, setDescription] = useState(poll?.description ?? '');
     const [noDeadline, setNoDeadline] = useState(!poll || poll.deadline === null);
@@ -423,6 +432,10 @@ function PollEditor({ poll, onClose, onSaved }: {
         }
     };
     const timesForDate = (date: string) => overrides.includes(date) ? dateTimes[date] ?? commonTimes : commonTimes;
+    const currentDraft = JSON.stringify([title, description, noDeadline, noDeadline ? null : deadline,
+        commonTimes.map(time => [time.start, time.end]), [...dates].sort().map(date => [date, timesForDate(date).map(time => [time.start, time.end])])]);
+    const originalDraft = useRef(currentDraft);
+    const draft = useDraftClose(originalDraft.current !== currentDraft, busy, onClose);
     const slotCount = dates.reduce((count, date) => count + timesForDate(date).reduce((sum, time) => sum + Math.max(0, Math.ceil((timeToMinutes(time.end) - timeToMinutes(time.start)) / slotMinutes) || 0), 0), 0);
     const updateTimes = (date: string | null, next: TimeRange[]) => { if (date)
         setDateTimes(current => ({ ...current, [date]: next }));
@@ -502,7 +515,7 @@ function PollEditor({ poll, onClose, onSaved }: {
             setBusy(false);
         }
     };
-    return <Modal title={poll ? t("투표 수정") : t("새 일정 투표")} onClose={() => !busy && onClose()} wide footer={<><Button icon={X} iconOnly variant="secondary" disabled={busy} onClick={onClose}>{t("취소")}</Button><Button iconOnly type="submit" form="poll-editor" loading={busy} icon={Save}>{poll ? t("수정하고 열기") : t("투표 만들기")}</Button></>}><form id="poll-editor" className="stack poll-editor" onSubmit={submit}>
+    return <><Modal title={poll ? t("투표 수정") : t("새 일정 투표")} onClose={draft.close} busy={busy} wide footer={<><Button icon={X} iconOnly variant="secondary" disabled={busy} onClick={draft.close}>{t("취소")}</Button><Button iconOnly type="submit" form="poll-editor" loading={busy} icon={Save}>{poll ? t("수정하고 열기") : t("투표 만들기")}</Button></>}><form id="poll-editor" className="stack poll-editor" onSubmit={submit}>
     <Field label={t("투표 제목")} required><input value={title} onChange={e => setTitle(e.target.value)} placeholder={t("어떤 만남을 준비할까요?")} maxLength={80} required autoFocus/></Field>
     <Field label={t("내용")}><textarea value={description} onChange={e => setDescription(e.target.value)} placeholder={t("멤버에게 전할 내용이 있나요?")} maxLength={2000} rows={2}/></Field>
     <div className="poll-editor-dates">
@@ -521,7 +534,7 @@ function PollEditor({ poll, onClose, onSaved }: {
     } }}>{overridden ? t("별도 설정 중") : t("공통 시간")}</button></div>{overridden ? renderTimes(dateTimes[date] ?? commonTimes, date) : <p className="poll-common-summary">{commonTimes.map(time => `${time.start}–${time.end}`).join(' · ')}</p>}</div>; })}</div>}</div>
     <div className="poll-deadline-editor"><div className="section-head"><h3>{t("투표 마감")}</h3><label className="poll-no-deadline"><input type="checkbox" checked={noDeadline} onChange={event => setNoDeadline(event.target.checked)}/>{t("마감 없음")}</label></div>{!noDeadline && <Field label={t("마감 일시")} required><div className="date-time-input"><input type="date" aria-label={t("마감 날짜")} value={deadline.split("T")[0]} onChange={e => setDeadline(`${e.target.value}T${deadline.split("T")[1] ?? ""}`)} required/><TimeInput aria-label={t("마감 시간")} value={deadline.split("T")[1] ?? ""} onChange={time => setDeadline(`${deadline.split("T")[0]}T${time}`)} required/></div></Field>}</div>
     {poll && <p className="poll-edit-note">{poll.slotMinutes === 30 ? t("기존 후보는 1시간 단위로 변경돼요. 시간을 확인해 주세요. ") : ''}{t("변경한 후보 시간은 새로 투표받아요. 삭제한 후보의 응답은 집계에서 제외돼요.")}</p>}
-  </form></Modal>;
+  </form></Modal>{draft.confirmation}</>;
 }
 function ConfirmPoll({ poll, range, onClose }: {
     poll: Poll;
@@ -532,8 +545,11 @@ function ConfirmPoll({ poll, range, onClose }: {
     const app = useApp();
     const toast = useToast();
     const [, setParams] = useSearchParams();
-    const ranked = poll.slots.map(slot => ({ slot, count: app.votes.filter(v => v.pollId === poll.id && v.slotIds.includes(slot.id)).length })).sort((a, b) => b.count - a.count || a.slot.date.localeCompare(b.slot.date) || a.slot.start.localeCompare(b.slot.start));
-    const initialRange = range ?? getPollAvailabilityWindows(poll, app.votes)[0];
+    const ranked = useMemo(() => {
+        const grid = buildPollGridIndex(poll.slots, app.votes.filter(vote => vote.pollId === poll.id));
+        return poll.slots.map(slot => ({ slot, count: grid.voters.get(slot.id)?.length ?? 0 })).sort((a, b) => b.count - a.count || a.slot.date.localeCompare(b.slot.date) || a.slot.start.localeCompare(b.slot.start));
+    }, [poll.slots, poll.id, app.votes]);
+    const [initialRange] = useState(() => range ?? getPollAvailabilityWindows(poll, app.votes)[0]);
     const [slotId, setSlotId] = useState(initialRange?.startSlotId ?? ranked[0]?.slot.id ?? '');
     const ends = contiguousEndSlots(poll.slots, slotId);
     const startSlot = poll.slots.find(slot => slot.id === slotId);
@@ -544,7 +560,10 @@ function ConfirmPoll({ poll, range, onClose }: {
     const availableCount = app.votes.filter(vote => vote.pollId === poll.id && rangeSlots.length && rangeSlots.every(slot => vote.slotIds.includes(slot.id))).length;
     const [location, setLocation] = useState('');
     const [busy, setBusy] = useState(false);
-    return <Modal title={t("모임 일정 확정")} onClose={() => !busy && onClose()} footer={<><Button icon={X} iconOnly variant="secondary" disabled={busy} onClick={onClose}>{t("취소")}</Button><Button type="submit" form="poll-confirm" icon={CalendarCheck} loading={busy}>{t("확정하기")}</Button></>}><form id="poll-confirm" className="stack" onSubmit={async (event) => { event.preventDefault(); if (!slotId || !location.trim())
+    const currentDraft = JSON.stringify([slotId, endSlotId, location]);
+    const originalDraft = useRef(currentDraft);
+    const draft = useDraftClose(originalDraft.current !== currentDraft, busy, onClose);
+    return <><Modal title={t("모임 일정 확정")} onClose={draft.close} busy={busy} footer={<><Button icon={X} iconOnly variant="secondary" disabled={busy} onClick={draft.close}>{t("취소")}</Button><Button type="submit" form="poll-confirm" icon={CalendarCheck} loading={busy}>{t("확정하기")}</Button></>}><form id="poll-confirm" className="stack" onSubmit={async (event) => { event.preventDefault(); if (!slotId || !location.trim() || busy)
         return; setBusy(true); try {
         const eventId = await app.confirmPoll(poll.id, slotId, location.trim(), endSlotId);
         toast('일정을 확정하고 캘린더에 추가했어요.');
@@ -571,5 +590,5 @@ function ConfirmPoll({ poll, range, onClose }: {
     {startSlot && chosenEnd && <p className="poll-confirm-range"><Clock3 size={15}/>{startSlot.start}–{chosenEnd.end}<span>{t("전체 시간 가능 {0}명", {"0":availableCount})}</span></p>}
     <PlacePicker value={location} onChange={setLocation} disabled={busy}/>
     <AddressField includePlaceName label={t("장소")} value={location} onChange={setLocation} maxLength={500} placeholder={t("어디서 만날까요?")} required disabled={busy} autoFocus/>
-  </form></Modal>;
+  </form></Modal>{draft.confirmation}</>;
 }

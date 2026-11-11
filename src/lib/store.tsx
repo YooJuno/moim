@@ -22,6 +22,8 @@ import { registrationComplete } from './registration';
 import { mvpWindow } from './mvp';
 import { classifyBankTransactions, MAX_BANK_IMPORT_ROWS } from './bank-import';
 import type { TelemetryContext } from '../../shared/error-telemetry';
+import { useTimeBoundary } from './useTimeBoundary';
+import { isPollOpen } from './poll-list';
 
 function queueCalendarSync(batch: {set:(reference:DocumentReference<DocumentData>,data:DocumentData)=>unknown}, eventId: string, memberId: string) {
   const id=`${eventId}_${memberId}`;
@@ -153,53 +155,50 @@ export function AppProvider({children}: {children: ReactNode}) {
   },[authUid,self?.status]);
 
   useEffect(()=>{
-    for(const path of data.posts.flatMap(post=>post.images)) {
-      if(!(path.startsWith('storage:') || path.startsWith('demo-image:')) || imageCache.current.has(path) || pendingImages.current.has(path)) continue;
-      pendingImages.current.add(path);
-      const generation=imageGeneration.current;
-      const load = async () => {
-        try {
-          const blob=path.startsWith('demo-image:') ? await readDemoImage(path.slice(11)) : storage ? await getBlob(ref(storage,path.slice(8)),5*1024*1024) : undefined;
-          if(!blob || generation!==imageGeneration.current) return;
-          const url=URL.createObjectURL(blob); imageCache.current.set(path,url); reverseImages.current.set(url,path); setImageUrls(previous=>({...previous,[path]:url}));
-        } catch { if(generation===imageGeneration.current) setError('사진을 불러오지 못했어요. 연결 상태와 Storage CORS 설정을 확인해 주세요.'); }
-        finally { pendingImages.current.delete(path); }
-      };
-      void load();
-    }
-  },[data.posts]);
-  useEffect(()=>{
-    if(isDemo || !db || !self || !['active','pending'].includes(self.status))return;
+    if(!isDemo && (!db || !self || !['active','pending'].includes(self.status)))return;
     const loadPhoto=async(path:string)=>{
       if(imageCache.current.has(path) || pendingImages.current.has(path))return;
       const generation=imageGeneration.current;pendingImages.current.add(path);
       try{
-        const snapshot=await getDoc(doc(db!,'photos',path.slice(6)));if(!snapshot.exists())throw new Error('사진을 찾을 수 없어요.');
-        const imageURL=snapshot.data().imageURL as string;if(!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(imageURL) || imageURL.length>700000)throw new Error('사진 형식을 확인해 주세요.');
-        const blob=await (await fetch(imageURL)).blob();if(generation!==imageGeneration.current)return;
+        let blob:Blob|undefined;
+        if(path.startsWith('photo:')){
+          const snapshot=await getDoc(doc(db!,'photos',path.slice(6)));if(!snapshot.exists())throw new Error('사진을 찾을 수 없어요.');
+          const imageURL=snapshot.data().imageURL as string;if(!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(imageURL) || imageURL.length>700000)throw new Error('사진 형식을 확인해 주세요.');
+          blob=await (await fetch(imageURL)).blob();
+        }else blob=path.startsWith('demo-image:') ? await readDemoImage(path.slice(11)) : storage ? await getBlob(ref(storage,path.slice(8)),5*1024*1024) : undefined;
+        if(!blob)throw new Error('사진을 찾을 수 없어요.');
+        if(generation!==imageGeneration.current)return;
         const url=URL.createObjectURL(blob);imageCache.current.set(path,url);reverseImages.current.set(url,path);setImageUrls(previous=>({...previous,[path]:url}));
       }catch(problem){if(generation===imageGeneration.current)setError(errorMessage(problem));}
       finally{pendingImages.current.delete(path);}
     };
-    const pathFor=(element:Element)=>{const source=element.getAttribute('src') ?? '';const marker=source.lastIndexOf('#');if(marker<0)return null;try{const path=decodeURIComponent(source.slice(marker+1));return path.startsWith('photo:') ? path:null;}catch{return null;}};
+    const pathFor=(element:Element)=>{const source=element.getAttribute('src') ?? '';const marker=source.lastIndexOf('#');if(marker<0)return null;try{const path=decodeURIComponent(source.slice(marker+1));return /^(photo:|storage:|demo-image:)/.test(path) ? path:null;}catch{return null;}};
     const observed=new WeakMap<Element,string>();
     const observer:IntersectionObserver|null=typeof IntersectionObserver!=='undefined' ? new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){const path=pathFor(entry.target);observer?.unobserve(entry.target);if(path)void loadPhoto(path);}},{rootMargin:'300px'}):null;
-    const scan=()=>{for(const image of document.querySelectorAll('img')){const path=pathFor(image);if(!path || observed.get(image)===path)continue;observed.set(image,path);if(observer)observer.observe(image);else void loadPhoto(path);}};
-    const mutations=new MutationObserver(scan);mutations.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['src']});scan();
+    const watch=(image:Element)=>{const path=pathFor(image);if(observed.get(image)===path)return;observer?.unobserve(image);if(!path){observed.delete(image);return;}observed.set(image,path);if(observer)observer.observe(image);else void loadPhoto(path);};
+    const imagesWithin=(node:Node,visit:(image:Element)=>void)=>{if(!(node instanceof Element))return;if(node.matches('img'))visit(node);node.querySelectorAll('img').forEach(visit);};
+    // Grid edits can insert hundreds of nodes. Inspect only changed subtrees,
+    // rather than scanning every image in the document on each mutation.
+    const mutations=new MutationObserver(records=>{for(const record of records){if(record.type==='attributes')watch(record.target as Element);else{record.removedNodes.forEach(node=>imagesWithin(node,image=>{observer?.unobserve(image);observed.delete(image);}));record.addedNodes.forEach(node=>{if(node.isConnected)imagesWithin(node,watch);});}}});
+    mutations.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['src']});document.querySelectorAll('img').forEach(watch);
     return()=>{observer?.disconnect();mutations.disconnect();};
   },[self?.id,self?.status]);
 
   useEffect(()=>()=>{ for(const url of imageCache.current.values()) URL.revokeObjectURL(url); },[]);
 
-  const activeMemberIds=new Set(data.members.filter(member=>member.status==='active').map(member=>member.id));
-  const ongoingPollIds=new Set(data.polls.filter(poll=>poll.status==='open'&&(poll.deadline===null||new Date(poll.deadline).getTime()>Date.now())).map(poll=>poll.id));
+  const boundaries=useMemo(()=>[...data.polls.filter(poll=>poll.status==='open'&&poll.deadline).map(poll=>Date.parse(poll.deadline!)),...data.events.map(event=>eventEnd(event).getTime())],[data.polls,data.events]);
+  const now=useTimeBoundary(boundaries);
+  const activeMemberIds=useMemo(()=>new Set(data.members.filter(member=>member.status==='active').map(member=>member.id)),[data.members]);
+  const ongoingPollIds=useMemo(()=>new Set(data.polls.filter(poll=>isPollOpen(poll,now)).map(poll=>poll.id)),[data.polls,now]);
+  const visibleVotes=useMemo(()=>data.votes.filter(vote=>!ongoingPollIds.has(vote.pollId)||activeMemberIds.has(vote.memberId)),[data.votes,ongoingPollIds,activeMemberIds]);
+  const eventEndTimes=useMemo(()=>new Map(data.events.map(event=>[event.id,eventEnd(event).getTime()])),[data.events]);
+  const visibleRsvps=useMemo(()=>data.rsvps.filter(rsvp=>{const end=eventEndTimes.get(rsvp.eventId);return end===undefined||end<=now||activeMemberIds.has(rsvp.memberId);}),[data.rsvps,eventEndTimes,activeMemberIds,now]);
+  const visiblePosts=useMemo(()=>data.posts.map(post=>({...post,images:post.images.map(displayImage)})),[data.posts,imageUrls]);
+  const visibleMembers=useMemo(()=>(isDemo ? data.members.map(member=>{const profile=data.profiles.find(p=>p.id===member.id);return {...member,phone:profile?.phone ?? member.phone,area:profile?.area ?? member.area};}):data.members).filter(member=>isAdmin||member.status==='active'),[data.members,isDemo ? data.profiles : null,isAdmin]);
+  const visibleProfiles=useMemo(()=>isAdmin ? data.profiles : data.profiles.filter(profile=>profile.id===user?.id),[data.profiles,isAdmin,user?.id]);
   const value: AppContextValue = useMemo(()=>({
     ...data,
-    votes:data.votes.filter(vote=>!ongoingPollIds.has(vote.pollId)||activeMemberIds.has(vote.memberId)),
-    rsvps:data.rsvps.filter(rsvp=>{const event=data.events.find(event=>event.id===rsvp.eventId);return !event||eventEnd(event).getTime()<=Date.now()||activeMemberIds.has(rsvp.memberId);}),
-    posts:data.posts.map(post=>({...post,images:post.images.map(displayImage)})),
-    members:(isDemo ? data.members.map(member=>{const profile=data.profiles.find(p=>p.id===member.id);return {...member,phone:profile?.phone ?? member.phone,area:profile?.area ?? member.area};}):data.members).filter(member=>isAdmin || member.status==='active'),
-    profiles:isAdmin ? data.profiles : data.profiles.filter(profile=>profile.id===user?.id),
+    now,votes:visibleVotes,rsvps:visibleRsvps,posts:visiblePosts,members:visibleMembers,profiles:visibleProfiles,
     user,loading,isDemo,isAdmin,settingsReady,bylawsReady,canParticipate,canCreatePoll,error,
     async login(forceAccountPicker=false) {
       if(isDemo) { setDemoSignedIn(true); return; }
@@ -573,7 +572,7 @@ export function AppProvider({children}: {children: ReactNode}) {
       return urls;
     },
     resetDemo() { if(!isDemo) return; const next=createDemoData();applyDemo(next);void clearDemoAttachments().catch(()=>{});setDemoSignedIn(true);setError(null); },
-  }),[data,user,loading,isAdmin,canParticipate,canCreatePoll,error,imageUrls,self,settingsReady,bylawsReady]);
+  }),[data,user,loading,isAdmin,canParticipate,canCreatePoll,error,imageUrls,self,settingsReady,bylawsReady,now,visibleVotes,visibleRsvps,visiblePosts,visibleMembers,visibleProfiles]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

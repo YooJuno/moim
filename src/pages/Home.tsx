@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Cake, CalendarDays, Check, ChevronRight, Clock3, ListChecks, MapPin, Users, Vote } from 'lucide-react';
 import { MapLinks } from '../components/MapLinks';
@@ -7,6 +8,7 @@ import { useI18n } from '../lib/preferences';
 import { formatDate, formatTime, today } from '../lib/utils';
 import { upcomingBirthdays } from '../lib/birthdays';
 import { addressForMap } from '../lib/map-links';
+import { sortOpenPolls } from '../lib/poll-list';
 import './home.css';
 
 export function Home() {
@@ -17,7 +19,7 @@ export function Home() {
   const now = today();
   const birthdays = upcomingBirthdays(active, now).slice(0, 2);
   const events = app.events
-    .filter(event => `${event.date}T${event.end}` >= `${now}T${new Date().toTimeString().slice(0, 5)}`)
+    .filter(event => new Date(`${event.date}T${event.end}:00+09:00`).getTime() > app.now)
     .sort((a, b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`));
   const next = events[0];
   const nextAddress = next ? addressForMap(next.location) : '';
@@ -27,11 +29,7 @@ export function Home() {
   const attendees = next ? app.rsvps.filter(rsvp => rsvp.eventId === next.id && rsvp.status === 'going' && activeIds.has(rsvp.memberId)) : [];
   const responded = new Set(app.votes.filter(vote => vote.memberId === app.user?.id).map(vote => vote.pollId));
   const needsResponse = (id: string) => app.canParticipate && !responded.has(id);
-  const openPolls = app.polls
-    .filter(poll => poll.status === 'open' && (!poll.deadline || new Date(poll.deadline) > new Date()))
-    .sort((a, b) => Number(needsResponse(b.id)) - Number(needsResponse(a.id))
-      || (a.deadline ? new Date(a.deadline).getTime() : Infinity) - (b.deadline ? new Date(b.deadline).getTime() : Infinity)
-      || b.createdAt.localeCompare(a.createdAt));
+  const openPolls = useMemo(() => sortOpenPolls(app.polls, app.votes, app.user?.id, app.canParticipate, app.now), [app.polls, app.votes, app.user?.id, app.canParticipate, app.now]);
   const unansweredCount = openPolls.filter(poll => needsResponse(poll.id)).length;
 
   return <div className="page home-page">

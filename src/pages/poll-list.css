@@ -1,0 +1,20 @@
+.polls-page .poll-grid { gap: 16px; margin-top: 18px; }
+.polls-page .poll-card { padding: 20px; }
+.polls-page .poll-card-top { margin-bottom: 12px; }
+.polls-page .poll-card h2 { font-size: 18px; font-weight: 700; }
+.polls-page .poll-card-description { margin-bottom: 0; color: var(--text-6b7684); }
+.polls-page .poll-best { margin-top: 14px; min-height: 60px; padding: 11px 12px; }
+.polls-page .poll-best div > span { color: var(--text-6b7684); font-size: 12px; }
+.polls-page .poll-best strong { font-size: 13px; font-variant-numeric: tabular-nums; }
+.polls-page .poll-progress { margin-top: 16px; height: 3px; }
+.polls-page .poll-card-bottom { margin-top: 12px; }
+.polls-page .poll-voted, .polls-page .poll-vote-cta,
+.polls-page .poll-avatar-stack > span:last-child:not(.avatar) { font-size: 12px; }
+.polls-page .poll-card:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+@media (max-width: 760px) {
+  .polls-page .poll-card { padding: 18px; }
+  .polls-page .poll-grid { gap: 12px; }
+}
+@media (max-width: 360px) {
+  .polls-page .poll-card-bottom { flex-wrap: wrap; gap: 10px; }
+}

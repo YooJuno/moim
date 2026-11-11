@@ -9,6 +9,7 @@ import { validatePhotoFile } from '../lib/image-upload';
 import type { LedgerEntry, Receipt } from '../lib/types';
 import { errorMessage, formatDate, memberName, today, uid } from '../lib/utils';
 import { Badge, Button, EmptyState, Field, IconButton, Modal, PageHeader, useToast } from '../components/ui';
+import { useDraftClose } from '../components/useDraftClose';
 import './community.css';
 import './ledger-notes.css';
 const ledgerCategories = ['회비', '식비', '대관', '준비물', '기타'];
@@ -91,6 +92,9 @@ function LedgerEditor({ entry, onClose }: {
     const [draftURL, setDraftURL] = useState('');
     const [receiptRemoved, setReceiptRemoved] = useState(false);
     const [receiptSaveError, setReceiptSaveError] = useState(false);
+    const currentDraft = JSON.stringify([type, date, category, amount, description, memo]);
+    const savedDraft = useRef(currentDraft);
+    const draft = useDraftClose(savedDraft.current !== currentDraft || !!receiptFile || (!!entry?.hasReceipt && receiptRemoved), saving, onClose);
     const getReceiptRef = useRef(app.getReceipt);
     getReceiptRef.current = app.getReceipt;
     useEffect(() => { if (!entry?.hasReceipt)
@@ -130,6 +134,7 @@ function LedgerEditor({ entry, onClose }: {
     } setSaving(true); setReceiptSaveError(false); let saved = false; try {
         entryRevision.current = await app.saveLedgerEntry({ id: entryId.current!, type, date, category, amount: parsed, description: description.trim(), memo, ...(memberId ? { memberId } : {}), creatorId: entry?.creatorId ?? app.user.id, createdAt: createdAt.current, updatedAt: entryRevision.current ?? new Date().toISOString() }, entrySaved.current);
         entrySaved.current = true;
+        savedDraft.current = currentDraft;
         saved = true;
         if (receiptFile || receiptRemoved)
             await app.saveReceipt(entryId.current!, receiptRemoved ? null : receiptFile);
@@ -156,7 +161,7 @@ function LedgerEditor({ entry, onClose }: {
     finally {
         setSaving(false);
     } }
-    return <Modal title={entry ? t("회계 내역 수정") : t("회계 내역 추가")} onClose={() => !saving && onClose()} footer={<>{entrySaved.current && <Button iconOnly variant="ghost" icon={Trash2} onClick={() => setConfirmDelete(true)} disabled={saving}>{t("삭제")}</Button>}<Button icon={X} iconOnly variant="secondary" disabled={saving} onClick={onClose}>{t("취소")}</Button><Button icon={Save} iconOnly form="ledger-form" type="submit" loading={saving}>{t("저장")}</Button></>}>
+    return <><Modal title={entry ? t("회계 내역 수정") : t("회계 내역 추가")} onClose={draft.close} busy={saving} footer={<>{entrySaved.current && <Button iconOnly variant="ghost" icon={Trash2} onClick={() => setConfirmDelete(true)} disabled={saving}>{t("삭제")}</Button>}<Button icon={X} iconOnly variant="secondary" disabled={saving} onClick={draft.close}>{t("취소")}</Button><Button icon={Save} iconOnly form="ledger-form" type="submit" loading={saving}>{t("저장")}</Button></>}>
     <form id="ledger-form" className="stack" onSubmit={save}><div className="ledger-type-picker"><button type="button" className={type === 'income' ? 'active income' : ''} onClick={() => { setType('income'); if (!entry)
         setCategory('회비'); }}><ArrowDownLeft size={18}/>{t("수입")}</button><button type="button" className={type === 'expense' ? 'active expense' : ''} onClick={() => { setType('expense'); if (!entry)
         setCategory('식비'); }}><ArrowUpRight size={18}/>{t("지출")}</button></div><div className="form-grid"><Field label={t("날짜")} required><input type="date" value={date} onChange={e => setDate(e.target.value)} required min="1900-01-01" max="2100-12-31"/></Field><Field label={t("분류")}><select value={category} onChange={e => setCategory(e.target.value)}>{!ledgerCategories.includes(category) && <option value={category}>{category}</option>}{ledgerCategories.map(item => <option key={item} value={item}>{t(item)}</option>)}</select></Field></div><Field label={t("금액")} required><div className="ledger-amount-input"><input type="number" inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" required min={1} max={10000000000} step={1}/><span>{t("원")}</span></div></Field><Field label={t("내역")} required><input value={description} onChange={e => setDescription(e.target.value)} placeholder={type === 'income' ? t("예) 11월 회비 입금") : t("예) 정기 모임 식사비")} maxLength={100} required/></Field>
@@ -169,7 +174,7 @@ function LedgerEditor({ entry, onClose }: {
       {receiptSaveError && <p className="ledger-receipt-error" role="alert">{t("내역은 저장됐어요. 영수증을 다시 저장해 주세요.")}</p>}
     </div>
     {confirmDelete && <div className="community-confirm"><span>{t("이 회계 내역을 삭제할까요?")}</span><Button icon={X} iconOnly size="sm" variant="secondary" onClick={() => setConfirmDelete(false)}>{t("취소")}</Button><Button icon={Trash2} iconOnly size="sm" variant="danger" loading={saving} onClick={() => void remove()}>{t("삭제")}</Button></div>}</form>
-  </Modal>;
+  </Modal>{draft.confirmation}</>;
 }
 function ViewReceiptModal({ entry, onClose }: {
     entry: LedgerEntry;
