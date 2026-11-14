@@ -15,6 +15,8 @@
 .home-panel-heading h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 650; color: var(--text-4e5968); }
 .home-section-icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: 8px; background: var(--surface-f2f4f6); color: var(--text-6b7684); }
 .home-polls-panel .home-section-icon { background: var(--surface-edf3ff); color: var(--blue-text); }
+.home-birthdays-panel .home-section-icon { background: var(--surface-fff0f1); color: #a63e70; }
+[data-theme="dark"] .home-birthdays-panel .home-section-icon { color: #f2a1c6; }
 .home-section-count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 6px; background: var(--surface-f2f4f6); color: var(--text-6b7684); font-size: 11px; font-weight: 500; }
 .home-more { display: inline-flex; align-items: center; gap: 3px; min-height: 32px; color: var(--text-8b95a1); font-size: 11px; white-space: nowrap; }
 .home-more:hover { color: var(--blue); }
