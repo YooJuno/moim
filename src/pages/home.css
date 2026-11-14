@@ -14,6 +14,7 @@
 .home-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 24px; margin-bottom: 10px; }
 .home-panel-heading h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 650; color: var(--text-4e5968); }
 .home-section-icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: 8px; background: var(--surface-f2f4f6); color: var(--text-6b7684); }
+.home-polls-panel .home-section-icon { background: var(--surface-edf3ff); color: var(--blue-text); }
 .home-section-count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 6px; background: var(--surface-f2f4f6); color: var(--text-6b7684); font-size: 11px; font-weight: 500; }
 .home-more { display: inline-flex; align-items: center; gap: 3px; min-height: 32px; color: var(--text-8b95a1); font-size: 11px; white-space: nowrap; }
 .home-more:hover { color: var(--blue); }
@@ -36,9 +37,9 @@
 .home-next-event { display: flex; flex-direction: column; }
 .home-event-dday { padding: 4px 7px; border-radius: 6px; background: var(--surface-edf3ff); color: var(--blue); font-size: 11px; }
 .home-event-summary { display: flex; align-items: center; gap: 12px; margin: 4px 0 14px; }
-.home-event-date { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 54px; min-height: 62px; flex-shrink: 0; border-radius: 10px; background: var(--surface-f2f4f6); color: var(--text-6b7684); }
+.home-event-date { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 54px; min-height: 62px; flex-shrink: 0; border-radius: 10px; background: var(--surface-edf3ff); color: var(--blue-text); }
 .home-event-date > span { font-size: 11px; }
-.home-event-date > strong { font-size: 24px; line-height: 1.15; color: var(--text-4e5968); font-weight: 650; }
+.home-event-date > strong { font-size: 24px; line-height: 1.15; color: inherit; font-weight: 650; }
 .home-event-summary-copy { min-width: 0; }
 .home-event-title { margin: 0 0 6px; font-size: 18px; line-height: 1.4; letter-spacing: -.035em; color: var(--text-4e5968); overflow-wrap: anywhere; }
 .home-event-time { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-6b7684); }
@@ -57,6 +58,8 @@
 .home-page .hero-attendees { display: flex; align-items: center; gap: 6px; color: var(--text-8b95a1); font-size: 11px; }
 .home-page .hero-attendees > span { font-size: inherit; }
 .home-event-open { gap: 8px; }
+.home-event-open.button-secondary { background: var(--surface-edf3ff); color: var(--blue-text); }
+.home-event-open.button-secondary:hover { background: var(--surface-e2edff); }
 .home-birthday-list { display: flex; flex-direction: column; gap: 17px; padding: 3px 0; }
 .home-birthday-row { display: flex; align-items: center; gap: 10px; min-height: 30px; }
 .home-birthday-row strong { min-width: 0; color: var(--text-4e5968); font-size: 12px; font-weight: 550; overflow-wrap: anywhere; }

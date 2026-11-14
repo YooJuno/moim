@@ -1,5 +1,6 @@
 /* Shared light/dark palette. User content and image assets keep their original colors. */
 :root{
+  --blue-text: #1d5ed8;
   --surface-c0c8d4: #c0c8d4;
   --surface-c6d0df: #c6d0df;
   --surface-c8d0db: #c8d0db;
@@ -422,6 +423,7 @@
   --text-cf8880: #cf8880;
 }
 :root[data-theme="dark"]{
+  --blue-text: var(--blue);
   --surface-c0c8d4: #5e7393;
   --surface-c6d0df: #536581;
   --surface-c8d0db: #546883;
